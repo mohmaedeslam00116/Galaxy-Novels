@@ -1,0 +1,35 @@
+# Local worktrees and temporary inspection output
+.worktrees
+.worktrees/
+_codex_wor_reader_inspect/
+
+# Flutter and Dart
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+build/
+coverage/
+
+# Android
+*.apk
+*.aab
+*.jks
+key.properties
+
+# iOS generated output for future use
+ios/Flutter/Generated.xcconfig
+ios/Flutter/flutter_export_environment.sh
+ios/Flutter/App.framework
+ios/Flutter/Flutter.framework
+ios/Pods/
+ios/Podfile.lock
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+Thumbs.db
+.DS_Store

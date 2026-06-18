@@ -1,0 +1,160 @@
+لدينا قالب WordPress لموقع روايات باسم Wor Reader، وتمت إضافة طبقة تطبيق اقتصادية جديدة.
+
+الفكرة الأساسية:
+التطبيق لا يجب أن يطلب REST API لكل شيء. البيانات العامة يجب أن تأتي من ملفات JSON ثابتة مكاشاة من Cloudflare، والبيانات الخاصة فقط تأتي من REST API.
+
+استخدم هذه المصادر العامة أولًا:
+
+1. Bootstrap:
+   `/wp-content/uploads/wor-reader-cache/app/manifest/bootstrap.json`
+
+هذا الملف يعطيك روابط:
+
+* search manifest
+* home manifest
+* catalog manifest
+* rankings manifest
+* store manifest
+* api base
+
+2. البحث:
+   استخدم الموجود من bootstrap:
+   `/wp-content/uploads/wor-reader-cache/search/manifest.json`
+   ثم حمّل pack البحث المشار إليه داخله.
+   البحث داخل التطبيق يكون محليًا بدون API.
+
+3. المكتبة:
+   استخدم:
+   `/wp-content/uploads/wor-reader-cache/app/manifest/catalog.json`
+   ثم حمّل packs الموجودة داخله.
+   الفلاتر والترتيب والبحث داخل المكتبة تكون محلية في التطبيق قدر الإمكان.
+
+4. الرئيسية:
+   استخدم:
+   `/wp-content/uploads/wor-reader-cache/app/manifest/home.json`
+
+5. صفحة الرواية:
+   من بيانات catalog ستجد رابط:
+   `manifest`
+   لكل رواية مثل:
+   `/wp-content/uploads/wor-reader-cache/app/manifest/novel-123.json`
+
+افتح manifest ثم pack للحصول على بيانات الرواية العامة:
+
+* العنوان
+* الغلاف
+* الملخص
+* التصنيفات
+* الحالة
+* المؤلف
+* المترجم
+* التقييم العام
+* عدد الفصول العامة
+* روابط chapter manifest و vip schedule manifest
+
+6. فصول الرواية العامة:
+   لا تطلب REST للفصول العامة.
+   استخدم رابط:
+   `chapters_manifest`
+   الموجود داخل novel pack، أو المسار الحالي:
+   `/wp-content/uploads/wor-reader-cache/chapters/manifest/novel-ID.json`
+   ثم حمّل pack المشار إليه.
+
+7. مواعيد VIP العامة:
+   استخدم:
+   `vip_schedule_manifest`
+   من novel pack.
+   هذه البيانات عامة وآمنة، ولا تحتوي محتوى فصول VIP أو روابط خاصة.
+
+8. قراءة الفصل العام:
+   افتح الفصل العام كصفحة HTML خفيفة:
+   `/novel/.../chapter-.../?wr_app_reader=1`
+
+هذا يعطي HTML خفيف للقارئ بدون هيدر وفوتر الموقع. لا تحاول جلب محتوى الفصل العام من JSON.
+
+9. API الخاص:
+   Base URL:
+   `/wp-json/wor-reader-app/v1`
+
+أولًا نفذ تسجيل الدخول:
+`POST /auth/login`
+body:
+`username`
+`password`
+`remember`
+
+الرد يعطي:
+`nonce`
+`user`
+
+احتفظ بالكوكيز التي يرجعها السيرفر، وأرسل في كل طلب خاص:
+`X-WP-Nonce: <nonce>`
+
+10. endpoints الخاصة:
+
+* `GET /session`
+* `GET /me`
+* `GET /me/novels/{novel_id}`
+* `GET /me/favorites`
+* `POST /me/favorites/sync`
+* `GET /me/history`
+* `GET /me/history/novel/{novel_id}`
+* `POST /reading/sync`
+* `GET|POST /ratings/novel/{novel_id}`
+* `GET|POST /comments/{novel|chapter}/{id}`
+* `POST /comments/{comment_id}/vote`
+* `POST /comments/{novel|chapter}/{id}/reaction`
+* `GET /vip/chapters?novel_id=ID`
+* `GET /vip/continuous-next?chapter_id=ID`
+* `POST /store/create-order`
+* `POST /store/capture-order`
+* `POST /store/create-subscription`
+* `POST /store/activate-subscription`
+* `POST /store/cancel-subscription`
+* `POST /translator-awards/vote`
+
+11. مزامنة القراءة و XP:
+    لا ترسل XP جاهز.
+    أرسل نشاط القراءة فقط إلى:
+    `POST /reading/sync`
+
+مثال:
+
+```json
+{
+  "items": [
+    {
+      "event_id": "uuid",
+      "object_type": "chapter",
+      "object_id": 555,
+      "parent_id": 123,
+      "active_seconds": 180,
+      "open_seconds": 420,
+      "progress": 96,
+      "completed": true,
+      "read_at": "2026-06-17T20:00:00Z"
+    }
+  ],
+  "final": false
+}
+```
+
+أرسل كل 3 دقائق، وعند إغلاق الفصل، وعند اكتمال الفصل. لا ترسل كل ثانية ولا كل scroll.
+
+12. User-Agent:
+    لا تستخدم User-Agent الافتراضي لـ Flutter/Dart/OkHttp.
+    استخدم:
+    `WorReaderApp/1.0 Android`
+    أو:
+    `WorReaderApp/1.0 iOS`
+
+13. ممنوع داخل التطبيق:
+
+* لا تطلب `/wp-json/` للبحث أو المكتبة أو فهرس الفصول العامة.
+* لا تعتمد على التطبيق لتحديد صلاحية VIP.
+* لا ترسل XP جاهز.
+* لا تحفظ VIP content لمدة طويلة.
+* لا تعمل prefetch جماعي للفصول.
+* لا تفتح أكثر من فصل أو فصلين مسبقًا.
+
+الهدف هو أن يكون 80–90% من التصفح من Cloudflare وكاش الهاتف، والسيرفر يستقبل فقط العمليات الخاصة والمجمعة.

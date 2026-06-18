@@ -1,0 +1,953 @@
+ملف توثيق قواعد Cloudflare و WAF لموقع Wor Reader
+================================================
+
+آخر تحديث للملف: v2470 - إضافة مسارات App Public Cache API إلى قاعدتي Cache Wor Public Manifests و Cache Wor Public Packs
+
+الغرض من هذا الملف
+------------------
+هذا الملف يلخص قواعد Cloudflare المعتمدة لموقع روايات يعمل بقالب Wor Reader بعد تعديلات الكاش العام، البحث الصفري، فهرس الفصول العام، ومواعيد نزول فصول VIP بنظام Manifest + Versioned Packs.
+
+الفكرة الأساسية:
+- الزائر غير المسجل: يأخذ الصفحات العامة من Cloudflare Cache.
+- العضو المسجل العادي: يأخذ الصفحات العامة من Cloudflare Cache إذا كان يحمل cookie:
+  wor_reader_cf_segment=public
+- المشترك VIP أو صاحب صلاحيات الإدارة/التحرير: bypass cache.
+- صفحات الحساب والبيانات الشخصية وREST API والمزامنة والتعليقات لا تدخل الكاش.
+- صفحات الفصول والروايات والقوائم العامة تدخل الكاش.
+- Browser TTL لصفحات HTML العامة يبقى Bypass cache حتى لا تعلق النسخ القديمة عند متصفح الزائر.
+- الكاش الطويل يكون عند Cloudflare Edge فقط.
+- ملفات JSON العامة الآمنة داخل wor-reader-cache تدخل الكاش فقط عبر قواعد مخصصة، وليس عبر كاش JSON عام.
+- مواعيد نزول فصول VIP العامة تستخدم ملفات ثابتة آمنة داخل uploads، ولا تحتوي روابط فصول خاصة أو محتوى أو صلاحيات مستخدم.
+
+آخر نسخة/إضافة قالب مرتبطة بهذه القواعد
+-------------------------------------------
+القواعد الأساسية بدأت مع:
+wor-reader-v2364-smart-sync-fix13-cloudflare-safe-public.zip
+
+ثم أضيفت قواعد البحث الصفري مع:
+wor-reader-v2400-zero-origin-search.zip
+
+ثم تم تحديث القواعد مع نظام فهرس الفصول العام:
+wor-reader-v2432-chapter-index-manifest.zip
+
+ثم تم توسيع القواعد مع نظام مواعيد نزول فصول VIP:
+wor-reader-v2459-vip-release-schedule-cloudflare.zip
+wor-reader-v2460-vip-schedule-admin-tools.zip
+wor-reader-v2461-vip-schedule-empty-design-fix.zip
+
+ثم أضيفت طبقة حماية النسخ الآلي مع:
+wor-reader-v2462-anti-scrape-edge-hardening.zip
+
+ثم أضيفت قاعدة WAF إضافية بعد الاختبار العملي ضد إضافات EPUB/WebToEpub:
+Wor challenge non browser chapter fetches
+
+ثم تم تحديث قواعد الكاش مع طبقة التطبيق الاقتصادية:
+wor-reader-v2470-app-cache-api.zip
+
+تعديل v2470 لا يضيف قواعد Cloudflare جديدة، بل يوسع القاعدتين الموجودتين فقط:
+- Cache Wor Public Manifests
+- Cache Wor Public Packs
+
+حتى تدعم ملفات التطبيق العامة الآمنة داخل:
+- /wp-content/uploads/wor-reader-cache/app/manifest/
+- /wp-content/uploads/wor-reader-cache/app/packs/
+
+هذه الملفات تخدم التطبيق ببيانات عامة مثل bootstrap/home/catalog/rankings/store/novel profile، ولا تحتوي user_id أو nonce أو حالة اشتراك أو روابط VIP خاصة أو محتوى فصول VIP.
+
+التعديلات المهمة داخل القالب في هذه النسخ:
+- توسيع وضع Cloudflare الآمن من صفحات الفصول فقط إلى الصفحات العامة.
+- منع طباعة بيانات المستخدم/VIP/nonces داخل HTML العام القابل للكاش.
+- إبقاء صفحات الحساب/السجل/المفضلة/الإشعارات خارج الكاش.
+- إبقاء المشتركين VIP والمدراء والمحررين خارج الكاش.
+- السماح لصفحات الروايات والفصول والقوائم العامة بالكاش للزوار والأعضاء العاديين.
+- عند تعديل رواية أو فصل، القالب يحاول تنظيف كاش العناصر المرتبطة.
+- إضافة Zero-Origin Smart Search Pack: فهرس بحث عام في ملفات JSON ثابتة داخل uploads، بحيث تتم اقتراحات البحث داخل المتصفح بدون REST/AJAX وبدون ضغط قاعدة البيانات أثناء الكتابة.
+- إضافة Public Chapter Index Manifest: فهرس فصول عام لكل رواية في ملفات JSON ثابتة داخل uploads.
+- صفحة الرواية وصفحة قراءة الفصل تستخدمان نفس فهرس الفصول العام لإظهار قائمة الفصول العامة بدون REST/AJAX وبدون استعلام قاعدة بيانات لكل زائر.
+- فهرس الفصول يستخدم manifest صغير + pack باسم متغير versioned حتى يمكن كاش pack طويلًا بأمان.
+- إضافة VIP Release Schedule: ملفات JSON ثابتة داخل uploads لمواعيد نزول الفصول القادمة حسب الباقات، بدون REST/AJAX وبدون ضغط قاعدة البيانات عند فتح صفحة الرواية.
+- ملفات مواعيد VIP تستخدم manifest صغير + pack باسم متغير versioned حتى يمكن كاش pack طويلًا بأمان.
+- مواعيد VIP لا تحتوي محتوى الفصل، ولا رابط الفصل الخاص، ولا slug، ولا user_id، ولا nonce، ولا صلاحيات مستخدم.
+- عند تحول فصل مجدول إلى منشور، أو تعديل موعده، يحاول القالب تحديث/حذف ملفات مواعيد VIP للرواية المرتبطة.
+- في v2461 تم منع ظهور حاوية مواعيد VIP في الروايات التي لا تملك أي فصل مجدول قادم.
+- عدد قواعد Cloudflare بقي 7 قواعد فقط، ولم تتم إضافة قواعد جديدة. تم توسيع قاعدتي البحث القديمتين لتشملان البحث + فهارس الفصول + مواعيد VIP.
+- في v2470 تم توسيع نفس القاعدتين أيضًا لتشمل ملفات التطبيق العامة app/manifest و app/packs بدون زيادة عدد قواعد Cloudflare.
+
+تعديلات v2462 المهمة
+---------------------
+هذه النسخة لا تغير قواعد الكاش السبع الأساسية، لكنها تضيف طبقة WAF/Rate Limiting فوقها لتقليل النسخ الآلي وسحب الفصول بسرعة.
+
+التعديلات داخل القالب:
+- إيقاف استخدام chapter-fragments العامة للزوار في القراءة المتواصلة.
+- إبقاء النزول المتواصل شغالًا عبر رابط الفصل التالي الكامل بدل ملف fragment العام.
+- الفصل التالي الكامل يبقى قابلًا للكاش عبر قاعدة Cache public chapter pages.
+- منع توليد chapter-fragments عامة جديدة للفصول العامة.
+- حذف chapter-fragments القديمة تدريجيًا بدون عملية حذف ضخمة دفعة واحدة.
+- إغلاق REST fallback العام لفهرس الفصول أمام الزوار، مع إبقائه للتشخيص/المدير عند الحاجة.
+- الاعتماد الطبيعي يبقى على chapter manifest + chapter pack.
+- تأخير public-view الافتراضي لتقليل طلبات POST إلى السيرفر.
+- إضافة cookie خفيف يكتبه المتصفح باسم:
+  wor_reader_js=1
+  لا يعتمد عليه كصلاحية أمنية، لكنه يساعد لاحقًا في قواعد WAF إذا احتجنا.
+- إضافة headers خفيفة:
+  X-Frame-Options: SAMEORIGIN
+  Content-Security-Policy: frame-ancestors 'self'
+  Referrer-Policy: strict-origin-when-cross-origin
+
+مهم:
+- النزول المتواصل لا يتوقف.
+- الزوار والأعضاء العاديون لا يحتاجون chapter-fragments العامة بعد v2462.
+- أي فصل VIP/private لا يعتمد على JavaScript للوصول، والصلاحيات تبقى من السيرفر.
+- لا تطبع بيانات VIP أو user_id أو nonce أو روابط خاصة في HTML العام.
+
+تعديلات v2470 المهمة
+---------------------
+هذه النسخة تضيف طبقة App Public Cache API لتخفيف ضغط تطبيق الهاتف على السيرفر.
+
+التعديلات داخل القالب:
+- إضافة ملفات عامة للتطبيق داخل:
+  /wp-content/uploads/wor-reader-cache/app/manifest/
+  /wp-content/uploads/wor-reader-cache/app/packs/
+- ملفات app/manifest صغيرة وتشير إلى pack الحالي.
+- ملفات app/packs ذات أسماء متغيرة versioned ويمكن كاشها لمدة طويلة.
+- الملفات العامة الجديدة تخدم:
+  bootstrap
+  home
+  catalog/library
+  rankings
+  store public config
+  novel profile
+- لا تحتوي ملفات app العامة:
+  user_id
+  nonce
+  حالة اشتراك المستخدم
+  مفضلة أو سجل قراءة
+  روابط VIP خاصة
+  محتوى فصول VIP
+  صلاحيات مستخدم
+- لا يتم كاش /wp-json/، وREST الخاص بالتطبيق يبقى bypass/no-store عبر قاعدة Bypass الخاصة.
+
+مهم:
+- لا تضف قاعدة Cache Rule جديدة.
+- لا تضف .json إلى قاعدة Cache static assets.
+- فقط استبدل Expression الخاص بقاعدتي:
+  Cache Wor Public Manifests
+  Cache Wor Public Packs
+  بالنسخ المحدثة في هذا الملف.
+
+قواعد WAF/Security الحالية بعد v2462
+-------------------------------------
+هذه القواعد موجودة في:
+Cloudflare > Security > WAF > Security rules
+
+وليست داخل Cache Rules.
+
+الوضع الحالي في خطة Free:
+- Custom rules: 5/5 used
+- Rate limiting rules: 1/1 used
+- Managed rules: غير مستخدمة بسبب الخطة الحالية
+
+قاعدة Custom 1: Wor block old chapter fragments
+------------------------------------------------
+Rule name:
+Wor block old chapter fragments
+
+Expression:
+
+(http.request.method in {"GET" "HEAD"})
+and starts_with(http.request.uri.path, "/wp-content/uploads/wor-reader-cache/chapter-fragments/")
+
+Action:
+- Block
+
+الغرض:
+حظر ملفات chapter-fragments القديمة لأنها كانت طريقًا سريعًا للحصول على HTML فصل مباشر.
+بعد v2462 النزول المتواصل لا يحتاج هذه الملفات للزوار العامين.
+
+قاعدة Custom 2: Wor block public chapter REST fallback
+------------------------------------------------------
+Rule name:
+Wor block public chapter REST fallback
+
+Expression:
+
+(http.request.uri.path eq "/wp-json/wor-reader/v1/reader-chapters-index")
+and not http.cookie contains "wordpress_logged_in_"
+
+Action:
+- Block
+
+الغرض:
+منع الزائر غير المسجل من استخدام REST fallback القديم لجلب فهرس الفصول.
+القالب يعتمد على ملفات:
+- /wp-content/uploads/wor-reader-cache/chapters/manifest/
+- /wp-content/uploads/wor-reader-cache/chapters/packs/
+
+قاعدة Custom 3: Wor block scraper user agents
+---------------------------------------------
+Rule name:
+Wor block scraper user agents
+
+Expression:
+
+(
+  starts_with(http.request.uri.path, "/novel/")
+  or starts_with(http.request.uri.path, "/wp-json/wor-reader/")
+  or starts_with(http.request.uri.path, "/wp-content/uploads/wor-reader-cache/")
+)
+and (
+  lower(http.user_agent) contains "curl"
+  or lower(http.user_agent) contains "python"
+  or lower(http.user_agent) contains "wget"
+  or lower(http.user_agent) contains "scrapy"
+  or lower(http.user_agent) contains "requests"
+  or lower(http.user_agent) contains "aiohttp"
+  or lower(http.user_agent) contains "go-http-client"
+)
+and not cf.client.bot
+
+Action:
+- Block
+
+الغرض:
+حظر أدوات السحب الخام والواضحة فقط على مسارات الروايات وREST الخاص بالقالب وملفات wor-reader-cache.
+
+مهم:
+لا تضع داخل هذه القاعدة:
+- okhttp
+- dart
+- httpclient
+
+هذه الكلمات لها قاعدة challenge منفصلة لأنها قد تظهر في تطبيقات WebView أو Flutter/Android.
+
+قاعدة Custom 4: Wor challenge app webview clients
+-------------------------------------------------
+Rule name:
+Wor challenge app webview clients
+
+Expression:
+
+(
+  starts_with(http.request.uri.path, "/novel/")
+  or starts_with(http.request.uri.path, "/wp-json/wor-reader/")
+  or starts_with(http.request.uri.path, "/wp-content/uploads/wor-reader-cache/")
+)
+and (
+  lower(http.user_agent) contains "httpclient"
+  or lower(http.user_agent) contains "okhttp"
+  or lower(http.user_agent) contains "dart"
+)
+and not cf.client.bot
+
+Action:
+- Managed Challenge
+
+الغرض:
+إزعاج تطبيقات WebView/Android/Flutter المشبوهة بدل حظرها مباشرة.
+إذا ظهرت مشاكل مع تطبيقات شرعية أو قراء حقيقيين، راقب Security Events قبل التشديد.
+
+قاعدة Custom 5: Wor challenge non browser chapter fetches
+---------------------------------------------------------
+Rule name:
+Wor challenge non browser chapter fetches
+
+Expression:
+
+(http.request.method in {"GET" "HEAD"})
+and starts_with(http.request.uri.path, "/novel/")
+and http.request.uri.path contains "/chapter-"
+and not cf.client.bot
+and not any(http.request.headers["sec-fetch-dest"][*] eq "document")
+and not any(http.request.headers["sec-fetch-site"][*] eq "same-origin")
+
+Action:
+- Managed Challenge
+
+الغرض:
+إيقاف أو تحدي طلبات جلب الفصول التي لا تبدو كفتح صفحة عادي من المتصفح وليست قادمة من نفس الموقع.
+
+هذه القاعدة أضيفت بعد اختبار WebToEpub، وهدفها منع إضافات المتصفح أو الطلبات الخلفية من تحميل الفصول دفعة واحدة، مع السماح للنزول المتواصل داخل الموقع بالعمل لأن طلباته تكون same-origin في الوضع الطبيعي.
+
+مهم:
+- لا تجعلها Block إلا إذا تأكدت أن النزول المتواصل والقراءة العادية لا يتأثران.
+- إذا توقف النزول المتواصل بعد تعديل مستقبلي في القالب أو المتصفح، عطّل هذه القاعدة مؤقتًا ثم افحص Security Events.
+- إذا ظهرت false positives على متصفحات حقيقية نادرة، أبقِ الإجراء Managed Challenge ولا تحوله إلى Block.
+- هذه القاعدة لا تغني عن Rate Limiting؛ هي طبقة إضافية ضد WebToEpub وأدوات الجلب الخلفي.
+
+قاعدة Rate Limiting 1: Wor limit public chapter pages
+-----------------------------------------------------
+Rule name:
+Wor limit public chapter pages
+
+Expression:
+
+(http.request.method in {"GET" "HEAD"})
+and starts_with(http.request.uri.path, "/novel/")
+and http.request.uri.path contains "/chapter-"
+and not cf.client.bot
+
+Characteristics:
+- IP
+
+When rate exceeds:
+- Requests: 8
+- Period: 10 seconds
+
+Action:
+- Block
+
+Duration:
+- 10 seconds
+
+الغرض:
+منع فتح الفصول بسرعة غير بشرية.
+القارئ الطبيعي لا يفتح 8 فصول خلال 10 ثواني، بينما السكربتات تفعل ذلك.
+الحظر قصير حتى لا يضر الزوار الحقيقيين إذا حصل false positive نادر.
+
+ملاحظات مهمة عن قواعد WAF الحالية
+-----------------------------------
+- لا تضف قاعدة Rate Limiting ثانية لأن الخطة الحالية تسمح بقاعدة واحدة فقط.
+- لا تضف Custom Rule إضافية الآن لأن الخطة الحالية وصلت إلى 5/5 في خطة Free.
+- لا تستخدم Block مع okhttp/dart/httpclient؛ استخدم Managed Challenge.
+- اترك chapter-fragments على Block لأنها لم تعد مطلوبة للنزول المتواصل بعد v2462.
+- اترك REST fallback القديم على Block للزوار غير المسجلين لأن فهرس الفصول العام يأتي من manifest + pack.
+- إذا اشتكى قراء حقيقيون من الحظر أثناء القراءة، ارفع Rate Limit من:
+  8 requests / 10 seconds
+  إلى:
+  12 requests / 10 seconds
+- إذا استمر النسخ الآلي ولم يتأثر، راقب User-Agent وASN والدولة وheaders من Security Events قبل تغيير أي قاعدة، لأن Custom rules وصلت إلى 5/5.
+
+ما لم يتم تفعيله حاليًا
+-----------------------
+- لا توجد قاعدة public-view منفصلة بسبب حد Rate Limiting في خطة Free.
+- تم تقليل public-view داخل القالب نفسه في v2462 بدل الاعتماد على قاعدة Cloudflare منفصلة.
+- لم يتم تفعيل قاعدة challenge للطلبات بدون wor_reader_js حتى الآن؛ قاعدة non-browser chapter fetches الحالية هي الأهم ضد WebToEpub.
+- لم يتم تفعيل تقسيم chapter packs بعد؛ هذا مؤجل لإصدار لاحق.
+
+اختبار سريع بعد قواعد v2462
+----------------------------
+1. افتح فصل كزائر وتأكد أنه يعمل.
+2. انزل حتى نهاية الفصل وتأكد أن النزول المتواصل يعمل.
+3. من DevTools تأكد أن الفصل التالي لا يأتي من:
+   /wp-content/uploads/wor-reader-cache/chapter-fragments/
+4. الفصل التالي يجب أن يأتي من رابط فصل كامل:
+   /novel/.../chapter-...
+5. افتح أكثر من 8 فصول خلال 10 ثواني كتجربة؛ يجب أن يظهر حظر قصير أو حدث في Rate Limiting.
+6. افتح مسار chapter-fragments قديم؛ يجب أن يظهر Block.
+7. تأكد أن البحث وقائمة الفصول ما زالت تستخدم manifest + pack وليس REST.
+8. جرّب WebToEpub أو أي إضافة EPUB؛ يجب أن تتوقف أو تواجه Managed Challenge بسبب قاعدة non-browser chapter fetches.
+9. راقب Cloudflare Security Events بعد 24 ساعة.
+
+
+ترتيب القواعد في Cloudflare
+----------------------------
+يجب أن يكون الترتيب بهذا الشكل بالضبط:
+
+1. Bypass private WordPress and paid content
+2. Cache Wor Public Manifests
+3. Cache Wor Public Packs
+4. Cache static assets
+5. Cache public chapter pages
+6. Cache public novel pages
+7. Cache public listing pages
+
+مهم جدًا:
+- قاعدة Bypass private WordPress and paid content يجب أن تكون First دائمًا.
+- قاعدتا Public Manifests و Public Packs يجب أن تكونا بعد قاعدة Bypass مباشرة وقبل Cache static assets.
+- لا تضف قاعدة جديدة لفهارس الفصول أو مواعيد VIP؛ تم دمجها داخل القاعدتين 2 و3 للحفاظ على عدد القواعد.
+- لا تضف .json إلى قاعدة Cache static assets العامة.
+
+
+القاعدة 1: Bypass private WordPress and paid content
+----------------------------------------------------
+Rule name:
+Bypass private WordPress and paid content
+
+Expression:
+
+(http.request.method ne "GET" and http.request.method ne "HEAD")
+or starts_with(http.request.uri.path, "/wp-admin")
+or starts_with(http.request.uri.path, "/wp-login.php")
+or starts_with(http.request.uri.path, "/xmlrpc.php")
+or starts_with(http.request.uri.path, "/wp-comments-post.php")
+or starts_with(http.request.uri.path, "/wp-cron.php")
+or starts_with(http.request.uri.path, "/wp-json/")
+or starts_with(http.request.uri.path, "/account")
+or starts_with(http.request.uri.path, "/history")
+or starts_with(http.request.uri.path, "/favorites")
+or starts_with(http.request.uri.path, "/notifications")
+or starts_with(http.request.uri.path, "/publish")
+or http.request.uri.query contains "preview"
+or http.request.uri.query contains "customize_changeset_uuid"
+or http.request.uri.query contains "elementor-preview"
+or http.cookie contains "wor_reader_cf_segment=private"
+or http.cookie contains "wordpress_sec_"
+or http.cookie contains "wp-postpass_"
+or (
+  http.cookie contains "wordpress_logged_in_"
+  and not http.cookie contains "wor_reader_cf_segment=public"
+)
+
+Settings:
+- Cache eligibility: Bypass cache
+- Place at: First
+
+الغرض:
+هذه القاعدة تمنع كاش أي شيء خاص أو إداري أو حساس:
+- لوحة التحكم
+- تسجيل الدخول
+- REST API
+- مزامنة الأب/الابن
+- التعليقات
+- المعاينات
+- صفحات الحساب والمفضلة والسجل والإشعارات
+- المشتركين VIP
+- المدراء والمحررين
+- أي عضو مسجل لا يحمل public segment واضح
+
+
+القاعدة 2: Cache Wor Public Manifests
+-------------------------------------
+Rule name:
+Cache Wor Public Manifests
+
+ملاحظة مهمة:
+هذه القاعدة كانت سابقًا باسم:
+Cache Wor Search Manifest
+تم توسيعها بدل إنشاء قاعدة جديدة حتى تخدم:
+- Search manifest
+- Chapter index manifests
+- VIP release schedule manifests
+- App public manifests
+
+Expression:
+
+(http.request.method in {"GET" "HEAD"})
+and (
+  http.request.uri.path eq "/wp-content/uploads/wor-reader-cache/search/manifest.json"
+  or (
+    starts_with(http.request.uri.path, "/wp-content/uploads/wor-reader-cache/chapters/manifest/")
+    and ends_with(lower(http.request.uri.path), ".json")
+  )
+  or (
+    starts_with(http.request.uri.path, "/wp-content/uploads/wor-reader-cache/vip-schedule/manifest/")
+    and ends_with(lower(http.request.uri.path), ".json")
+  )
+  or (
+    starts_with(http.request.uri.path, "/wp-content/uploads/wor-reader-cache/app/manifest/")
+    and ends_with(lower(http.request.uri.path), ".json")
+  )
+)
+
+Settings:
+- Cache eligibility: Eligible for cache
+- Edge TTL: Ignore cache-control header and use this TTL
+- TTL: 2 hours
+- Browser TTL: Bypass cache
+
+الغرض:
+تكاشي ملفات manifest العامة الصغيرة فقط:
+- ملف manifest الخاص بالبحث:
+  /wp-content/uploads/wor-reader-cache/search/manifest.json
+- ملفات manifest الخاصة بفهرس فصول الروايات:
+  /wp-content/uploads/wor-reader-cache/chapters/manifest/novel-ID.json
+- ملفات manifest الخاصة بمواعيد نزول فصول VIP:
+  /wp-content/uploads/wor-reader-cache/vip-schedule/manifest/novel-ID.json
+- ملفات manifest العامة الخاصة بالتطبيق:
+  /wp-content/uploads/wor-reader-cache/app/manifest/bootstrap.json
+  /wp-content/uploads/wor-reader-cache/app/manifest/home.json
+  /wp-content/uploads/wor-reader-cache/app/manifest/catalog.json
+  /wp-content/uploads/wor-reader-cache/app/manifest/rankings.json
+  /wp-content/uploads/wor-reader-cache/app/manifest/store.json
+  /wp-content/uploads/wor-reader-cache/app/manifest/novel-ID.json
+
+هذه الملفات صغيرة وآمنة للكاش، وتخبر المتصفح أو التطبيق باسم ملف pack الحالي مثل:
+- novels-xxxxx.json للبحث.
+- novel-ID-VERSION.json لفصول الرواية.
+- novel-ID-VERSION.json لمواعيد VIP.
+- app/packs/name-VERSION.json لملفات التطبيق العامة.
+
+ملاحظة:
+Browser TTL يبقى Bypass cache حتى لا يعلق manifest طويلًا في متصفح الزائر أو التطبيق عند تحديث البحث أو فصول الرواية أو بيانات التطبيق العامة.
+إذا كانت واجهة Cloudflare تسمح بأقل من ساعتين، يمكن جعل Edge TTL من 30 إلى 60 دقيقة، لكن لا تجعل Browser TTL طويلًا لهذا النوع من الملفات.
+حتى إذا بقي Edge TTL ساعتين، القالب يحاول تنظيف manifest المرتبط عند تحديث الفصول أو البحث أو مواعيد VIP أو بيانات التطبيق العامة.
+
+القاعدة 3: Cache Wor Public Packs
+---------------------------------
+Rule name:
+Cache Wor Public Packs
+
+ملاحظة مهمة:
+هذه القاعدة كانت سابقًا باسم:
+Cache Wor Search Packs
+تم توسيعها بدل إنشاء قاعدة جديدة حتى تخدم:
+- Search packs
+- Chapter index packs
+- VIP release schedule packs
+- App public packs
+
+Expression:
+
+(http.request.method in {"GET" "HEAD"})
+and (
+  (
+    starts_with(http.request.uri.path, "/wp-content/uploads/wor-reader-cache/search/")
+    and ends_with(lower(http.request.uri.path), ".json")
+    and not http.request.uri.path contains "manifest.json"
+  )
+  or (
+    starts_with(http.request.uri.path, "/wp-content/uploads/wor-reader-cache/chapters/packs/")
+    and ends_with(lower(http.request.uri.path), ".json")
+  )
+  or (
+    starts_with(http.request.uri.path, "/wp-content/uploads/wor-reader-cache/vip-schedule/packs/")
+    and ends_with(lower(http.request.uri.path), ".json")
+  )
+  or (
+    starts_with(http.request.uri.path, "/wp-content/uploads/wor-reader-cache/app/packs/")
+    and ends_with(lower(http.request.uri.path), ".json")
+  )
+)
+
+Settings:
+- Cache eligibility: Eligible for cache
+- Edge TTL: Ignore cache-control header and use this TTL
+- TTL: 1 month
+- Browser TTL: Override origin and use this TTL
+- TTL: 1 month
+
+الغرض:
+تكاشي ملفات packs العامة ذات الاسم المتغير، مثل:
+- ملفات فهرس البحث الكبيرة:
+  /wp-content/uploads/wor-reader-cache/search/novels-xxxxx.json
+- ملفات فهرس فصول الروايات:
+  /wp-content/uploads/wor-reader-cache/chapters/packs/novel-ID-VERSION.json
+- ملفات مواعيد نزول فصول VIP:
+  /wp-content/uploads/wor-reader-cache/vip-schedule/packs/novel-ID-VERSION.json
+- ملفات التطبيق العامة:
+  /wp-content/uploads/wor-reader-cache/app/packs/bootstrap-VERSION.json
+  /wp-content/uploads/wor-reader-cache/app/packs/home-VERSION.json
+  /wp-content/uploads/wor-reader-cache/app/packs/catalog-VERSION.json
+  /wp-content/uploads/wor-reader-cache/app/packs/rankings-VERSION.json
+  /wp-content/uploads/wor-reader-cache/app/packs/store-VERSION.json
+  /wp-content/uploads/wor-reader-cache/app/packs/novel-ID-VERSION.json
+
+هذه الملفات عامة وآمنة للكاش الطويل لأنها تحتوي بيانات عامة آمنة فقط.
+
+ملفات البحث العامة قد تحتوي:
+- اسم الرواية.
+- رابط الرواية.
+- صورة مصغرة عامة.
+- التصنيفات العامة.
+- عدد الفصول العامة.
+- نص بحث عام.
+
+ملفات فهرس الفصول العامة قد تحتوي:
+- ID الفصل العام.
+- رقم الفصل.
+- عنوان الفصل العام.
+- رابط الفصل.
+- تاريخ النشر العام.
+- بيانات ترتيب/بحث عامة.
+
+ملفات مواعيد VIP العامة قد تحتوي:
+- رقم الفصل.
+- ترتيب الفصل.
+- موعد نزوله للعامة.
+- بيانات العد والتجميع العامة.
+
+ملفات التطبيق العامة قد تحتوي:
+- إعدادات bootstrap العامة.
+- روابط manifest العامة.
+- بيانات home العامة.
+- فهرس catalog/library العام.
+- بيانات novel profile العامة.
+- rankings العامة.
+- store public config العامة.
+
+ولا تحتوي هذه الملفات:
+- بيانات أعضاء.
+- مفضلات أو سجل قراءة.
+- محتوى فصول VIP.
+- روابط فصول خاصة.
+- slug خاص لفصول VIP.
+- user_id.
+- nonces.
+- صلاحيات.
+- حالة اشتراك المستخدم.
+- عناوين خاصة قد تكشف محتوى غير منشور.
+- فصول VIP قابلة للقراءة كرابط مباشر.
+
+ملاحظة:
+لأن اسم ملف pack يتغير عند إعادة بناء الفهرس، يمكن كاش هذه الملفات لمدة شهر في Cloudflare والمتصفح/التطبيق بدون مشكلة.
+لا تضف .json إلى قاعدة Cache static assets العامة؛ استخدم هذه القاعدة المخصصة لمسارات wor-reader-cache العامة فقط.
+
+القاعدة 4: Cache static assets
+------------------------------
+Rule name:
+Cache static assets
+
+Expression:
+
+(http.request.method in {"GET" "HEAD"})
+and (
+  ends_with(lower(http.request.uri.path), ".css")
+  or ends_with(lower(http.request.uri.path), ".js")
+  or ends_with(lower(http.request.uri.path), ".mjs")
+  or ends_with(lower(http.request.uri.path), ".png")
+  or ends_with(lower(http.request.uri.path), ".jpg")
+  or ends_with(lower(http.request.uri.path), ".jpeg")
+  or ends_with(lower(http.request.uri.path), ".webp")
+  or ends_with(lower(http.request.uri.path), ".avif")
+  or ends_with(lower(http.request.uri.path), ".gif")
+  or ends_with(lower(http.request.uri.path), ".svg")
+  or ends_with(lower(http.request.uri.path), ".ico")
+  or ends_with(lower(http.request.uri.path), ".woff")
+  or ends_with(lower(http.request.uri.path), ".woff2")
+  or ends_with(lower(http.request.uri.path), ".ttf")
+)
+
+Settings:
+- Cache eligibility: Eligible for cache
+- Edge TTL: Ignore cache-control header and use this TTL
+- TTL: 1 month
+- Browser TTL: Override origin and use this TTL
+- TTL: 1 month
+
+الغرض:
+تكاشي ملفات CSS/JS والصور والخطوط لتخفيف تحميل السيرفر.
+
+مهم:
+لا تضف .json هنا. ملفات JSON العامة لها قواعدها الخاصة فقط:
+- Cache Wor Public Manifests
+- Cache Wor Public Packs
+
+
+القاعدة 5: Cache public chapter pages
+-------------------------------------
+Rule name:
+Cache public chapter pages
+
+Expression:
+
+(http.request.method in {"GET" "HEAD"})
+and starts_with(http.request.uri.path, "/novel/")
+and http.request.uri.path contains "/chapter-"
+and not http.request.uri.query contains "preview"
+and not http.request.uri.query contains "customize_changeset_uuid"
+and not http.cookie contains "wor_reader_cf_segment=private"
+and (
+  not http.cookie contains "wordpress_logged_in_"
+  or http.cookie contains "wor_reader_cf_segment=public"
+)
+
+Settings:
+- Cache eligibility: Eligible for cache
+- Edge TTL: Ignore cache-control header and use this TTL
+- TTL: 7 days
+- Browser TTL: Bypass cache
+
+ملاحظة:
+لا تجعل Browser TTL طويلًا لصفحات الفصول حتى لا تعلق نسخة قديمة في متصفح الزائر.
+الكاش يكون عند Cloudflare فقط، ويمكن تنظيفه عند تحديث الفصل.
+
+صفحة قراءة الفصل لا تحتاج تحميل قائمة كل الفصول داخل HTML.
+القالب بعد v2432 يستطيع تحميل قائمة الفصول العامة عند فتح قائمة الفصول من ملف:
+/wp-content/uploads/wor-reader-cache/chapters/manifest/novel-ID.json
+ثم pack المرتبط به.
+
+
+القاعدة 6: Cache public novel pages
+-----------------------------------
+Rule name:
+Cache public novel pages
+
+Expression:
+
+(http.request.method in {"GET" "HEAD"})
+and starts_with(http.request.uri.path, "/novel/")
+and not http.request.uri.path contains "/chapter-"
+and not http.request.uri.query contains "preview"
+and not http.request.uri.query contains "customize_changeset_uuid"
+and not http.cookie contains "wor_reader_cf_segment=private"
+and (
+  not http.cookie contains "wordpress_logged_in_"
+  or http.cookie contains "wor_reader_cf_segment=public"
+)
+
+Settings:
+- Cache eligibility: Eligible for cache
+- Edge TTL: Ignore cache-control header and use this TTL
+- TTL: 1 day
+- Browser TTL: Bypass cache
+
+الغرض:
+تكاشي صفحات الروايات العامة، لأن القالب يمنع طباعة بيانات المستخدم الخاصة داخل HTML العام.
+
+ملاحظة مهمة بعد v2432:
+صفحة الرواية لا تعتمد على HTML القديم وحده لعرض قائمة الفصول.
+إذا كانت نسخة HTML قديمة عند Cloudflare، يستطيع JavaScript قراءة manifest فصول الرواية ثم pack الحديث لتصحيح قائمة الفصول العامة بدون REST/AJAX وبدون ضغط قاعدة البيانات.
+
+
+القاعدة 7: Cache public listing pages
+-------------------------------------
+Rule name:
+Cache public listing pages
+
+Expression:
+
+(http.request.method in {"GET" "HEAD"})
+and (
+  http.request.uri.path eq "/"
+  or starts_with(http.request.uri.path, "/library")
+  or starts_with(http.request.uri.path, "/recent")
+  or starts_with(http.request.uri.path, "/ranking")
+  or starts_with(http.request.uri.path, "/novels")
+  or starts_with(http.request.uri.path, "/genre")
+  or starts_with(http.request.uri.path, "/novel-genre")
+  or starts_with(http.request.uri.path, "/translator")
+)
+and http.request.uri.query eq ""
+and not http.cookie contains "wor_reader_cf_segment=private"
+and (
+  not http.cookie contains "wordpress_logged_in_"
+  or http.cookie contains "wor_reader_cf_segment=public"
+)
+
+Settings:
+- Cache eligibility: Eligible for cache
+- Edge TTL: Ignore cache-control header and use this TTL
+- TTL: 2 hours
+- Browser TTL: Bypass cache
+
+ملاحظة:
+كان المطلوب مبدئيًا 10 إلى 30 دقيقة، لكن واجهة Cloudflare عندك لم تعرض أقل من 2 hours.
+لذلك استخدمنا 2 hours مع Browser TTL = Bypass cache.
+هذا يعني أن الكاش يكون عند Cloudflare فقط، وليس في متصفح الزائر.
+
+
+إعدادات Cloudflare العامة المقترحة
+----------------------------------
+- Brotli: ON
+- HTTP/3: ON
+- Early Hints: ON
+- Rocket Loader: OFF
+- Auto Minify: OFF حاليًا
+- Cache Everything العام: لا تستخدمه، اعتمد على القواعد السبع فقط.
+
+مسارات لا يجب تكاشيها
+---------------------
+لا تكاشي هذه المسارات:
+- /wp-admin/*
+- /wp-login.php
+- /wp-json/*
+- /wp-comments-post.php
+- /xmlrpc.php
+- /account/*
+- /history/*
+- /favorites/*
+- /notifications/*
+- /publish/*
+- صفحات المعاينة preview
+- صفحات التخصيص customize
+- أي طلب POST/PUT/DELETE
+- صفحات أو طلبات VIP/private
+- chapter-fragments العامة لم تعد مستخدمة للزوار بعد v2462، وهي محظورة عبر WAF بدل إدخالها في كاش عام.
+
+مهم بخصوص JSON
+---------------
+لا تضف كل ملفات .json إلى قاعدة static assets العامة.
+
+الملفات الوحيدة التي نكاشيها كـ JSON حاليًا هي الملفات العامة الآمنة داخل هذه المسارات فقط:
+
+1. Search manifest:
+   /wp-content/uploads/wor-reader-cache/search/manifest.json
+
+2. Search packs:
+   /wp-content/uploads/wor-reader-cache/search/*.json
+   بشرط ألا يكون الملف manifest.json
+
+3. Chapter manifests:
+   /wp-content/uploads/wor-reader-cache/chapters/manifest/*.json
+
+4. Chapter packs:
+   /wp-content/uploads/wor-reader-cache/chapters/packs/*.json
+
+5. VIP schedule manifests:
+   /wp-content/uploads/wor-reader-cache/vip-schedule/manifest/*.json
+
+6. VIP schedule packs:
+   /wp-content/uploads/wor-reader-cache/vip-schedule/packs/*.json
+
+7. App public manifests:
+   /wp-content/uploads/wor-reader-cache/app/manifest/*.json
+
+8. App public packs:
+   /wp-content/uploads/wor-reader-cache/app/packs/*.json
+
+وذلك عبر قاعدتي:
+- Cache Wor Public Manifests
+- Cache Wor Public Packs
+
+منطق المستخدمين
+---------------
+- زائر غير مسجل:
+  Cloudflare Cache للصفحات العامة والملفات العامة الآمنة.
+
+- عضو مسجل عادي:
+  Cloudflare Cache للصفحات العامة بشرط وجود:
+  wor_reader_cf_segment=public
+
+- مشترك VIP:
+  bypass بسبب:
+  wor_reader_cf_segment=private
+
+- مدير/محرر:
+  bypass بسبب cookies/صلاحيات WordPress.
+
+ماذا حل نظام v2432؟
+-------------------
+المشكلة القديمة:
+- أحدث الفصول يظهر الفصل الجديد.
+- لكن صفحة الرواية قد تأتي من Cloudflare HTML قديم وتعرض لا توجد فصول أو لا تعرض الفصول الجديدة.
+- VIP لا يتأثر لأنه bypass.
+
+الحل الحالي:
+- صفحة الرواية تبقى مكاشاة لتخفيف السيرفر.
+- قائمة الفصول العامة تعتمد على manifest + pack ثابتين داخل uploads.
+- حتى إذا كان HTML صفحة الرواية قديمًا، يستطيع المتصفح جلب manifest الحديث ثم pack الحديث وتصحيح قائمة الفصول.
+- نفس ملف فهرس الفصول يستخدم أيضًا في صفحة قراءة الفصل عند فتح قائمة الفصول.
+- لا يوجد REST عام ولا admin-ajax لجلب قائمة الفصول.
+- لا يوجد استعلام قاعدة بيانات لكل زائر.
+
+ماذا أضاف نظام v2459 إلى v2461؟
+-------------------------------
+- إضافة مواعيد نزول فصول VIP كملفات ثابتة داخل:
+  /wp-content/uploads/wor-reader-cache/vip-schedule/
+- تستخدم نفس نمط manifest + versioned pack.
+- حاوية مواعيد النزول لا تحمل البيانات عند فتح صفحة الرواية.
+- عند فتح الحاوية يقرأ المتصفح manifest ثم pack من Cloudflare.
+- العد التنازلي وتقسيم الباقات يتمان في المتصفح.
+- لا توجد REST عامة أو admin-ajax لعرض المواعيد.
+- لا يوجد استعلام قاعدة بيانات لكل زائر عند فتح صفحة الرواية.
+- لا تظهر الحاوية في رواية لا تملك فصولًا مجدولة قادمة.
+- عندما يتحول فصل مجدول إلى منشور، يتم تحديث ملفات المواعيد أو حذفها إذا أصبحت الرواية بلا مواعيد.
+- صفحة أدوات المدير موجودة في:
+  الروايات > مواعيد VIP
+
+بيانات مواعيد VIP العامة
+-------------------------
+المسموح داخل ملفات vip-schedule:
+- رقم الفصل.
+- ترتيب الفصل.
+- موعد نزوله للعامة.
+- إجمالي الفصول القادمة.
+- اسم ملف pack الحالي.
+
+غير المسموح داخل ملفات vip-schedule:
+- محتوى الفصل.
+- رابط الفصل الخاص.
+- slug الفصل.
+- user_id.
+- nonce.
+- حالة اشتراك المستخدم.
+- صلاحية القراءة.
+- عناوين خاصة قد تكشف فصلًا غير منشور.
+
+
+اختبار بعد التطبيق
+------------------
+بعد رفع القالب وضبط القواعد:
+1. امسح كاش Cloudflare بالكامل مرة واحدة فقط.
+2. افتح فصل كزائر وتأكد أنه يعمل.
+3. افتح نفس الفصل كعضو عادي وتأكد أنه لا يعرض بيانات خاصة داخل HTML.
+4. افتح نفس الفصل كمشترك VIP وتأكد أن الطلب bypass.
+5. افتح صفحة رواية كزائر وعضو عادي.
+6. افتح الرئيسية والمكتبة والترتيب.
+7. افتح صفحة المكتبة بدون query وتأكد أنها تدخل كاش Cloudflare.
+8. افتح البحث العلوي واكتب اسم رواية.
+9. من DevTools > Network تأكد أن البحث يطلب فقط تقريبًا:
+   - /wp-content/uploads/wor-reader-cache/search/manifest.json
+   - /wp-content/uploads/wor-reader-cache/search/novels-xxxxx.json
+10. افتح صفحة رواية وتأكد من ظهور طلبات فهرس الفصول عند الحاجة:
+   - /wp-content/uploads/wor-reader-cache/chapters/manifest/novel-ID.json
+   - /wp-content/uploads/wor-reader-cache/chapters/packs/novel-ID-VERSION.json
+11. افتح صفحة قراءة فصل، ثم افتح قائمة الفصول وتأكد أنها تستخدم نفس chapter manifest و chapter pack.
+12. افتح صفحة رواية فيها فصول مجدولة قادمة، ثم افتح حاوية مواعيد نزول الفصول وتأكد أنها تطلب:
+   - /wp-content/uploads/wor-reader-cache/vip-schedule/manifest/novel-ID.json
+   - /wp-content/uploads/wor-reader-cache/vip-schedule/packs/novel-ID-VERSION.json
+13. افتح صفحة رواية لا تحتوي فصولًا مجدولة قادمة وتأكد أن حاوية مواعيد النزول لا تظهر.
+14. تأكد أن ملفات vip-schedule لا تحتوي روابط فصول خاصة أو محتوى أو slug أو user_id أو nonce.
+15. بعد تحول فصل مجدول إلى منشور، تحقق أن ملف vip-schedule للرواية تحدث أو حذف إذا لم تعد هناك مواعيد.
+16. أثناء البحث أو فتح قائمة الفصول أو فتح مواعيد VIP لا يجب أن تظهر طلبات قائمة عامة إلى:
+   - /wp-json/
+   - /wp-admin/admin-ajax.php
+   - /?s=
+17. افتح رابط بحث كامل بالشكل:
+   /library/#q=اسم_الرواية
+   وتأكد أن البحث يتم داخل صفحة المكتبة بدون query string.
+18. عدل فصلًا أو أضف فصلًا جديدًا، ثم تحقق أن manifest و pack الخاصين بالرواية تحدثا بعد النشر.
+19. بعد نشر فصل جديد، افتح صفحة الرواية كزائر وتأكد أن الفصل يظهر في قائمة الفصول بدون انتظار انتهاء كاش صفحة الرواية.
+20. بعد رفع نسخة v2470 أو أحدث، تأكد أن ملفات التطبيق العامة تعمل:
+   - /wp-content/uploads/wor-reader-cache/app/manifest/bootstrap.json
+   - /wp-content/uploads/wor-reader-cache/app/manifest/catalog.json
+   - /wp-content/uploads/wor-reader-cache/app/manifest/home.json
+   - /wp-content/uploads/wor-reader-cache/app/packs/
+21. لا تجعل Browser TTL لصفحات HTML أطول من Bypass cache.
+
+ملاحظات مراقبة v2462
+--------------------
+بعد إضافة قواعد WAF الحالية:
+- إذا زاد عداد Wor block old chapter fragments فهذا يعني أن تطبيقات أو سكربتات كانت تستخدم ملفات fragments القديمة.
+- إذا زاد عداد Wor limit public chapter pages فهذا يعني أن هناك فتح فصول بسرعة عالية.
+- إذا زاد عداد Wor challenge app webview clients فهذا غالبًا يشير إلى تطبيق WebView أو عميل Android/Flutter.
+- إذا زاد عداد Wor challenge non browser chapter fetches فهذا غالبًا يشير إلى WebToEpub أو إضافة متصفح أو طلب خلفي لا يفتح الفصل كصفحة عادية.
+- إذا بقيت كل العدادات صفرًا فترة طويلة فهذا لا يعني فشل القواعد؛ قد يعني أن الترافيك الطبيعي لا يطابقها أو أن الهجوم توقف.
+- لا تشدد الحدود قبل مراقبة 24 إلى 48 ساعة.
+- لا تخفض Rate Limit عن 8/10s في البداية حتى لا يتضرر القراء.
+- عند وجود شكاوى من القراء، اجعل الحد 12/10s بدل 8/10s.
+
+
+ملاحظات للمستقبل
+----------------
+إذا أردنا لاحقًا كاش بعض REST endpoints العامة، يمكن عمل قاعدة منفصلة فقط للـ GET endpoints الآمنة عند الضرورة.
+حاليًا أبقينا /wp-json/ كلها Bypass لأن فيها مزامنة، بيانات مستخدم، مفضلة، تقييم، VIP، وتعليقات.
+
+إذا ظهرت مشكلة أن عضو عادي لا يأخذ الكاش، افحص cookie:
+wor_reader_cf_segment=public
+
+إذا ظهر محتوى خاص لشخص داخل صفحة عامة، يجب إزالة طباعته من HTML وتحميله بطلب خاص bypass بعد تحميل الصفحة.
+
+إذا أضيفت ميزة عامة جديدة تعتمد على ملفات ثابتة داخل uploads، لا تضعها تلقائيًا داخل كاش عام واسع.
+الأفضل إدخالها ضمن نفس نمط القاعدتين العامتين إذا كانت آمنة وموجودة داخل:
+/wp-content/uploads/wor-reader-cache/
+
+مواعيد VIP الحالية مثال على ذلك:
+- manifest صغير داخل vip-schedule/manifest.
+- pack باسم متغير داخل vip-schedule/packs.
+- لا تحتوي أي بيانات خاصة أو روابط VIP.
+
+القواعد المحجوزة حاليًا للملفات العامة هي:
+- Cache Wor Public Manifests للملفات الصغيرة التي تشير إلى pack الحالي.
+- Cache Wor Public Packs للملفات العامة ذات الاسم المتغير والقابلة للكاش الطويل.
+
+المسارات المدعومة حاليًا داخل هذه القواعد:
+- search
+- chapters
+- vip-schedule
+- app/manifest
+- app/packs
+
+بهذا يمكن دعم ميزات عامة مستقبلية بدون زيادة عدد قواعد Cloudflare، بشرط أن تكون البيانات عامة وآمنة ولا تحتوي أي شيء خاص أو VIP.
+
+إذا تغير نظام البحث مستقبلًا، حافظ على هذا المبدأ:
+- الاقتراحات أثناء الكتابة لا تستخدم REST/AJAX.
+- فهرس البحث العام يبقى ملفًا ثابتًا قابلًا للكاش.
+- صفحة المكتبة تستخدم hash مثل /library/#q=اسم_الرواية بدل query مثل /library/?q=اسم_الرواية حتى لا تكسر قاعدة Cache public listing pages.
+
+إذا تغير نظام فهرس الفصول مستقبلًا، حافظ على هذا المبدأ:
+- صفحة الرواية وصفحة القراءة لا تعتمدان على HTML قديم فقط لقائمة الفصول.
+- فهرس الفصول العامة يبقى ملفًا ثابتًا قابلًا للكاش.
+- الفهرس العام لا يحتوي VIP أو early access أو scheduled غير منشور.
+- manifest صغير بBrowser TTL = Bypass.
+- pack باسم متغير بTTL طويل.
