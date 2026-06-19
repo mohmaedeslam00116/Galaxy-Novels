@@ -107,7 +107,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
               return CatalogNovelTile(novel: result.items[itemIndex]);
             }
 
-            return _CatalogLoadingMore(state: state);
+            return _CatalogLoadStatus(state: state, onRetry: _retryCatalog);
           },
         );
       },
@@ -222,13 +222,17 @@ class _CatalogControls extends StatelessWidget {
   Future<void> _showFilters(BuildContext context) async {
     final result = await showModalBottomSheet<_FilterSelection>(
       context: context,
+      isScrollControlled: true,
       showDragHandle: true,
       builder: (context) {
-        return _CatalogFiltersSheet(
-          selectedStatus: query.statusLabel,
-          selectedGenre: query.genreName,
-          availableStatuses: availableStatuses,
-          availableGenres: availableGenres,
+        return FractionallySizedBox(
+          heightFactor: 0.78,
+          child: _CatalogFiltersSheet(
+            selectedStatus: query.statusLabel,
+            selectedGenre: query.genreName,
+            availableStatuses: availableStatuses,
+            availableGenres: availableGenres,
+          ),
         );
       },
     );
@@ -273,46 +277,65 @@ class _CatalogFiltersSheetState extends State<_CatalogFiltersSheet> {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (widget.availableStatuses.length > 1) ...[
-              Text('الحالة', style: Theme.of(context).textTheme.titleSmall),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                children: [
-                  for (final status in widget.availableStatuses)
-                    FilterChip(
-                      label: Text(status),
-                      selected: _status == status,
-                      onSelected: (selected) {
-                        setState(() => _status = selected ? status : null);
-                      },
-                    ),
-                ],
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (widget.availableStatuses.length > 1) ...[
+                      Text(
+                        'الحالة',
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          for (final status in widget.availableStatuses)
+                            FilterChip(
+                              label: Text(status),
+                              selected: _status == status,
+                              onSelected: (selected) {
+                                setState(
+                                  () => _status = selected ? status : null,
+                                );
+                              },
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                    if (widget.availableGenres.isNotEmpty) ...[
+                      Text(
+                        'التصنيفات',
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          for (final genre in widget.availableGenres)
+                            FilterChip(
+                              label: Text(genre),
+                              selected: _genre == genre,
+                              onSelected: (selected) {
+                                setState(
+                                  () => _genre = selected ? genre : null,
+                                );
+                              },
+                            ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
               ),
-              const SizedBox(height: 16),
-            ],
-            if (widget.availableGenres.isNotEmpty) ...[
-              Text('التصنيفات', style: Theme.of(context).textTheme.titleSmall),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final genre in widget.availableGenres)
-                    FilterChip(
-                      label: Text(genre),
-                      selected: _genre == genre,
-                      onSelected: (selected) {
-                        setState(() => _genre = selected ? genre : null);
-                      },
-                    ),
-                ],
-              ),
-            ],
-            const SizedBox(height: 16),
+            ),
+            const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(
@@ -348,14 +371,32 @@ class _FilterSelection {
   final String? genre;
 }
 
-class _CatalogLoadingMore extends StatelessWidget {
-  const _CatalogLoadingMore({required this.state});
+class _CatalogLoadStatus extends StatelessWidget {
+  const _CatalogLoadStatus({required this.state, required this.onRetry});
 
   final CatalogLoadState? state;
+  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
-    if (state == null || !state!.isLoadingMore) {
+    final currentState = state;
+    if (currentState == null) {
+      return const SizedBox.shrink();
+    }
+
+    if (currentState.backgroundError != null) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+        child: Row(
+          children: [
+            const Expanded(child: Text('تعذر تحميل بقية المكتبة')),
+            TextButton(onPressed: onRetry, child: const Text('إعادة المحاولة')),
+          ],
+        ),
+      );
+    }
+
+    if (!currentState.isLoadingMore) {
       return const SizedBox.shrink();
     }
 

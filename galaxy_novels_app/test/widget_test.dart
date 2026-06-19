@@ -189,6 +189,50 @@ void main() {
 
     expect(find.text('مكتبة الاختبار'), findsOneWidget);
   });
+
+  testWidgets('catalog filters are applied from the bottom sheet', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      GalaxyNovelsApp(
+        homeRepository: _TestHomeRepository(_homeData),
+        catalogRepository: const _TestCatalogRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('المكتبة'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('فلاتر'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('الحالة'), findsOneWidget);
+    await tester.tap(find.text('مكتملة'));
+    await tester.tap(find.text('تطبيق'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('مكتملة الاختبار'), findsOneWidget);
+    expect(find.text('مكتبة الاختبار'), findsNothing);
+  });
+
+  testWidgets('catalog keeps data visible when a later pack fails', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      GalaxyNovelsApp(
+        homeRepository: _TestHomeRepository(_homeData),
+        catalogRepository: const _BackgroundErrorCatalogRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('المكتبة'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('مكتبة الاختبار'), findsOneWidget);
+    expect(find.text('تعذر تحميل بقية المكتبة'), findsOneWidget);
+    expect(find.text('إعادة المحاولة'), findsOneWidget);
+  });
 }
 
 Future<void> _scrollHomeDown(WidgetTester tester) async {
@@ -273,10 +317,60 @@ class _TestCatalogRepository implements CatalogRepository {
           updatedAt: null,
           manifest: '',
         ),
+        CatalogNovel(
+          id: 100,
+          title: 'مكتملة الاختبار',
+          originalTitle: '',
+          url: '/novel/completed-test/',
+          coverThumbnail: '',
+          coverMedium: '',
+          statusKey: 'completed',
+          statusLabel: 'مكتملة',
+          genres: [CatalogGenre(id: 2, name: 'دراما', slug: 'drama')],
+          chaptersCount: 20,
+          ratingAverage: 4.6,
+          ratingCount: 8,
+          views: 200,
+          updatedAt: null,
+          manifest: '',
+        ),
       ],
       loadedParts: 1,
       totalParts: 1,
       isLoadingMore: false,
+    );
+  }
+}
+
+class _BackgroundErrorCatalogRepository implements CatalogRepository {
+  const _BackgroundErrorCatalogRepository();
+
+  @override
+  Stream<CatalogLoadState> watchCatalog() async* {
+    yield const CatalogLoadState(
+      items: [
+        CatalogNovel(
+          id: 99,
+          title: 'مكتبة الاختبار',
+          originalTitle: '',
+          url: '/novel/catalog-test/',
+          coverThumbnail: '',
+          coverMedium: '',
+          statusKey: 'ongoing',
+          statusLabel: 'مستمرة',
+          genres: [CatalogGenre(id: 1, name: 'أكشن', slug: 'action')],
+          chaptersCount: 10,
+          ratingAverage: 4.2,
+          ratingCount: 5,
+          views: 100,
+          updatedAt: null,
+          manifest: '',
+        ),
+      ],
+      loadedParts: 1,
+      totalParts: 2,
+      isLoadingMore: false,
+      backgroundError: 'Second pack failed.',
     );
   }
 }

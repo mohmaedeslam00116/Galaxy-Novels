@@ -35,6 +35,43 @@ void main() {
     expect(result.items.map((novel) => novel.title), ['حديث', 'قديم']);
   });
 
+  test('sorts by views rating chapters and title', () {
+    final source = [
+      _novel(title: 'باء', views: 20, rating: 3.5, chapters: 10),
+      _novel(title: 'ألف', views: 40, rating: 4.8, chapters: 5),
+      _novel(title: 'جيم', views: 10, rating: 4.0, chapters: 50),
+    ];
+
+    expect(
+      applyCatalogQuery(
+        source,
+        const CatalogQuery(sort: CatalogSort.views),
+      ).items.map((novel) => novel.title),
+      ['ألف', 'باء', 'جيم'],
+    );
+    expect(
+      applyCatalogQuery(
+        source,
+        const CatalogQuery(sort: CatalogSort.rating),
+      ).items.map((novel) => novel.title),
+      ['ألف', 'جيم', 'باء'],
+    );
+    expect(
+      applyCatalogQuery(
+        source,
+        const CatalogQuery(sort: CatalogSort.chapters),
+      ).items.map((novel) => novel.title),
+      ['جيم', 'باء', 'ألف'],
+    );
+    expect(
+      applyCatalogQuery(
+        source,
+        const CatalogQuery(sort: CatalogSort.title),
+      ).items.map((novel) => novel.title),
+      ['ألف', 'باء', 'جيم'],
+    );
+  });
+
   test('builds available statuses and genres from loaded items', () {
     final result = applyCatalogQuery([
       _novel(title: 'أ', status: 'مستمرة', genres: ['أكشن', 'خيال']),
