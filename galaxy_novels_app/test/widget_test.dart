@@ -4,9 +4,11 @@ import 'package:galaxy_novels_app/app/galaxy_novels_app.dart';
 import 'package:galaxy_novels_app/data/models/catalog_data.dart';
 import 'package:galaxy_novels_app/data/models/chapter_summary.dart';
 import 'package:galaxy_novels_app/data/models/home_data.dart';
+import 'package:galaxy_novels_app/data/models/novel_details_data.dart';
 import 'package:galaxy_novels_app/data/models/novel_summary.dart';
 import 'package:galaxy_novels_app/data/repositories/catalog_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/home_repository.dart';
+import 'package:galaxy_novels_app/data/repositories/novel_repository.dart';
 
 void main() {
   testWidgets('shows Galaxy Novels Arabic shell', (tester) async {
@@ -14,6 +16,7 @@ void main() {
       GalaxyNovelsApp(
         homeRepository: _TestHomeRepository(_homeData),
         catalogRepository: const _TestCatalogRepository(),
+        novelRepository: const _TestNovelRepository(),
       ),
     );
     await tester.pumpAndSettle();
@@ -36,6 +39,7 @@ void main() {
       GalaxyNovelsApp(
         homeRepository: _TestHomeRepository(_homeData),
         catalogRepository: const _TestCatalogRepository(),
+        novelRepository: const _TestNovelRepository(),
       ),
     );
     await tester.pumpAndSettle();
@@ -62,6 +66,7 @@ void main() {
       GalaxyNovelsApp(
         homeRepository: _TestHomeRepository(_homeData),
         catalogRepository: const _TestCatalogRepository(),
+        novelRepository: const _TestNovelRepository(),
       ),
     );
 
@@ -85,6 +90,7 @@ void main() {
       GalaxyNovelsApp(
         homeRepository: _TestHomeRepository(_homeData),
         catalogRepository: const _TestCatalogRepository(),
+        novelRepository: const _TestNovelRepository(),
       ),
     );
     await tester.pumpAndSettle();
@@ -110,6 +116,7 @@ void main() {
       GalaxyNovelsApp(
         homeRepository: _TestHomeRepository(_homeData),
         catalogRepository: const _TestCatalogRepository(),
+        novelRepository: const _TestNovelRepository(),
       ),
     );
     await tester.pumpAndSettle();
@@ -140,6 +147,7 @@ void main() {
       GalaxyNovelsApp(
         homeRepository: _TestHomeRepository(_homeData),
         catalogRepository: const _TestCatalogRepository(),
+        novelRepository: const _TestNovelRepository(),
       ),
     );
     await tester.pumpAndSettle();
@@ -155,6 +163,7 @@ void main() {
       GalaxyNovelsApp(
         homeRepository: _TestHomeRepository(_homeData),
         catalogRepository: const _TestCatalogRepository(),
+        novelRepository: const _TestNovelRepository(),
       ),
     );
     await tester.pumpAndSettle();
@@ -172,6 +181,7 @@ void main() {
       GalaxyNovelsApp(
         homeRepository: _TestHomeRepository(_homeData),
         catalogRepository: const _TestCatalogRepository(),
+        novelRepository: const _TestNovelRepository(),
       ),
     );
     await tester.pumpAndSettle();
@@ -197,6 +207,7 @@ void main() {
       GalaxyNovelsApp(
         homeRepository: _TestHomeRepository(_homeData),
         catalogRepository: const _TestCatalogRepository(),
+        novelRepository: const _TestNovelRepository(),
       ),
     );
     await tester.pumpAndSettle();
@@ -222,6 +233,7 @@ void main() {
       GalaxyNovelsApp(
         homeRepository: _TestHomeRepository(_homeData),
         catalogRepository: const _BackgroundErrorCatalogRepository(),
+        novelRepository: const _TestNovelRepository(),
       ),
     );
     await tester.pumpAndSettle();
@@ -371,6 +383,57 @@ class _BackgroundErrorCatalogRepository implements CatalogRepository {
       totalParts: 2,
       isLoadingMore: false,
       backgroundError: 'Second pack failed.',
+    );
+  }
+}
+
+class _TestNovelRepository implements NovelRepository {
+  const _TestNovelRepository();
+
+  @override
+  Future<NovelDetailsLoadResult> loadNovel(String manifestPath) async {
+    return const NovelDetailsLoadResult(
+      details: NovelDetails(
+        id: 99,
+        title: 'تفاصيل الاختبار',
+        originalTitle: 'Test Details',
+        url: '/novel/details-test/',
+        coverThumbnail: '',
+        coverMedium: '',
+        coverLarge: '',
+        statusKey: 'ongoing',
+        statusLabel: 'مستمرة',
+        country: 'cn',
+        author: 'كاتب الاختبار',
+        translator: '',
+        genres: [NovelGenre(id: 1, name: 'أكشن', slug: 'action')],
+        chaptersCount: 2,
+        firstChapterId: 1,
+        firstChapterUrl: '/chapter-1/',
+        ratingAverage: 4.2,
+        ratingCount: 5,
+        views: 120,
+        updatedAt: null,
+        summary: 'هذه نبذة تفاصيل الاختبار.',
+        chaptersManifest: '/chapters.json',
+        vipScheduleManifest: '',
+        manifest: '/novel-test.json',
+      ),
+      chapters: [
+        NovelChapter(
+          id: 1,
+          position: 1,
+          number: '1',
+          label: 'الفصل 1',
+          title: 'البداية',
+          url: '/chapter-1/',
+          dateLabel: 'اليوم',
+          dateIso: null,
+          views: 0,
+          comments: 0,
+          search: '',
+        ),
+      ],
     );
   }
 }

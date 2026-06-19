@@ -6,8 +6,10 @@ import '../core/network/public_cache_client.dart';
 import '../data/repositories/bootstrap_repository.dart';
 import '../data/repositories/catalog_repository.dart';
 import '../data/repositories/home_repository.dart';
+import '../data/repositories/novel_repository.dart';
 import '../data/repositories/public_catalog_repository.dart';
 import '../data/repositories/public_home_repository.dart';
+import '../data/repositories/public_novel_repository.dart';
 import '../features/shell/presentation/app_shell.dart';
 import 'app_dependencies.dart';
 import 'app_theme.dart';
@@ -17,12 +19,14 @@ class GalaxyNovelsApp extends StatelessWidget {
     AppConfig? config,
     this.homeRepository,
     this.catalogRepository,
+    this.novelRepository,
     super.key,
   }) : config = config ?? const AppConfig();
 
   final AppConfig config;
   final HomeRepository? homeRepository;
   final CatalogRepository? catalogRepository;
+  final NovelRepository? novelRepository;
 
   @override
   Widget build(BuildContext context) {
@@ -40,6 +44,8 @@ class GalaxyNovelsApp extends StatelessWidget {
           bootstrapRepository: bootstrapRepository,
           cacheClient: cacheClient,
         );
+    final effectiveNovelRepository =
+        novelRepository ?? PublicNovelRepository(cacheClient: cacheClient);
 
     return MaterialApp(
       title: 'مجرة الروايات',
@@ -58,6 +64,7 @@ class GalaxyNovelsApp extends StatelessWidget {
         config: config,
         homeRepository: effectiveHomeRepository,
         catalogRepository: effectiveCatalogRepository,
+        novelRepository: effectiveNovelRepository,
         child: const Directionality(
           textDirection: TextDirection.rtl,
           child: AppShell(),

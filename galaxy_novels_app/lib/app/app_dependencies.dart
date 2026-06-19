@@ -3,12 +3,14 @@ import 'package:flutter/widgets.dart';
 import '../core/config/app_config.dart';
 import '../data/repositories/catalog_repository.dart';
 import '../data/repositories/home_repository.dart';
+import '../data/repositories/novel_repository.dart';
 
 class AppDependencies extends InheritedWidget {
   const AppDependencies({
     required this.config,
     required this.homeRepository,
     required this.catalogRepository,
+    required this.novelRepository,
     required super.child,
     super.key,
   });
@@ -16,6 +18,7 @@ class AppDependencies extends InheritedWidget {
   final AppConfig config;
   final HomeRepository homeRepository;
   final CatalogRepository catalogRepository;
+  final NovelRepository novelRepository;
 
   static AppDependencies of(BuildContext context) {
     final dependencies = context
@@ -29,6 +32,7 @@ class AppDependencies extends InheritedWidget {
   bool updateShouldNotify(AppDependencies oldWidget) {
     return config != oldWidget.config ||
         homeRepository != oldWidget.homeRepository ||
-        catalogRepository != oldWidget.catalogRepository;
+        catalogRepository != oldWidget.catalogRepository ||
+        novelRepository != oldWidget.novelRepository;
   }
 }
