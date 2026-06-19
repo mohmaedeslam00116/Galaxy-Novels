@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../app/app_dependencies.dart';
 import '../../../data/models/novel_details_data.dart';
 import '../../../data/repositories/novel_repository.dart';
+import '../../reader/presentation/reader_screen.dart';
 import 'widgets/novel_chapter_tile.dart';
 import 'widgets/novel_details_header.dart';
 
@@ -50,7 +51,7 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
 
           return _NovelDetailsContent(
             result: snapshot.data!,
-            onRead: _showReaderPlaceholder,
+            onRead: _openReader,
           );
         },
       ),
@@ -67,9 +68,11 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
     });
   }
 
-  void _showReaderPlaceholder(String chapterUrl) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('القارئ سيكون في المرحلة التالية')),
+  void _openReader(String chapterUrl) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => ReaderScreen(chapterUrl: chapterUrl),
+      ),
     );
   }
 }

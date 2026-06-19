@@ -2,6 +2,8 @@ import 'package:flutter/widgets.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 typedef ReaderErrorCallback = void Function(String message);
+typedef ReaderWebViewBuilder =
+    Widget Function(BuildContext context, ReaderWebViewConfig config);
 
 class ReaderWebViewConfig {
   const ReaderWebViewConfig({

@@ -252,6 +252,7 @@ void main() {
         homeRepository: _TestHomeRepository(_homeData),
         catalogRepository: const _TestCatalogRepository(),
         novelRepository: const _TestNovelRepository(),
+        readerWebViewBuilder: (context, config) => const Text('قارئ تجريبي'),
       ),
     );
     await tester.pumpAndSettle();
@@ -269,6 +270,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('الفصل 1'), findsOneWidget);
+
+    await tester.tap(find.text('ابدأ القراءة'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+
+    expect(find.text('الفصل 1'), findsWidgets);
+    expect(find.text('قارئ تجريبي'), findsOneWidget);
+    expect(find.text('القارئ سيكون في المرحلة التالية'), findsNothing);
   });
 
   testWidgets('opens novel details from the home screen', (tester) async {

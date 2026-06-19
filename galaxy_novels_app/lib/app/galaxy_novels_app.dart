@@ -10,6 +10,7 @@ import '../data/repositories/novel_repository.dart';
 import '../data/repositories/public_catalog_repository.dart';
 import '../data/repositories/public_home_repository.dart';
 import '../data/repositories/public_novel_repository.dart';
+import '../features/reader/presentation/reader_web_view.dart';
 import '../features/shell/presentation/app_shell.dart';
 import 'app_dependencies.dart';
 import 'app_theme.dart';
@@ -20,6 +21,7 @@ class GalaxyNovelsApp extends StatelessWidget {
     this.homeRepository,
     this.catalogRepository,
     this.novelRepository,
+    this.readerWebViewBuilder,
     super.key,
   }) : config = config ?? const AppConfig();
 
@@ -27,6 +29,7 @@ class GalaxyNovelsApp extends StatelessWidget {
   final HomeRepository? homeRepository;
   final CatalogRepository? catalogRepository;
   final NovelRepository? novelRepository;
+  final ReaderWebViewBuilder? readerWebViewBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -52,6 +55,7 @@ class GalaxyNovelsApp extends StatelessWidget {
       homeRepository: effectiveHomeRepository,
       catalogRepository: effectiveCatalogRepository,
       novelRepository: effectiveNovelRepository,
+      readerWebViewBuilder: readerWebViewBuilder,
       child: MaterialApp(
         title: 'مجرة الروايات',
         debugShowCheckedModeBanner: false,

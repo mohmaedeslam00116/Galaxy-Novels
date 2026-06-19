@@ -4,9 +4,6 @@ import '../../../app/app_dependencies.dart';
 import '../data/reader_url_builder.dart';
 import 'reader_web_view.dart';
 
-typedef ReaderWebViewBuilder =
-    Widget Function(BuildContext context, ReaderWebViewConfig config);
-
 class ReaderScreen extends StatefulWidget {
   const ReaderScreen({
     required this.chapterUrl,
@@ -31,7 +28,8 @@ class _ReaderScreenState extends State<ReaderScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final config = AppDependencies.of(context).config;
+    final dependencies = AppDependencies.of(context);
+    final config = dependencies.config;
     final Uri readerUri;
 
     try {
@@ -68,7 +66,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
       },
     );
 
-    final builder = widget.webViewBuilder;
+    final builder = widget.webViewBuilder ?? dependencies.readerWebViewBuilder;
 
     return Scaffold(
       appBar: AppBar(title: Text(widget.chapterTitle ?? 'القارئ')),
