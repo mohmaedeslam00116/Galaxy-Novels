@@ -2,6 +2,7 @@
 .worktrees
 .worktrees/
 _codex_wor_reader_inspect/
+.tool-home/
 
 # Flutter and Dart
 .dart_tool/
