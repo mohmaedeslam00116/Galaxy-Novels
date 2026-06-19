@@ -3,6 +3,7 @@
 .worktrees/
 _codex_wor_reader_inspect/
 .tool-home/
+.superpowers/
 
 # Flutter and Dart
 .dart_tool/
