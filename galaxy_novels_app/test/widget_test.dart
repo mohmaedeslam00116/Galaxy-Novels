@@ -149,6 +149,46 @@ void main() {
 
     expect(recentTop, lessThan(latestTop));
   });
+
+  testWidgets('catalog tab renders repository-provided novels', (tester) async {
+    await tester.pumpWidget(
+      GalaxyNovelsApp(
+        homeRepository: _TestHomeRepository(_homeData),
+        catalogRepository: const _TestCatalogRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('المكتبة'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('مكتبة الاختبار'), findsOneWidget);
+    expect(find.textContaining('10 فصل'), findsOneWidget);
+    expect(find.text('آخر تحديث'), findsOneWidget);
+  });
+
+  testWidgets('catalog search filters results locally', (tester) async {
+    await tester.pumpWidget(
+      GalaxyNovelsApp(
+        homeRepository: _TestHomeRepository(_homeData),
+        catalogRepository: const _TestCatalogRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('المكتبة'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), 'غير موجود');
+    await tester.pump(const Duration(milliseconds: 350));
+
+    expect(find.text('لا توجد نتائج مطابقة'), findsOneWidget);
+
+    await tester.tap(find.text('مسح البحث والفلاتر'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('مكتبة الاختبار'), findsOneWidget);
+  });
 }
 
 Future<void> _scrollHomeDown(WidgetTester tester) async {
