@@ -51,10 +51,7 @@ void main() {
 }
 
 class _ReaderTestApp extends StatelessWidget {
-  const _ReaderTestApp({
-    required this.child,
-    this.config = const AppConfig(),
-  });
+  const _ReaderTestApp({required this.child, this.config = const AppConfig()});
 
   final Widget child;
   final AppConfig config;
