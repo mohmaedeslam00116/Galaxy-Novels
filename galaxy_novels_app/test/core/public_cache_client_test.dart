@@ -72,6 +72,24 @@ void main() {
       Uri.parse('https://cdn.example.com/absolute-pack.json'),
     );
   });
+
+  test('loadJsonValue supports top-level arrays', () async {
+    final client = PublicCacheClient(
+      config: const AppConfig(siteBaseUrl: 'https://example.com/'),
+      jsonGet: (uri, headers) async {
+        expect(uri.toString(), 'https://example.com/chapters.json');
+        expect(headers['Accept'], 'application/json');
+        return [
+          {'id': 1, 'label': 'الفصل 1'},
+        ];
+      },
+    );
+
+    final value = await client.loadJsonValue('/chapters.json');
+
+    expect(value, isA<List<Object?>>());
+    expect((value as List).single, isA<Map<String, dynamic>>());
+  });
 }
 
 class _Request {

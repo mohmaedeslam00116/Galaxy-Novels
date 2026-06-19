@@ -4,7 +4,7 @@ import 'dart:io';
 import '../config/app_config.dart';
 
 typedef JsonGet =
-    Future<Map<String, dynamic>> Function(Uri uri, Map<String, String> headers);
+    Future<Object?> Function(Uri uri, Map<String, String> headers);
 
 class PublicCacheClient {
   PublicCacheClient({required this.config, JsonGet? jsonGet})
@@ -18,8 +18,22 @@ class PublicCacheClient {
     'User-Agent': config.userAgent,
   };
 
-  Future<Map<String, dynamic>> loadJson(String urlOrPath) {
+  Future<Object?> loadJsonValue(String urlOrPath) {
     return _jsonGet(config.resolve(urlOrPath), publicJsonHeaders);
+  }
+
+  Future<Map<String, dynamic>> loadJson(String urlOrPath) async {
+    final value = await loadJsonValue(urlOrPath);
+    if (value is Map<String, dynamic>) {
+      return value;
+    }
+    if (value is Map) {
+      return value.map((key, value) => MapEntry(key.toString(), value));
+    }
+
+    throw PublicCacheException(
+      'GET ${config.resolve(urlOrPath)} did not return a JSON object.',
+    );
   }
 
   Future<Map<String, dynamic>> loadPackFromManifest(String manifestPath) async {
@@ -37,7 +51,7 @@ class PublicCacheClient {
     throw const PublicCacheException('Manifest does not contain a pack URL.');
   }
 
-  static Future<Map<String, dynamic>> _defaultJsonGet(
+  static Future<Object?> _defaultJsonGet(
     Uri uri,
     Map<String, String> headers,
   ) async {
@@ -55,12 +69,7 @@ class PublicCacheClient {
         );
       }
 
-      final decoded = jsonDecode(body);
-      if (decoded is Map<String, dynamic>) {
-        return decoded;
-      }
-
-      throw PublicCacheException('GET $uri did not return a JSON object.');
+      return jsonDecode(body);
     } finally {
       client.close(force: true);
     }
