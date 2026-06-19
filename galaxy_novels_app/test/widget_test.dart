@@ -1,15 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:galaxy_novels_app/app/galaxy_novels_app.dart';
+import 'package:galaxy_novels_app/data/models/catalog_data.dart';
 import 'package:galaxy_novels_app/data/models/chapter_summary.dart';
 import 'package:galaxy_novels_app/data/models/home_data.dart';
 import 'package:galaxy_novels_app/data/models/novel_summary.dart';
+import 'package:galaxy_novels_app/data/repositories/catalog_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/home_repository.dart';
 
 void main() {
   testWidgets('shows Galaxy Novels Arabic shell', (tester) async {
     await tester.pumpWidget(
-      GalaxyNovelsApp(homeRepository: _TestHomeRepository(_homeData)),
+      GalaxyNovelsApp(
+        homeRepository: _TestHomeRepository(_homeData),
+        catalogRepository: const _TestCatalogRepository(),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -28,7 +33,10 @@ void main() {
 
   testWidgets('opens account screen from the drawer', (tester) async {
     await tester.pumpWidget(
-      GalaxyNovelsApp(homeRepository: _TestHomeRepository(_homeData)),
+      GalaxyNovelsApp(
+        homeRepository: _TestHomeRepository(_homeData),
+        catalogRepository: const _TestCatalogRepository(),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -51,7 +59,10 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      GalaxyNovelsApp(homeRepository: _TestHomeRepository(_homeData)),
+      GalaxyNovelsApp(
+        homeRepository: _TestHomeRepository(_homeData),
+        catalogRepository: const _TestCatalogRepository(),
+      ),
     );
 
     expect(find.text('جار تحميل الرئيسية...'), findsOneWidget);
@@ -71,7 +82,10 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      GalaxyNovelsApp(homeRepository: _TestHomeRepository(_homeData)),
+      GalaxyNovelsApp(
+        homeRepository: _TestHomeRepository(_homeData),
+        catalogRepository: const _TestCatalogRepository(),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -93,7 +107,10 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      GalaxyNovelsApp(homeRepository: _TestHomeRepository(_homeData)),
+      GalaxyNovelsApp(
+        homeRepository: _TestHomeRepository(_homeData),
+        catalogRepository: const _TestCatalogRepository(),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -120,7 +137,10 @@ void main() {
     });
 
     await tester.pumpWidget(
-      GalaxyNovelsApp(homeRepository: _TestHomeRepository(_homeData)),
+      GalaxyNovelsApp(
+        homeRepository: _TestHomeRepository(_homeData),
+        catalogRepository: const _TestCatalogRepository(),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -187,4 +207,36 @@ class _TestHomeRepository implements HomeRepository {
 
   @override
   Future<HomeData> loadHome() async => data;
+}
+
+class _TestCatalogRepository implements CatalogRepository {
+  const _TestCatalogRepository();
+
+  @override
+  Stream<CatalogLoadState> watchCatalog() async* {
+    yield const CatalogLoadState(
+      items: [
+        CatalogNovel(
+          id: 99,
+          title: 'مكتبة الاختبار',
+          originalTitle: '',
+          url: '/novel/catalog-test/',
+          coverThumbnail: '',
+          coverMedium: '',
+          statusKey: 'ongoing',
+          statusLabel: 'مستمرة',
+          genres: [CatalogGenre(id: 1, name: 'أكشن', slug: 'action')],
+          chaptersCount: 10,
+          ratingAverage: 4.2,
+          ratingCount: 5,
+          views: 100,
+          updatedAt: null,
+          manifest: '',
+        ),
+      ],
+      loadedParts: 1,
+      totalParts: 1,
+      isLoadingMore: false,
+    );
+  }
 }

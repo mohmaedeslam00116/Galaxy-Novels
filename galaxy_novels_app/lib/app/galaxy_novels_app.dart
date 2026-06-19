@@ -4,26 +4,40 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import '../core/config/app_config.dart';
 import '../core/network/public_cache_client.dart';
 import '../data/repositories/bootstrap_repository.dart';
+import '../data/repositories/catalog_repository.dart';
 import '../data/repositories/home_repository.dart';
+import '../data/repositories/public_catalog_repository.dart';
 import '../data/repositories/public_home_repository.dart';
 import '../features/shell/presentation/app_shell.dart';
 import 'app_dependencies.dart';
 import 'app_theme.dart';
 
 class GalaxyNovelsApp extends StatelessWidget {
-  const GalaxyNovelsApp({AppConfig? config, this.homeRepository, super.key})
-    : config = config ?? const AppConfig();
+  const GalaxyNovelsApp({
+    AppConfig? config,
+    this.homeRepository,
+    this.catalogRepository,
+    super.key,
+  }) : config = config ?? const AppConfig();
 
   final AppConfig config;
   final HomeRepository? homeRepository;
+  final CatalogRepository? catalogRepository;
 
   @override
   Widget build(BuildContext context) {
     final cacheClient = PublicCacheClient(config: config);
+    final bootstrapRepository = BootstrapRepository(cacheClient);
     final effectiveHomeRepository =
         homeRepository ??
         PublicHomeRepository(
-          bootstrapRepository: BootstrapRepository(cacheClient),
+          bootstrapRepository: bootstrapRepository,
+          cacheClient: cacheClient,
+        );
+    final effectiveCatalogRepository =
+        catalogRepository ??
+        PublicCatalogRepository(
+          bootstrapRepository: bootstrapRepository,
           cacheClient: cacheClient,
         );
 
@@ -43,6 +57,7 @@ class GalaxyNovelsApp extends StatelessWidget {
       home: AppDependencies(
         config: config,
         homeRepository: effectiveHomeRepository,
+        catalogRepository: effectiveCatalogRepository,
         child: const Directionality(
           textDirection: TextDirection.rtl,
           child: AppShell(),
