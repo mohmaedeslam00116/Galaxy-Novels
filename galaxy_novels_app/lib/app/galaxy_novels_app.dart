@@ -47,25 +47,25 @@ class GalaxyNovelsApp extends StatelessWidget {
     final effectiveNovelRepository =
         novelRepository ?? PublicNovelRepository(cacheClient: cacheClient);
 
-    return MaterialApp(
-      title: 'مجرة الروايات',
-      debugShowCheckedModeBanner: false,
-      locale: const Locale('ar'),
-      supportedLocales: const [Locale('ar')],
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-      ],
-      theme: AppTheme.light(),
-      darkTheme: AppTheme.dark(),
-      themeMode: ThemeMode.system,
-      home: AppDependencies(
-        config: config,
-        homeRepository: effectiveHomeRepository,
-        catalogRepository: effectiveCatalogRepository,
-        novelRepository: effectiveNovelRepository,
-        child: const Directionality(
+    return AppDependencies(
+      config: config,
+      homeRepository: effectiveHomeRepository,
+      catalogRepository: effectiveCatalogRepository,
+      novelRepository: effectiveNovelRepository,
+      child: MaterialApp(
+        title: 'مجرة الروايات',
+        debugShowCheckedModeBanner: false,
+        locale: const Locale('ar'),
+        supportedLocales: const [Locale('ar')],
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+        ],
+        theme: AppTheme.light(),
+        darkTheme: AppTheme.dark(),
+        themeMode: ThemeMode.system,
+        home: const Directionality(
           textDirection: TextDirection.rtl,
           child: AppShell(),
         ),

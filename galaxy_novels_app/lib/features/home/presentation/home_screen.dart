@@ -5,6 +5,7 @@ import '../../../data/models/chapter_summary.dart';
 import '../../../data/models/home_data.dart';
 import '../../../data/models/novel_summary.dart';
 import '../../../data/repositories/home_repository.dart';
+import '../../novel_details/presentation/novel_details_screen.dart';
 import '../../../shared/widgets/novel_list_tile.dart';
 
 enum _LatestUpdatesView { list, grid }
@@ -69,14 +70,20 @@ class _HomeScreenState extends State<HomeScreen> {
           padding: const EdgeInsets.only(bottom: 28),
           children: [
             if (home.recentNovels.isNotEmpty)
-              _FeaturedNovelsShelf(novels: home.recentNovels.take(6).toList()),
+              _FeaturedNovelsShelf(
+                novels: home.recentNovels.take(6).toList(),
+                onNovelTap: _openNovelDetails,
+              ),
             if (home.continueReading != null) ...[
               const _PlainSectionHeader(title: 'أكمل القراءة'),
               _ContinueReadingTile(progress: home.continueReading!),
             ],
             if (home.recentNovels.isNotEmpty) ...[
               const _PlainSectionHeader(title: 'روايات محدثة'),
-              _RecentNovelsStrip(novels: home.recentNovels),
+              _RecentNovelsStrip(
+                novels: home.recentNovels,
+                onNovelTap: _openNovelDetails,
+              ),
             ],
             if (home.latestChapters.isNotEmpty) ...[
               _LatestUpdatesHeader(
@@ -110,12 +117,24 @@ class _HomeScreenState extends State<HomeScreen> {
       },
     );
   }
+
+  void _openNovelDetails(String manifestPath) {
+    if (manifestPath.isEmpty) {
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => NovelDetailsScreen(manifestPath: manifestPath),
+      ),
+    );
+  }
 }
 
 class _FeaturedNovelsShelf extends StatelessWidget {
-  const _FeaturedNovelsShelf({required this.novels});
+  const _FeaturedNovelsShelf({required this.novels, required this.onNovelTap});
 
   final List<NovelSummary> novels;
+  final ValueChanged<String> onNovelTap;
 
   @override
   Widget build(BuildContext context) {
@@ -135,6 +154,9 @@ class _FeaturedNovelsShelf extends StatelessWidget {
                 title: novel.title,
                 coverUrl: novel.coverThumbnail,
                 statusLabel: novel.statusLabel,
+                onTap: novel.manifest.isEmpty
+                    ? null
+                    : () => onNovelTap(novel.manifest),
               ),
             );
           },
@@ -394,9 +416,10 @@ class _LatestUpdatesGrid extends StatelessWidget {
 }
 
 class _RecentNovelsStrip extends StatelessWidget {
-  const _RecentNovelsStrip({required this.novels});
+  const _RecentNovelsStrip({required this.novels, required this.onNovelTap});
 
   final List<NovelSummary> novels;
+  final ValueChanged<String> onNovelTap;
 
   @override
   Widget build(BuildContext context) {
@@ -415,6 +438,9 @@ class _RecentNovelsStrip extends StatelessWidget {
               title: novel.title,
               coverUrl: novel.coverThumbnail,
               statusLabel: novel.statusLabel,
+              onTap: novel.manifest.isEmpty
+                  ? null
+                  : () => onNovelTap(novel.manifest),
             ),
           );
         },
@@ -428,11 +454,13 @@ class _NovelCoverCell extends StatelessWidget {
     required this.title,
     required this.coverUrl,
     required this.statusLabel,
+    this.onTap,
   });
 
   final String title;
   final String coverUrl;
   final String statusLabel;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -440,7 +468,7 @@ class _NovelCoverCell extends StatelessWidget {
 
     return InkWell(
       borderRadius: BorderRadius.circular(8),
-      onTap: () {},
+      onTap: onTap,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

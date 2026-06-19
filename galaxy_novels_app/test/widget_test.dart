@@ -245,6 +245,70 @@ void main() {
     expect(find.text('تعذر تحميل بقية المكتبة'), findsOneWidget);
     expect(find.text('إعادة المحاولة'), findsOneWidget);
   });
+
+  testWidgets('opens novel details from the catalog', (tester) async {
+    await tester.pumpWidget(
+      GalaxyNovelsApp(
+        homeRepository: _TestHomeRepository(_homeData),
+        catalogRepository: const _TestCatalogRepository(),
+        novelRepository: const _TestNovelRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('المكتبة'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('مكتبة الاختبار'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('تفاصيل الاختبار'), findsOneWidget);
+    expect(find.text('هذه نبذة تفاصيل الاختبار.'), findsOneWidget);
+    expect(find.text('ابدأ القراءة'), findsOneWidget);
+
+    await tester.scrollUntilVisible(find.text('الفصل 1'), 320);
+    await tester.pumpAndSettle();
+
+    expect(find.text('الفصل 1'), findsOneWidget);
+  });
+
+  testWidgets('opens novel details from the home screen', (tester) async {
+    await tester.pumpWidget(
+      GalaxyNovelsApp(
+        homeRepository: _TestHomeRepository(_homeData),
+        catalogRepository: const _TestCatalogRepository(),
+        novelRepository: const _TestNovelRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('رواية الاختبار').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('تفاصيل الاختبار'), findsOneWidget);
+    expect(find.text('هذه نبذة تفاصيل الاختبار.'), findsOneWidget);
+  });
+
+  testWidgets(
+    'novel details hides read button when no chapters are available',
+    (tester) async {
+      await tester.pumpWidget(
+        GalaxyNovelsApp(
+          homeRepository: _TestHomeRepository(_homeData),
+          catalogRepository: const _TestCatalogRepository(),
+          novelRepository: const _EmptyNovelRepository(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('المكتبة'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('مكتبة الاختبار'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('لا توجد فصول متاحة للعرض الآن'), findsOneWidget);
+      expect(find.text('ابدأ القراءة'), findsNothing);
+    },
+  );
 }
 
 Future<void> _scrollHomeDown(WidgetTester tester) async {
@@ -291,7 +355,7 @@ const _homeData = HomeData(
       statusLabel: 'مستمرة',
       genres: ['خيال'],
       chaptersCount: 12,
-      manifest: '',
+      manifest: '/novel-home-test.json',
     ),
   ],
 );
@@ -327,7 +391,7 @@ class _TestCatalogRepository implements CatalogRepository {
           ratingCount: 5,
           views: 100,
           updatedAt: null,
-          manifest: '',
+          manifest: '/novel-catalog-test.json',
         ),
         CatalogNovel(
           id: 100,
@@ -383,6 +447,43 @@ class _BackgroundErrorCatalogRepository implements CatalogRepository {
       totalParts: 2,
       isLoadingMore: false,
       backgroundError: 'Second pack failed.',
+    );
+  }
+}
+
+class _EmptyNovelRepository implements NovelRepository {
+  const _EmptyNovelRepository();
+
+  @override
+  Future<NovelDetailsLoadResult> loadNovel(String manifestPath) async {
+    return const NovelDetailsLoadResult(
+      details: NovelDetails(
+        id: 101,
+        title: 'تفاصيل بلا فصول',
+        originalTitle: '',
+        url: '/novel/no-chapters/',
+        coverThumbnail: '',
+        coverMedium: '',
+        coverLarge: '',
+        statusKey: 'ongoing',
+        statusLabel: 'مستمرة',
+        country: '',
+        author: '',
+        translator: '',
+        genres: [],
+        chaptersCount: 10,
+        firstChapterId: 0,
+        firstChapterUrl: '',
+        ratingAverage: 0,
+        ratingCount: 0,
+        views: 0,
+        updatedAt: null,
+        summary: 'لا توجد فصول بعد.',
+        chaptersManifest: '',
+        vipScheduleManifest: '',
+        manifest: '/novel-empty.json',
+      ),
+      chapters: [],
     );
   }
 }

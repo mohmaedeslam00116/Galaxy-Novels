@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../app/app_dependencies.dart';
 import '../../../data/repositories/catalog_repository.dart';
+import '../../novel_details/presentation/novel_details_screen.dart';
 import '../domain/catalog_query.dart';
 import 'widgets/catalog_novel_tile.dart';
 
@@ -104,7 +105,13 @@ class _CatalogScreenState extends State<CatalogScreen> {
 
             final itemIndex = index - 1;
             if (itemIndex < result.items.length) {
-              return CatalogNovelTile(novel: result.items[itemIndex]);
+              final novel = result.items[itemIndex];
+              return CatalogNovelTile(
+                novel: novel,
+                onTap: novel.manifest.isEmpty
+                    ? null
+                    : () => _openNovelDetails(novel.manifest),
+              );
             }
 
             return _CatalogLoadStatus(state: state, onRetry: _retryCatalog);
@@ -138,6 +145,14 @@ class _CatalogScreenState extends State<CatalogScreen> {
     setState(() {
       _catalogStream = repository.watchCatalog();
     });
+  }
+
+  void _openNovelDetails(String manifestPath) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => NovelDetailsScreen(manifestPath: manifestPath),
+      ),
+    );
   }
 }
 

@@ -4,9 +4,10 @@ import '../../../../app/app_dependencies.dart';
 import '../../../../data/models/catalog_data.dart';
 
 class CatalogNovelTile extends StatelessWidget {
-  const CatalogNovelTile({required this.novel, super.key});
+  const CatalogNovelTile({required this.novel, this.onTap, super.key});
 
   final CatalogNovel novel;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -16,7 +17,7 @@ class CatalogNovelTile extends StatelessWidget {
 
     return InkWell(
       borderRadius: BorderRadius.circular(8),
-      onTap: () {},
+      onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         child: Row(
