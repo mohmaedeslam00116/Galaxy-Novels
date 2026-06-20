@@ -25,14 +25,46 @@ void main() {
     expect(find.text('الفصل 1'), findsOneWidget);
     expect(find.text('عنوان الفصل'), findsOneWidget);
     expect(find.text('نص الفصل الأول'), findsOneWidget);
-    expect(find.text('التالي'), findsOneWidget);
+    expect(find.text('التالي'), findsNothing);
     expect(find.byType(CircularProgressIndicator), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('reader-content-tap-area')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('التالي'), findsOneWidget);
 
     await tester.tap(find.text('التالي'));
     await tester.pumpAndSettle();
 
     expect(find.text('عنوان الفصل التالي'), findsOneWidget);
     expect(find.text('نص الفصل التالي'), findsOneWidget);
+  });
+
+  testWidgets('toggles floating controls when tapping reader content', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _ReaderTestApp(
+        readerRepository: const _TestReaderRepository(),
+        child: const ReaderScreen(
+          contentApi: '/wp-json/wor-reader-app/v1/chapters/10',
+          chapterTitle: 'الفصل 1',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('التالي'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('reader-content-tap-area')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('التالي'), findsOneWidget);
+
+    await tester.tap(find.text('نص الفصل الأول'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('التالي'), findsNothing);
   });
 
   testWidgets('shows an error when chapter content fails', (tester) async {
