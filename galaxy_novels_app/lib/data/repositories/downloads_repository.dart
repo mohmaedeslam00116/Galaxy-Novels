@@ -1,0 +1,104 @@
+import 'package:flutter/foundation.dart';
+
+import '../models/downloaded_chapter.dart';
+import '../models/novel_details_data.dart';
+import '../models/reader_content_data.dart';
+
+class DownloadLimitPolicy {
+  const DownloadLimitPolicy({this.maxChapters = 100});
+
+  final int maxChapters;
+
+  int remainingSlots({required int currentCount}) {
+    final remaining = maxChapters - currentCount;
+    return remaining < 0 ? 0 : remaining;
+  }
+
+  bool canDownload({required int currentCount, required int requestedCount}) {
+    return requestedCount <= remainingSlots(currentCount: currentCount);
+  }
+}
+
+class DownloadsState {
+  const DownloadsState({this.chapters = const []});
+
+  final List<DownloadedChapter> chapters;
+
+  int get downloadedCount => chapters.length;
+
+  int get remainingSlots =>
+      const DownloadLimitPolicy().remainingSlots(currentCount: downloadedCount);
+
+  bool get isFull => remainingSlots == 0;
+
+  bool contains(String contentApi) {
+    return chapters.any((chapter) => chapter.contentApi == contentApi);
+  }
+
+  DownloadedChapter? findByContentApi(String contentApi) {
+    for (final chapter in chapters) {
+      if (chapter.contentApi == contentApi) {
+        return chapter;
+      }
+    }
+    return null;
+  }
+}
+
+class ChapterDownloadRequest {
+  const ChapterDownloadRequest({
+    required this.novelId,
+    required this.novelTitle,
+    required this.novelCover,
+    required this.chapter,
+  });
+
+  final int novelId;
+  final String novelTitle;
+  final String novelCover;
+  final NovelChapter chapter;
+}
+
+class DownloadBatchProgress {
+  const DownloadBatchProgress({
+    required this.novelTitle,
+    required this.novelCover,
+    required this.total,
+    required this.completed,
+    required this.failed,
+    required this.isComplete,
+  });
+
+  final String novelTitle;
+  final String novelCover;
+  final int total;
+  final int completed;
+  final int failed;
+  final bool isComplete;
+
+  double get fraction => total <= 0 ? 0 : (completed + failed) / total;
+}
+
+abstract class DownloadsRepository {
+  const DownloadsRepository();
+
+  ValueListenable<DownloadsState> get state;
+
+  Future<void> load();
+
+  Future<DownloadedChapter?> findChapter(String contentApi);
+
+  Future<ReaderChapterContent?> findReaderContent(String contentApi);
+
+  Future<void> downloadChapter(ChapterDownloadRequest request);
+
+  Stream<DownloadBatchProgress> downloadChaptersBatch(
+    List<ChapterDownloadRequest> requests,
+  );
+
+  Future<void> deleteChapter(String contentApi);
+
+  Future<void> deleteNovelDownloads(int novelId);
+
+  Future<void> markOpened(String contentApi);
+}
