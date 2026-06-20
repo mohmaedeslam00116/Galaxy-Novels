@@ -6,6 +6,7 @@ class NovelListTile extends StatelessWidget {
     required this.subtitle,
     required this.meta,
     this.rank,
+    this.onTap,
     super.key,
   });
 
@@ -13,6 +14,7 @@ class NovelListTile extends StatelessWidget {
   final String subtitle;
   final String meta;
   final int? rank;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -21,7 +23,7 @@ class NovelListTile extends StatelessWidget {
 
     return InkWell(
       borderRadius: BorderRadius.circular(8),
-      onTap: () {},
+      onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         child: Row(

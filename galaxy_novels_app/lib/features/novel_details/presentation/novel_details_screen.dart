@@ -68,12 +68,13 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
     });
   }
 
-  void _openReader(NovelChapter chapter) {
+  void _openReader(NovelChapter chapter, String novelTitle) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (context) => ReaderScreen(
           contentApi: chapter.effectiveContentApi,
           chapterTitle: chapter.label,
+          novelTitle: novelTitle,
         ),
       ),
     );
@@ -84,7 +85,7 @@ class _NovelDetailsContent extends StatelessWidget {
   const _NovelDetailsContent({required this.result, required this.onRead});
 
   final NovelDetailsLoadResult result;
-  final ValueChanged<NovelChapter> onRead;
+  final void Function(NovelChapter chapter, String novelTitle) onRead;
 
   @override
   Widget build(BuildContext context) {
@@ -102,7 +103,7 @@ class _NovelDetailsContent extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
             child: FilledButton.icon(
-              onPressed: () => onRead(firstReadableChapter),
+              onPressed: () => onRead(firstReadableChapter, details.title),
               icon: const Icon(Icons.menu_book_outlined),
               label: const Text('ابدأ القراءة'),
             ),
@@ -192,7 +193,7 @@ class _ChaptersSection extends StatelessWidget {
   const _ChaptersSection({required this.result, required this.onRead});
 
   final NovelDetailsLoadResult result;
-  final ValueChanged<NovelChapter> onRead;
+  final void Function(NovelChapter chapter, String novelTitle) onRead;
 
   @override
   Widget build(BuildContext context) {
@@ -225,7 +226,7 @@ class _ChaptersSection extends StatelessWidget {
               chapter: chapter,
               onTap: () {
                 if (chapter.effectiveContentApi.isNotEmpty) {
-                  onRead(chapter);
+                  onRead(chapter, result.details.title);
                 }
               },
             ),

@@ -12,9 +12,16 @@ import '../data/repositories/public_home_repository.dart';
 import '../data/repositories/public_novel_repository.dart';
 import '../data/repositories/public_reader_repository.dart';
 import '../data/repositories/reader_repository.dart';
+import '../data/repositories/reading_history_repository.dart';
+import '../data/repositories/shared_preferences_reading_history_store.dart';
+import '../data/repositories/stored_reading_history_repository.dart';
 import '../features/shell/presentation/app_shell.dart';
 import 'app_dependencies.dart';
 import 'app_theme.dart';
+
+final _defaultReadingHistoryRepository = StoredReadingHistoryRepository(
+  store: SharedPreferencesReadingHistoryStore(),
+);
 
 class GalaxyNovelsApp extends StatelessWidget {
   const GalaxyNovelsApp({
@@ -23,6 +30,7 @@ class GalaxyNovelsApp extends StatelessWidget {
     this.catalogRepository,
     this.novelRepository,
     this.readerRepository,
+    this.readingHistoryRepository,
     super.key,
   }) : config = config ?? const AppConfig();
 
@@ -31,6 +39,7 @@ class GalaxyNovelsApp extends StatelessWidget {
   final CatalogRepository? catalogRepository;
   final NovelRepository? novelRepository;
   final ReaderRepository? readerRepository;
+  final ReadingHistoryRepository? readingHistoryRepository;
 
   @override
   Widget build(BuildContext context) {
@@ -52,6 +61,8 @@ class GalaxyNovelsApp extends StatelessWidget {
         novelRepository ?? PublicNovelRepository(cacheClient: cacheClient);
     final effectiveReaderRepository =
         readerRepository ?? PublicReaderRepository(cacheClient: cacheClient);
+    final effectiveReadingHistoryRepository =
+        readingHistoryRepository ?? _defaultReadingHistoryRepository;
 
     return AppDependencies(
       config: config,
@@ -59,6 +70,7 @@ class GalaxyNovelsApp extends StatelessWidget {
       catalogRepository: effectiveCatalogRepository,
       novelRepository: effectiveNovelRepository,
       readerRepository: effectiveReaderRepository,
+      readingHistoryRepository: effectiveReadingHistoryRepository,
       child: MaterialApp(
         title: 'مجرة الروايات',
         debugShowCheckedModeBanner: false,

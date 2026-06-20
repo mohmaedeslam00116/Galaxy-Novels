@@ -2,16 +2,24 @@ import 'package:flutter/material.dart';
 
 import '../../../app/app_dependencies.dart';
 import '../../../data/models/reader_content_data.dart';
+import '../../../data/models/reading_progress.dart';
 import '../../../data/repositories/reader_repository.dart';
+import '../../../data/repositories/reading_history_repository.dart';
 import 'native_reader_content.dart';
 import 'reader_preferences.dart';
 import 'reader_settings_sheet.dart';
 
 class ReaderScreen extends StatefulWidget {
-  const ReaderScreen({required this.contentApi, this.chapterTitle, super.key});
+  const ReaderScreen({
+    required this.contentApi,
+    this.chapterTitle,
+    this.novelTitle,
+    super.key,
+  });
 
   final String contentApi;
   final String? chapterTitle;
+  final String? novelTitle;
 
   @override
   State<ReaderScreen> createState() => _ReaderScreenState();
@@ -23,6 +31,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
   ReaderPreferences _preferences = ReaderPreferences.defaults;
   Future<ReaderChapterContent>? _future;
   ReaderRepository? _repository;
+  ReadingHistoryRepository? _historyRepository;
 
   @override
   void initState() {
@@ -34,10 +43,13 @@ class _ReaderScreenState extends State<ReaderScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final repository = AppDependencies.of(context).readerRepository;
-    if (_repository != repository) {
+    final dependencies = AppDependencies.of(context);
+    final repository = dependencies.readerRepository;
+    final historyRepository = dependencies.readingHistoryRepository;
+    if (_repository != repository || _historyRepository != historyRepository) {
       _repository = repository;
-      _future = repository.loadChapter(_contentApi);
+      _historyRepository = historyRepository;
+      _future = _loadChapter(_contentApi);
     }
   }
 
@@ -48,10 +60,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
         widget.chapterTitle != oldWidget.chapterTitle) {
       _contentApi = widget.contentApi;
       _chapterTitle = widget.chapterTitle;
-      final repository = _repository;
-      if (repository != null) {
-        _future = repository.loadChapter(_contentApi);
-      }
+      _future = _loadChapter(_contentApi);
     }
   }
 
@@ -88,7 +97,8 @@ class _ReaderScreenState extends State<ReaderScreen> {
   void _retry() {
     final repository = AppDependencies.of(context).readerRepository;
     setState(() {
-      _future = repository.loadChapter(_contentApi);
+      _repository = repository;
+      _future = _loadChapter(_contentApi);
     });
   }
 
@@ -99,10 +109,40 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
     final repository = AppDependencies.of(context).readerRepository;
     setState(() {
+      _repository = repository;
       _contentApi = contentApi;
       _chapterTitle = title;
-      _future = repository.loadChapter(contentApi);
+      _future = _loadChapter(contentApi);
     });
+  }
+
+  Future<ReaderChapterContent> _loadChapter(String contentApi) async {
+    final repository = _repository;
+    if (repository == null) {
+      throw StateError('Reader repository is not ready.');
+    }
+
+    final content = await repository.loadChapter(contentApi);
+    await _recordProgress(content);
+    return content;
+  }
+
+  Future<void> _recordProgress(ReaderChapterContent content) async {
+    final historyRepository = _historyRepository;
+    if (historyRepository == null) {
+      return;
+    }
+
+    await historyRepository.record(
+      ReadingProgress(
+        novelId: content.novelId,
+        novelTitle: widget.novelTitle ?? '',
+        chapterId: content.id,
+        chapterTitle: content.effectiveTitle,
+        contentApi: _contentApi,
+        updatedAt: DateTime.now().toUtc(),
+      ),
+    );
   }
 
   void _openReaderSettings() {

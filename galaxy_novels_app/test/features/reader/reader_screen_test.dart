@@ -3,10 +3,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:galaxy_novels_app/app/app_dependencies.dart';
 import 'package:galaxy_novels_app/core/config/app_config.dart';
 import 'package:galaxy_novels_app/data/models/reader_content_data.dart';
+import 'package:galaxy_novels_app/data/models/reading_progress.dart';
 import 'package:galaxy_novels_app/data/repositories/fake_catalog_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/fake_home_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/fake_novel_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/reader_repository.dart';
+import 'package:galaxy_novels_app/data/repositories/reading_history_repository.dart';
 import 'package:galaxy_novels_app/features/reader/presentation/reader_screen.dart';
 
 void main() {
@@ -136,6 +138,31 @@ void main() {
     );
   });
 
+  testWidgets('records reading progress when chapter content loads', (
+    tester,
+  ) async {
+    final historyRepository = _TestReadingHistoryRepository();
+
+    await tester.pumpWidget(
+      _ReaderTestApp(
+        readerRepository: const _TestReaderRepository(),
+        readingHistoryRepository: historyRepository,
+        child: const ReaderScreen(
+          contentApi: '/wp-json/wor-reader-app/v1/chapters/10',
+          chapterTitle: 'الفصل 1',
+          novelTitle: 'رواية الاختبار',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(historyRepository.records, hasLength(1));
+    expect(historyRepository.records.single.novelId, 1);
+    expect(historyRepository.records.single.novelTitle, 'رواية الاختبار');
+    expect(historyRepository.records.single.chapterId, 10);
+    expect(historyRepository.records.single.chapterTitle, 'عنوان الفصل');
+  });
+
   testWidgets('shows an error when chapter content fails', (tester) async {
     await tester.pumpWidget(
       _ReaderTestApp(
@@ -156,10 +183,12 @@ class _ReaderTestApp extends StatelessWidget {
   const _ReaderTestApp({
     required this.child,
     this.readerRepository = const _TestReaderRepository(),
+    this.readingHistoryRepository,
   });
 
   final Widget child;
   final ReaderRepository readerRepository;
+  final ReadingHistoryRepository? readingHistoryRepository;
 
   @override
   Widget build(BuildContext context) {
@@ -169,6 +198,8 @@ class _ReaderTestApp extends StatelessWidget {
       catalogRepository: const FakeCatalogRepository(),
       novelRepository: const FakeNovelRepository(result: null),
       readerRepository: readerRepository,
+      readingHistoryRepository:
+          readingHistoryRepository ?? _TestReadingHistoryRepository(),
       child: MaterialApp(
         locale: const Locale('ar'),
         home: Directionality(textDirection: TextDirection.rtl, child: child),
@@ -227,4 +258,22 @@ class _FailingReaderRepository implements ReaderRepository {
   Future<ReaderChapterContent> loadChapter(String contentApi) async {
     throw Exception('reader failed');
   }
+}
+
+class _TestReadingHistoryRepository implements ReadingHistoryRepository {
+  final records = <ReadingProgress>[];
+
+  @override
+  void addListener(VoidCallback listener) {}
+
+  @override
+  Future<List<ReadingProgress>> load() async => records;
+
+  @override
+  Future<void> record(ReadingProgress progress) async {
+    records.add(progress);
+  }
+
+  @override
+  void removeListener(VoidCallback listener) {}
 }
