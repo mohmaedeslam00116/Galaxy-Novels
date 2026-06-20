@@ -20,14 +20,19 @@ class DownloadLimitPolicy {
 }
 
 class DownloadsState {
-  const DownloadsState({this.chapters = const []});
+  DownloadsState({
+    List<DownloadedChapter> chapters = const [],
+    this.maxChapters = 100,
+  }) : chapters = List.unmodifiable(chapters);
 
   final List<DownloadedChapter> chapters;
+  final int maxChapters;
 
   int get downloadedCount => chapters.length;
 
-  int get remainingSlots =>
-      const DownloadLimitPolicy().remainingSlots(currentCount: downloadedCount);
+  int get remainingSlots => DownloadLimitPolicy(
+    maxChapters: maxChapters,
+  ).remainingSlots(currentCount: downloadedCount);
 
   bool get isFull => remainingSlots == 0;
 

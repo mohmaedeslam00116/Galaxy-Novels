@@ -59,6 +59,24 @@ void main() {
     expect(state.isFull, isFalse);
   });
 
+  test('download state does not change when source list is mutated', () {
+    final chapters = [_downloadedChapter(1)];
+    final state = DownloadsState(chapters: chapters);
+
+    chapters.add(_downloadedChapter(2));
+
+    expect(state.downloadedCount, 1);
+  });
+
+  test('download state uses configured max chapter limit', () {
+    final chapters = List.generate(3, (index) => _downloadedChapter(index + 1));
+    final state = DownloadsState(chapters: chapters, maxChapters: 5);
+
+    expect(state.downloadedCount, 3);
+    expect(state.remainingSlots, 2);
+    expect(state.isFull, isFalse);
+  });
+
   test('download limit policy blocks requests above remaining slots', () {
     const policy = DownloadLimitPolicy(maxChapters: 100);
 
@@ -66,4 +84,22 @@ void main() {
     expect(policy.canDownload(currentCount: 99, requestedCount: 2), isFalse);
     expect(policy.remainingSlots(currentCount: 101), 0);
   });
+}
+
+DownloadedChapter _downloadedChapter(int id) {
+  return DownloadedChapter(
+    novelId: 1,
+    novelTitle: 'رواية',
+    novelCover: '',
+    chapterId: id,
+    chapterTitle: 'الفصل $id',
+    chapterLabel: 'الفصل $id',
+    chapterPosition: id,
+    chaptersTotal: 10,
+    contentApi: '/chapters/$id',
+    contentHtml: '<p>الفصل</p>',
+    plainTextPreview: 'الفصل',
+    downloadedAt: DateTime.utc(2026, 6, 20),
+    lastOpenedAt: null,
+  );
 }
