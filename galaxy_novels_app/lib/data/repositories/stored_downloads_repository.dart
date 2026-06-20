@@ -88,7 +88,7 @@ class StoredDownloadsRepository implements DownloadsRepository {
   @override
   Future<void> downloadChapter(ChapterDownloadRequest request) async {
     await _ensureLoaded();
-    final contentApi = request.chapter.contentApi;
+    final contentApi = request.chapter.effectiveContentApi;
     if (contentApi.isEmpty || _findChapter(contentApi) != null) {
       return;
     }
@@ -120,12 +120,17 @@ class StoredDownloadsRepository implements DownloadsRepository {
     List<ChapterDownloadRequest> requests,
   ) async* {
     await _ensureLoaded();
-    final pending = requests
-        .where((request) {
-          final contentApi = request.chapter.contentApi;
-          return contentApi.isNotEmpty && _findChapter(contentApi) == null;
-        })
-        .toList(growable: false);
+    final pending = <ChapterDownloadRequest>[];
+    final seenContentApis = <String>{};
+    for (final request in requests) {
+      final contentApi = request.chapter.effectiveContentApi;
+      if (contentApi.isEmpty ||
+          _findChapter(contentApi) != null ||
+          !seenContentApis.add(contentApi)) {
+        continue;
+      }
+      pending.add(request);
+    }
 
     if (pending.isEmpty) {
       yield const DownloadBatchProgress(

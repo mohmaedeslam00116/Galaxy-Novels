@@ -54,18 +54,21 @@ void main() {
     );
   });
 
-  test('does not download a chapter with an empty content api', () async {
-    final reader = _ReaderRepository();
-    final repository = StoredDownloadsRepository(
-      store: _MemoryDownloadStore(),
-      readerRepository: reader,
-    );
+  test(
+    'does not download a chapter with an empty effective content api',
+    () async {
+      final reader = _ReaderRepository();
+      final repository = StoredDownloadsRepository(
+        store: _MemoryDownloadStore(),
+        readerRepository: reader,
+      );
 
-    await repository.downloadChapter(_request(1, contentApi: ''));
+      await repository.downloadChapter(_request(0, contentApi: ''));
 
-    expect(repository.state.value.downloadedCount, 0);
-    expect(reader.loadCalls, isEmpty);
-  });
+      expect(repository.state.value.downloadedCount, 0);
+      expect(reader.loadCalls, isEmpty);
+    },
+  );
 
   test('batch download continues when one chapter fails', () async {
     final store = _MemoryDownloadStore();
@@ -101,6 +104,27 @@ void main() {
     expect(progress.single.completed, 0);
     expect(progress.single.failed, 0);
     expect(progress.single.isComplete, isTrue);
+  });
+
+  test('batch download counts duplicate chapter APIs once', () async {
+    final repository = StoredDownloadsRepository(
+      store: _MemoryDownloadStore(),
+      readerRepository: _ReaderRepository(),
+      limitPolicy: const DownloadLimitPolicy(maxChapters: 1),
+    );
+
+    await repository.load();
+    final progress = await repository.downloadChaptersBatch([
+      _request(1),
+      _request(1),
+    ]).toList();
+
+    expect(progress, hasLength(1));
+    expect(progress.single.total, 1);
+    expect(progress.single.completed, 1);
+    expect(progress.single.failed, 0);
+    expect(progress.single.isComplete, isTrue);
+    expect(repository.state.value.downloadedCount, 1);
   });
 
   test('batch download enforces total limit before starting', () async {
