@@ -67,6 +67,75 @@ void main() {
     expect(find.text('التالي'), findsNothing);
   });
 
+  testWidgets('opens reader settings and updates paragraph text size', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _ReaderTestApp(
+        readerRepository: const _TestReaderRepository(),
+        child: const ReaderScreen(
+          contentApi: '/wp-json/wor-reader-app/v1/chapters/10',
+          chapterTitle: 'الفصل 1',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final beforeStyle = tester.widget<Text>(find.text('نص الفصل الأول')).style;
+
+    await tester.tap(find.byKey(const ValueKey('reader-content-tap-area')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('reader-settings-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('إعدادات القراءة'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('reader-font-increase')));
+    await tester.pumpAndSettle();
+
+    final afterStyle = tester.widget<Text>(find.text('نص الفصل الأول')).style;
+
+    expect(afterStyle?.fontSize, greaterThan(beforeStyle?.fontSize ?? 0));
+  });
+
+  testWidgets('reader settings can switch to a light reading palette', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _ReaderTestApp(
+        readerRepository: const _TestReaderRepository(),
+        child: const ReaderScreen(
+          contentApi: '/wp-json/wor-reader-app/v1/chapters/10',
+          chapterTitle: 'الفصل 1',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final seedColor = Theme.of(
+      tester.element(find.byType(ReaderScreen)),
+    ).colorScheme.primary;
+
+    await tester.tap(find.byKey(const ValueKey('reader-content-tap-area')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('reader-settings-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('reader-palette-light')));
+    await tester.pumpAndSettle();
+
+    final background = tester.widget<ColoredBox>(
+      find.byKey(const ValueKey('reader-background')),
+    );
+
+    expect(
+      ColorScheme.fromSeed(
+        seedColor: seedColor,
+        brightness: Brightness.light,
+      ).surface,
+      background.color,
+    );
+  });
+
   testWidgets('shows an error when chapter content fails', (tester) async {
     await tester.pumpWidget(
       _ReaderTestApp(
