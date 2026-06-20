@@ -1,108 +1,207 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/app_dependencies.dart';
-import '../data/reader_url_builder.dart';
-import 'reader_web_view.dart';
+import '../../../data/models/reader_content_data.dart';
+import '../../../data/repositories/reader_repository.dart';
+import '../data/chapter_html_parser.dart';
 
 class ReaderScreen extends StatefulWidget {
-  const ReaderScreen({
-    required this.chapterUrl,
-    this.chapterTitle,
-    this.webViewBuilder,
-    super.key,
-  });
+  const ReaderScreen({required this.contentApi, this.chapterTitle, super.key});
 
-  final String chapterUrl;
+  final String contentApi;
   final String? chapterTitle;
-  final ReaderWebViewBuilder? webViewBuilder;
 
   @override
   State<ReaderScreen> createState() => _ReaderScreenState();
 }
 
 class _ReaderScreenState extends State<ReaderScreen> {
-  int _progress = 0;
-  String? _error;
-  int _reloadToken = 0;
+  late String _contentApi;
+  String? _chapterTitle;
+  Future<ReaderChapterContent>? _future;
+  ReaderRepository? _repository;
+
+  @override
+  void initState() {
+    super.initState();
+    _contentApi = widget.contentApi;
+    _chapterTitle = widget.chapterTitle;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final repository = AppDependencies.of(context).readerRepository;
+    if (_repository != repository) {
+      _repository = repository;
+      _future = repository.loadChapter(_contentApi);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant ReaderScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.contentApi != oldWidget.contentApi ||
+        widget.chapterTitle != oldWidget.chapterTitle) {
+      _contentApi = widget.contentApi;
+      _chapterTitle = widget.chapterTitle;
+      final repository = _repository;
+      if (repository != null) {
+        _future = repository.loadChapter(_contentApi);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final dependencies = AppDependencies.of(context);
-    final config = dependencies.config;
-    final Uri readerUri;
-
-    try {
-      readerUri = buildPublicReaderUri(
-        config: config,
-        chapterUrl: widget.chapterUrl,
-      );
-    } on Object {
-      return Scaffold(
-        appBar: AppBar(title: const Text('القارئ')),
-        body: const _ReaderErrorView(message: 'تعذر فتح الفصل'),
-      );
-    }
-
-    final webViewConfig = ReaderWebViewConfig(
-      initialUri: readerUri,
-      userAgent: config.userAgent,
-      onProgress: (value) {
-        if (!mounted) {
-          return;
-        }
-        setState(() {
-          _progress = value;
-          if (value > 0) {
-            _error = null;
-          }
-        });
-      },
-      onLoadError: (message) {
-        if (!mounted) {
-          return;
-        }
-        setState(() => _error = message);
-      },
-    );
-
-    final builder = widget.webViewBuilder ?? dependencies.readerWebViewBuilder;
-
     return Scaffold(
-      appBar: AppBar(title: Text(widget.chapterTitle ?? 'القارئ')),
-      backgroundColor: theme.colorScheme.surface,
-      body: Column(
-        children: [
-          if (_progress < 100 && _error == null)
-            LinearProgressIndicator(
-              value: _progress == 0 ? null : _progress / 100,
-              minHeight: 2,
-            ),
-          Expanded(
-            child: _error == null
-                ? (builder ?? _defaultWebViewBuilder)(context, webViewConfig)
-                : _ReaderErrorView(
-                    message: 'تعذر تحميل الفصل',
-                    details: _error,
-                    onRetry: () {
-                      setState(() {
-                        _error = null;
-                        _progress = 0;
-                        _reloadToken++;
-                      });
-                    },
-                  ),
-          ),
-        ],
+      appBar: AppBar(title: Text(_chapterTitle ?? 'القارئ')),
+      body: FutureBuilder<ReaderChapterContent>(
+        future: _future,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const _ReaderLoadingView();
+          }
+
+          if (snapshot.hasError || !snapshot.hasData) {
+            return _ReaderErrorView(
+              message: 'تعذر تحميل الفصل',
+              details: snapshot.error?.toString(),
+              onRetry: _retry,
+            );
+          }
+
+          return _NativeReaderContent(
+            content: snapshot.data!,
+            onOpenChapter: _openChapter,
+          );
+        },
       ),
     );
   }
 
-  Widget _defaultWebViewBuilder(
-    BuildContext context,
-    ReaderWebViewConfig config,
-  ) {
-    return ReaderWebView(key: ValueKey(_reloadToken), config: config);
+  void _retry() {
+    final repository = AppDependencies.of(context).readerRepository;
+    setState(() {
+      _future = repository.loadChapter(_contentApi);
+    });
+  }
+
+  void _openChapter(String contentApi, String title) {
+    if (contentApi.isEmpty) {
+      return;
+    }
+
+    final repository = AppDependencies.of(context).readerRepository;
+    setState(() {
+      _contentApi = contentApi;
+      _chapterTitle = title;
+      _future = repository.loadChapter(contentApi);
+    });
+  }
+}
+
+class _NativeReaderContent extends StatelessWidget {
+  const _NativeReaderContent({
+    required this.content,
+    required this.onOpenChapter,
+  });
+
+  final ReaderChapterContent content;
+  final void Function(String contentApi, String title) onOpenChapter;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final blocks = parseChapterHtml(content.contentHtml);
+    final hasPrevious = content.navigation.previousApi.isNotEmpty;
+    final hasNext = content.navigation.nextApi.isNotEmpty;
+
+    return ListView(
+      key: ValueKey(content.id),
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 34),
+      children: [
+        if (content.effectiveTitle.isNotEmpty) ...[
+          Text(
+            content.effectiveTitle,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.w900,
+              height: 1.45,
+            ),
+          ),
+          const SizedBox(height: 18),
+        ],
+        for (final block in blocks)
+          Padding(
+            padding: EdgeInsets.only(
+              bottom: block.type == ChapterTextBlockType.heading ? 14 : 16,
+            ),
+            child: Text(
+              block.text,
+              textAlign: TextAlign.start,
+              style: block.type == ChapterTextBlockType.heading
+                  ? theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w900,
+                      height: 1.55,
+                    )
+                  : theme.textTheme.titleMedium?.copyWith(
+                      height: 2.05,
+                      color: theme.colorScheme.onSurface.withValues(
+                        alpha: 0.92,
+                      ),
+                    ),
+            ),
+          ),
+        if (hasPrevious || hasNext) ...[
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: hasPrevious
+                      ? () => onOpenChapter(
+                          content.navigation.previousApi,
+                          'الفصل السابق',
+                        )
+                      : null,
+                  icon: const Icon(Icons.chevron_right),
+                  label: const Text('السابق'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: hasNext
+                      ? () => onOpenChapter(
+                          content.navigation.nextApi,
+                          'الفصل التالي',
+                        )
+                      : null,
+                  icon: const Icon(Icons.chevron_left),
+                  label: const Text('التالي'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _ReaderLoadingView extends StatelessWidget {
+  const _ReaderLoadingView();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: SizedBox(
+        width: 36,
+        height: 36,
+        child: CircularProgressIndicator(strokeWidth: 3),
+      ),
+    );
   }
 }
 

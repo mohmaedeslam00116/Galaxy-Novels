@@ -68,10 +68,13 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
     });
   }
 
-  void _openReader(String chapterUrl) {
+  void _openReader(NovelChapter chapter) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (context) => ReaderScreen(chapterUrl: chapterUrl),
+        builder: (context) => ReaderScreen(
+          contentApi: chapter.effectiveContentApi,
+          chapterTitle: chapter.label,
+        ),
       ),
     );
   }
@@ -81,24 +84,25 @@ class _NovelDetailsContent extends StatelessWidget {
   const _NovelDetailsContent({required this.result, required this.onRead});
 
   final NovelDetailsLoadResult result;
-  final ValueChanged<String> onRead;
+  final ValueChanged<NovelChapter> onRead;
 
   @override
   Widget build(BuildContext context) {
     final details = result.details;
-    final firstReadableUrl = result.chapters.isNotEmpty
-        ? result.chapters.first.url
-        : details.firstChapterUrl;
+    final firstReadableChapter = result.chapters.isNotEmpty
+        ? result.chapters.first
+        : null;
 
     return ListView(
       padding: const EdgeInsets.only(bottom: 28),
       children: [
         NovelDetailsHeader(details: details),
-        if (firstReadableUrl.isNotEmpty)
+        if (firstReadableChapter != null &&
+            firstReadableChapter.effectiveContentApi.isNotEmpty)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
             child: FilledButton.icon(
-              onPressed: () => onRead(firstReadableUrl),
+              onPressed: () => onRead(firstReadableChapter),
               icon: const Icon(Icons.menu_book_outlined),
               label: const Text('ابدأ القراءة'),
             ),
@@ -188,7 +192,7 @@ class _ChaptersSection extends StatelessWidget {
   const _ChaptersSection({required this.result, required this.onRead});
 
   final NovelDetailsLoadResult result;
-  final ValueChanged<String> onRead;
+  final ValueChanged<NovelChapter> onRead;
 
   @override
   Widget build(BuildContext context) {
@@ -220,8 +224,8 @@ class _ChaptersSection extends StatelessWidget {
             NovelChapterTile(
               chapter: chapter,
               onTap: () {
-                if (chapter.url.isNotEmpty) {
-                  onRead(chapter.url);
+                if (chapter.effectiveContentApi.isNotEmpty) {
+                  onRead(chapter);
                 }
               },
             ),

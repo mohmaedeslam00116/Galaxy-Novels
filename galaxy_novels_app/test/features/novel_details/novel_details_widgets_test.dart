@@ -81,6 +81,7 @@ const _chapter = NovelChapter(
   label: 'الفصل 1',
   title: 'البداية',
   url: '/chapter-1/',
+  contentApi: '/wp-json/wor-reader-app/v1/chapters/1',
   dateLabel: 'اليوم',
   dateIso: null,
   views: 0,

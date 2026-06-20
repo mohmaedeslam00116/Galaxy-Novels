@@ -6,9 +6,11 @@ import 'package:galaxy_novels_app/data/models/chapter_summary.dart';
 import 'package:galaxy_novels_app/data/models/home_data.dart';
 import 'package:galaxy_novels_app/data/models/novel_details_data.dart';
 import 'package:galaxy_novels_app/data/models/novel_summary.dart';
+import 'package:galaxy_novels_app/data/models/reader_content_data.dart';
 import 'package:galaxy_novels_app/data/repositories/catalog_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/home_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/novel_repository.dart';
+import 'package:galaxy_novels_app/data/repositories/reader_repository.dart';
 
 void main() {
   testWidgets('shows Galaxy Novels Arabic shell', (tester) async {
@@ -252,7 +254,7 @@ void main() {
         homeRepository: _TestHomeRepository(_homeData),
         catalogRepository: const _TestCatalogRepository(),
         novelRepository: const _TestNovelRepository(),
-        readerWebViewBuilder: (context, config) => const Text('قارئ تجريبي'),
+        readerRepository: const _TestReaderRepository(),
       ),
     );
     await tester.pumpAndSettle();
@@ -537,6 +539,7 @@ class _TestNovelRepository implements NovelRepository {
           label: 'الفصل 1',
           title: 'البداية',
           url: '/chapter-1/',
+          contentApi: '/wp-json/wor-reader-app/v1/chapters/1',
           dateLabel: 'اليوم',
           dateIso: null,
           views: 0,
@@ -544,6 +547,30 @@ class _TestNovelRepository implements NovelRepository {
           search: '',
         ),
       ],
+    );
+  }
+}
+
+class _TestReaderRepository implements ReaderRepository {
+  const _TestReaderRepository();
+
+  @override
+  Future<ReaderChapterContent> loadChapter(String contentApi) async {
+    return const ReaderChapterContent(
+      id: 1,
+      novelId: 99,
+      label: 'الفصل 1',
+      title: '',
+      displayTitle: 'الفصل 1',
+      position: 1,
+      total: 2,
+      contentHtml: '<p>قارئ تجريبي</p>',
+      navigation: ReaderChapterNavigation(
+        previousApi: '',
+        nextApi: '',
+        previousId: 0,
+        nextId: 0,
+      ),
     );
   }
 }

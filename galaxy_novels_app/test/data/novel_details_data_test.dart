@@ -80,6 +80,7 @@ void main() {
           'url': 'https://example.com/chapter-1/',
           'date': 'يونيو 17, 2026',
           'date_iso': '2026-06-18T00:14:09+03:00',
+          'content_api': '/wp-json/wor-reader-app/v1/chapters/1',
           'views': 7,
           'comments': 2,
           'search': '1 الفصل 1 البداية',
@@ -90,6 +91,10 @@ void main() {
     expect(pack.total, 2);
     expect(pack.chapters.single.id, 1);
     expect(pack.chapters.single.displayTitle, 'البداية');
+    expect(
+      pack.chapters.single.contentApi,
+      '/wp-json/wor-reader-app/v1/chapters/1',
+    );
     expect(pack.chapters.single.dateLabel, 'يونيو 17, 2026');
   });
 

@@ -4,7 +4,7 @@ import '../core/config/app_config.dart';
 import '../data/repositories/catalog_repository.dart';
 import '../data/repositories/home_repository.dart';
 import '../data/repositories/novel_repository.dart';
-import '../features/reader/presentation/reader_web_view.dart';
+import '../data/repositories/reader_repository.dart';
 
 class AppDependencies extends InheritedWidget {
   const AppDependencies({
@@ -12,7 +12,7 @@ class AppDependencies extends InheritedWidget {
     required this.homeRepository,
     required this.catalogRepository,
     required this.novelRepository,
-    this.readerWebViewBuilder,
+    required this.readerRepository,
     required super.child,
     super.key,
   });
@@ -21,7 +21,7 @@ class AppDependencies extends InheritedWidget {
   final HomeRepository homeRepository;
   final CatalogRepository catalogRepository;
   final NovelRepository novelRepository;
-  final ReaderWebViewBuilder? readerWebViewBuilder;
+  final ReaderRepository readerRepository;
 
   static AppDependencies of(BuildContext context) {
     final dependencies = context
@@ -37,6 +37,6 @@ class AppDependencies extends InheritedWidget {
         homeRepository != oldWidget.homeRepository ||
         catalogRepository != oldWidget.catalogRepository ||
         novelRepository != oldWidget.novelRepository ||
-        readerWebViewBuilder != oldWidget.readerWebViewBuilder;
+        readerRepository != oldWidget.readerRepository;
   }
 }

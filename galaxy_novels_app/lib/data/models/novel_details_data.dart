@@ -174,6 +174,7 @@ class NovelChapter {
     required this.label,
     required this.title,
     required this.url,
+    required this.contentApi,
     required this.dateLabel,
     required this.dateIso,
     required this.views,
@@ -189,6 +190,7 @@ class NovelChapter {
       label: _asString(json['label']),
       title: _asString(json['title']),
       url: _asString(json['url']),
+      contentApi: _asString(json['content_api']),
       dateLabel: _asString(json['date']),
       dateIso: _asDateTime(json['date_iso']),
       views: _asInt(json['views']),
@@ -203,6 +205,7 @@ class NovelChapter {
   final String label;
   final String title;
   final String url;
+  final String contentApi;
   final String dateLabel;
   final DateTime? dateIso;
   final int views;
@@ -212,6 +215,16 @@ class NovelChapter {
   String get displayTitle => title.isNotEmpty
       ? title
       : _titleFromSearch(search: search, label: label, number: number);
+
+  String get effectiveContentApi {
+    if (contentApi.isNotEmpty) {
+      return contentApi;
+    }
+    if (id == 0) {
+      return '';
+    }
+    return '/wp-json/wor-reader-app/v1/chapters/$id';
+  }
 }
 
 Map<String, dynamic> _asMap(Object? value) {
