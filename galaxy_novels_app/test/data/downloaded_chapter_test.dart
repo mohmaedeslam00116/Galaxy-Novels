@@ -84,6 +84,14 @@ void main() {
     expect(policy.canDownload(currentCount: 99, requestedCount: 2), isFalse);
     expect(policy.remainingSlots(currentCount: 101), 0);
   });
+
+  test('download limit policy exposes the default max chapter limit', () {
+    expect(DownloadLimitPolicy.defaultMaxChapters, 100);
+    expect(
+      DownloadsState().maxChapters,
+      DownloadLimitPolicy.defaultMaxChapters,
+    );
+  });
 }
 
 DownloadedChapter _downloadedChapter(int id) {

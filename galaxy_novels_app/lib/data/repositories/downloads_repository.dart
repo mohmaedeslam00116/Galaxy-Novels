@@ -5,7 +5,9 @@ import '../models/novel_details_data.dart';
 import '../models/reader_content_data.dart';
 
 class DownloadLimitPolicy {
-  const DownloadLimitPolicy({this.maxChapters = 100});
+  const DownloadLimitPolicy({this.maxChapters = defaultMaxChapters});
+
+  static const defaultMaxChapters = 100;
 
   final int maxChapters;
 
@@ -22,7 +24,7 @@ class DownloadLimitPolicy {
 class DownloadsState {
   DownloadsState({
     List<DownloadedChapter> chapters = const [],
-    this.maxChapters = 100,
+    this.maxChapters = DownloadLimitPolicy.defaultMaxChapters,
   }) : chapters = List.unmodifiable(chapters);
 
   final List<DownloadedChapter> chapters;
