@@ -4,6 +4,24 @@ import '../models/downloaded_chapter.dart';
 import '../models/novel_details_data.dart';
 import '../models/reader_content_data.dart';
 
+class DownloadLimitExceededException implements Exception {
+  const DownloadLimitExceededException({
+    required this.maxChapters,
+    required this.currentCount,
+    required this.requestedCount,
+  });
+
+  final int maxChapters;
+  final int currentCount;
+  final int requestedCount;
+
+  @override
+  String toString() {
+    return 'DownloadLimitExceededException: requested $requestedCount with '
+        '$currentCount of $maxChapters chapters already downloaded';
+  }
+}
+
 class DownloadLimitPolicy {
   const DownloadLimitPolicy({this.maxChapters = defaultMaxChapters});
 

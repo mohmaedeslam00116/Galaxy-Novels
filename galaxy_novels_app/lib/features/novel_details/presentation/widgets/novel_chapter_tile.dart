@@ -7,11 +7,13 @@ class NovelChapterTile extends StatelessWidget {
   const NovelChapterTile({
     required this.chapter,
     required this.onTap,
+    this.trailingAction,
     super.key,
   });
 
   final NovelChapter chapter;
   final VoidCallback onTap;
+  final Widget? trailingAction;
 
   @override
   Widget build(BuildContext context) {
@@ -110,6 +112,10 @@ class NovelChapterTile extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
+                if (trailingAction != null) ...[
+                  trailingAction!,
+                  const SizedBox(width: 4),
+                ],
                 Icon(
                   Icons.chevron_left_rounded,
                   size: 24,

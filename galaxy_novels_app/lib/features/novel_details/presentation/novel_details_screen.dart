@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import '../../../app/app_dependencies.dart';
 import '../../../app/app_theme.dart';
 import '../../../data/models/novel_details_data.dart';
+import '../../../data/repositories/downloads_repository.dart';
 import '../../../data/repositories/novel_repository.dart';
 import '../../../shared/widgets/section_title.dart';
+import '../../downloads/presentation/chapter_download_button.dart';
 import '../../reader/presentation/reader_screen.dart';
 import 'widgets/novel_chapter_tile.dart';
 import 'widgets/novel_details_header.dart';
@@ -272,6 +274,7 @@ class _ChaptersSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final chapters = result.chapters;
+    final downloadsRepository = AppDependencies.of(context).downloadsRepository;
     final theme = Theme.of(context);
     final tokens = theme.extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
 
@@ -304,17 +307,71 @@ class _ChaptersSection extends StatelessWidget {
                 : null,
           )
         else
-          for (final chapter in chapters)
-            NovelChapterTile(
-              chapter: chapter,
-              onTap: () {
-                if (chapter.effectiveContentApi.isNotEmpty) {
-                  onRead(chapter, result.details.title);
-                }
-              },
-            ),
+          ValueListenableBuilder<DownloadsState>(
+            valueListenable: downloadsRepository.state,
+            builder: (context, downloadsState, _) {
+              return Column(
+                children: [
+                  for (final chapter in chapters)
+                    NovelChapterTile(
+                      chapter: chapter,
+                      trailingAction: ChapterDownloadButton(
+                        isDownloaded: downloadsState.contains(
+                          chapter.effectiveContentApi,
+                        ),
+                        isEnabled: chapter.effectiveContentApi.isNotEmpty,
+                        onPressed: () => _downloadChapter(
+                          context,
+                          downloadsRepository,
+                          chapter,
+                        ),
+                      ),
+                      onTap: () {
+                        if (chapter.effectiveContentApi.isNotEmpty) {
+                          onRead(chapter, result.details.title);
+                        }
+                      },
+                    ),
+                ],
+              );
+            },
+          ),
       ],
     );
+  }
+
+  Future<void> _downloadChapter(
+    BuildContext context,
+    DownloadsRepository repository,
+    NovelChapter chapter,
+  ) async {
+    try {
+      await repository.downloadChapter(
+        ChapterDownloadRequest(
+          novelId: result.details.id,
+          novelTitle: result.details.title,
+          novelCover: result.details.bestCover,
+          chapter: chapter,
+        ),
+      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('تم تحميل الفصل')));
+      }
+    } on DownloadLimitExceededException {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('وصلت إلى حد 100 فصل محمل')),
+        );
+      }
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('تعذر تحميل الفصل، حاول مجددا')),
+        );
+      }
+    }
   }
 }
 

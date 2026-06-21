@@ -6,24 +6,6 @@ import 'downloads_repository.dart';
 import 'local_download_store.dart';
 import 'reader_repository.dart';
 
-class DownloadLimitExceededException implements Exception {
-  const DownloadLimitExceededException({
-    required this.maxChapters,
-    required this.currentCount,
-    required this.requestedCount,
-  });
-
-  final int maxChapters;
-  final int currentCount;
-  final int requestedCount;
-
-  @override
-  String toString() {
-    return 'DownloadLimitExceededException: requested $requestedCount with '
-        '$currentCount of $maxChapters chapters already downloaded';
-  }
-}
-
 class StoredDownloadsRepository implements DownloadsRepository {
   StoredDownloadsRepository({
     required LocalDownloadStore store,

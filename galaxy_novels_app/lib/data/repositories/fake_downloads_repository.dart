@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart';
 import '../models/downloaded_chapter.dart';
 import '../models/reader_content_data.dart';
 import 'downloads_repository.dart';
-import 'stored_downloads_repository.dart';
 
 class FakeDownloadsRepository implements DownloadsRepository {
   FakeDownloadsRepository({

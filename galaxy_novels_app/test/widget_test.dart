@@ -10,6 +10,7 @@ import 'package:galaxy_novels_app/data/models/reader_content_data.dart';
 import 'package:galaxy_novels_app/data/models/rankings_data.dart';
 import 'package:galaxy_novels_app/data/models/search_index_data.dart';
 import 'package:galaxy_novels_app/data/repositories/catalog_repository.dart';
+import 'package:galaxy_novels_app/data/repositories/fake_downloads_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/home_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/novel_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/reader_repository.dart';
@@ -320,6 +321,33 @@ void main() {
     expect(find.text('الفصل 1'), findsWidgets);
     expect(find.text('قارئ تجريبي'), findsOneWidget);
     expect(find.text('القارئ سيكون في المرحلة التالية'), findsNothing);
+  });
+
+  testWidgets('downloads a chapter from novel details', (tester) async {
+    final downloadsRepository = FakeDownloadsRepository();
+    await tester.pumpWidget(
+      GalaxyNovelsApp(
+        homeRepository: _TestHomeRepository(_homeData),
+        catalogRepository: const _TestCatalogRepository(),
+        novelRepository: const _TestNovelRepository(),
+        readerRepository: const _TestReaderRepository(),
+        downloadsRepository: downloadsRepository,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('المكتبة'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('مكتبة الاختبار'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.byTooltip('تحميل الفصل'), 320);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('تحميل الفصل'));
+    await tester.pumpAndSettle();
+
+    expect(downloadsRepository.state.value.downloadedCount, 1);
+    expect(find.byTooltip('محمل'), findsOneWidget);
   });
 
   testWidgets('opens novel details from the home screen', (tester) async {

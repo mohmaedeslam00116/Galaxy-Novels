@@ -2,7 +2,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:galaxy_novels_app/data/models/novel_details_data.dart';
 import 'package:galaxy_novels_app/data/repositories/downloads_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/fake_downloads_repository.dart';
-import 'package:galaxy_novels_app/data/repositories/stored_downloads_repository.dart';
 
 void main() {
   test('downloads, opens, and deletes chapters in memory', () async {

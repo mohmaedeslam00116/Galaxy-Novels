@@ -47,6 +47,28 @@ void main() {
 
     expect(tapped, isTrue);
   });
+
+  testWidgets('chapter tile can show a download action', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Directionality(
+          textDirection: TextDirection.rtl,
+          child: Scaffold(
+            body: NovelChapterTile(
+              chapter: _chapter,
+              onTap: () {},
+              trailingAction: IconButton(
+                onPressed: () {},
+                icon: const Icon(Icons.download_outlined),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byIcon(Icons.download_outlined), findsOneWidget);
+  });
 }
 
 const _details = NovelDetails(
