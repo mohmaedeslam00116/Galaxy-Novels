@@ -5,6 +5,7 @@ import 'package:galaxy_novels_app/core/config/app_config.dart';
 import 'package:galaxy_novels_app/data/models/reader_content_data.dart';
 import 'package:galaxy_novels_app/data/models/reading_progress.dart';
 import 'package:galaxy_novels_app/data/repositories/fake_catalog_repository.dart';
+import 'package:galaxy_novels_app/data/repositories/fake_downloads_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/fake_home_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/fake_novel_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/reader_repository.dart';
@@ -200,6 +201,7 @@ class _ReaderTestApp extends StatelessWidget {
       readerRepository: readerRepository,
       readingHistoryRepository:
           readingHistoryRepository ?? _TestReadingHistoryRepository(),
+      downloadsRepository: FakeDownloadsRepository(),
       child: MaterialApp(
         locale: const Locale('ar'),
         home: Directionality(textDirection: TextDirection.rtl, child: child),

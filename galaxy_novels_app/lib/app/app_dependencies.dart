@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 
 import '../core/config/app_config.dart';
 import '../data/repositories/catalog_repository.dart';
+import '../data/repositories/downloads_repository.dart';
 import '../data/repositories/home_repository.dart';
 import '../data/repositories/novel_repository.dart';
 import '../data/repositories/reader_repository.dart';
@@ -15,6 +16,7 @@ class AppDependencies extends InheritedWidget {
     required this.novelRepository,
     required this.readerRepository,
     required this.readingHistoryRepository,
+    required this.downloadsRepository,
     required super.child,
     super.key,
   });
@@ -25,6 +27,7 @@ class AppDependencies extends InheritedWidget {
   final NovelRepository novelRepository;
   final ReaderRepository readerRepository;
   final ReadingHistoryRepository readingHistoryRepository;
+  final DownloadsRepository downloadsRepository;
 
   static AppDependencies of(BuildContext context) {
     final dependencies = context
@@ -41,6 +44,7 @@ class AppDependencies extends InheritedWidget {
         catalogRepository != oldWidget.catalogRepository ||
         novelRepository != oldWidget.novelRepository ||
         readerRepository != oldWidget.readerRepository ||
-        readingHistoryRepository != oldWidget.readingHistoryRepository;
+        readingHistoryRepository != oldWidget.readingHistoryRepository ||
+        downloadsRepository != oldWidget.downloadsRepository;
   }
 }

@@ -5,6 +5,7 @@ import '../core/config/app_config.dart';
 import '../core/network/public_cache_client.dart';
 import '../data/repositories/bootstrap_repository.dart';
 import '../data/repositories/catalog_repository.dart';
+import '../data/repositories/downloads_repository.dart';
 import '../data/repositories/home_repository.dart';
 import '../data/repositories/novel_repository.dart';
 import '../data/repositories/public_catalog_repository.dart';
@@ -13,7 +14,9 @@ import '../data/repositories/public_novel_repository.dart';
 import '../data/repositories/public_reader_repository.dart';
 import '../data/repositories/reader_repository.dart';
 import '../data/repositories/reading_history_repository.dart';
+import '../data/repositories/shared_preferences_download_store.dart';
 import '../data/repositories/shared_preferences_reading_history_store.dart';
+import '../data/repositories/stored_downloads_repository.dart';
 import '../data/repositories/stored_reading_history_repository.dart';
 import '../features/shell/presentation/app_shell.dart';
 import 'app_dependencies.dart';
@@ -31,6 +34,7 @@ class GalaxyNovelsApp extends StatelessWidget {
     this.novelRepository,
     this.readerRepository,
     this.readingHistoryRepository,
+    this.downloadsRepository,
     super.key,
   }) : config = config ?? const AppConfig();
 
@@ -40,6 +44,7 @@ class GalaxyNovelsApp extends StatelessWidget {
   final NovelRepository? novelRepository;
   final ReaderRepository? readerRepository;
   final ReadingHistoryRepository? readingHistoryRepository;
+  final DownloadsRepository? downloadsRepository;
 
   @override
   Widget build(BuildContext context) {
@@ -61,6 +66,12 @@ class GalaxyNovelsApp extends StatelessWidget {
         novelRepository ?? PublicNovelRepository(cacheClient: cacheClient);
     final effectiveReaderRepository =
         readerRepository ?? PublicReaderRepository(cacheClient: cacheClient);
+    final effectiveDownloadsRepository =
+        downloadsRepository ??
+        StoredDownloadsRepository(
+          store: SharedPreferencesDownloadStore(),
+          readerRepository: effectiveReaderRepository,
+        );
     final effectiveReadingHistoryRepository =
         readingHistoryRepository ?? _defaultReadingHistoryRepository;
 
@@ -71,6 +82,7 @@ class GalaxyNovelsApp extends StatelessWidget {
       novelRepository: effectiveNovelRepository,
       readerRepository: effectiveReaderRepository,
       readingHistoryRepository: effectiveReadingHistoryRepository,
+      downloadsRepository: effectiveDownloadsRepository,
       child: MaterialApp(
         title: 'مجرة الروايات',
         debugShowCheckedModeBanner: false,
