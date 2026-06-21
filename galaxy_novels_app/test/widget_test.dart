@@ -25,11 +25,12 @@ void main() {
 
     expect(find.text('الرئيسية'), findsWidgets);
     expect(find.text('المكتبة'), findsOneWidget);
+    expect(find.text('التنزيلات'), findsOneWidget);
     expect(find.text('السجل'), findsOneWidget);
     expect(find.text('الترتيب'), findsOneWidget);
     expect(
       find.descendant(
-        of: find.byType(BottomNavigationBar),
+        of: find.byType(NavigationBar),
         matching: find.text('حسابي'),
       ),
       findsNothing,
