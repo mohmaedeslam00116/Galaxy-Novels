@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:galaxy_novels_app/data/models/novel_details_data.dart';
 import 'package:galaxy_novels_app/data/repositories/downloads_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/fake_downloads_repository.dart';
+import 'package:galaxy_novels_app/data/repositories/stored_downloads_repository.dart';
 
 void main() {
   test('downloads, opens, and deletes chapters in memory', () async {
@@ -49,6 +50,36 @@ void main() {
     expect(progress.last.isComplete, isTrue);
     expect(repository.state.value.downloadedCount, 2);
   });
+
+  test('downloadChapter throws when maxChapters is exceeded', () async {
+    final repository = FakeDownloadsRepository(maxChapters: 1);
+
+    await repository.downloadChapter(_request(1));
+
+    expect(
+      () => repository.downloadChapter(_request(2)),
+      throwsA(isA<DownloadLimitExceededException>()),
+    );
+    expect(repository.state.value.downloadedCount, 1);
+    expect(repository.state.value.contains('/chapters/1'), isTrue);
+    expect(repository.state.value.contains('/chapters/2'), isFalse);
+  });
+
+  test(
+    'batch download throws before partial state changes when over limit',
+    () {
+      final repository = FakeDownloadsRepository(maxChapters: 1);
+
+      expect(
+        () => repository.downloadChaptersBatch([
+          _request(1),
+          _request(2),
+        ]).toList(),
+        throwsA(isA<DownloadLimitExceededException>()),
+      );
+      expect(repository.state.value.downloadedCount, 0);
+    },
+  );
 
   test('batch download emits complete progress for empty requests', () async {
     final repository = FakeDownloadsRepository();

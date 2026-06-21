@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../models/downloaded_chapter.dart';
 import '../models/reader_content_data.dart';
 import 'downloads_repository.dart';
+import 'stored_downloads_repository.dart';
 
 class FakeDownloadsRepository implements DownloadsRepository {
   FakeDownloadsRepository({
@@ -56,6 +57,8 @@ class FakeDownloadsRepository implements DownloadsRepository {
       return;
     }
 
+    _ensureWithinLimit(1);
+
     final title = _chapterTitle(request);
     final contentHtml = '<p>$title</p>';
     final chapter = DownloadedChapter(
@@ -104,6 +107,8 @@ class FakeDownloadsRepository implements DownloadsRepository {
       );
       return;
     }
+
+    _ensureWithinLimit(pending.length);
 
     var completed = 0;
     for (final request in pending) {
@@ -158,6 +163,21 @@ class FakeDownloadsRepository implements DownloadsRepository {
       chapters: chapters,
       maxChapters: _state.value.maxChapters,
     );
+  }
+
+  void _ensureWithinLimit(int requestedCount) {
+    final state = _state.value;
+    final limitPolicy = DownloadLimitPolicy(maxChapters: state.maxChapters);
+    if (!limitPolicy.canDownload(
+      currentCount: state.chapters.length,
+      requestedCount: requestedCount,
+    )) {
+      throw DownloadLimitExceededException(
+        maxChapters: state.maxChapters,
+        currentCount: state.chapters.length,
+        requestedCount: requestedCount,
+      );
+    }
   }
 }
 
