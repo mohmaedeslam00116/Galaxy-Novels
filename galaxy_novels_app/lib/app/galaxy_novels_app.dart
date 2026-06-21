@@ -26,7 +26,7 @@ final _defaultReadingHistoryRepository = StoredReadingHistoryRepository(
   store: SharedPreferencesReadingHistoryStore(),
 );
 
-class GalaxyNovelsApp extends StatelessWidget {
+class GalaxyNovelsApp extends StatefulWidget {
   const GalaxyNovelsApp({
     AppConfig? config,
     this.homeRepository,
@@ -47,36 +47,63 @@ class GalaxyNovelsApp extends StatelessWidget {
   final DownloadsRepository? downloadsRepository;
 
   @override
+  State<GalaxyNovelsApp> createState() => _GalaxyNovelsAppState();
+}
+
+class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
+  StoredDownloadsRepository? _defaultDownloadsRepository;
+
+  @override
+  void didUpdateWidget(covariant GalaxyNovelsApp oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (widget.downloadsRepository != null) {
+      return;
+    }
+
+    final switchedBackToDefault = oldWidget.downloadsRepository != null;
+    final readerRepositoryChanged =
+        widget.readerRepository != oldWidget.readerRepository;
+    final configChanged = widget.config != oldWidget.config;
+    final defaultDownloadsUsesConfig = widget.readerRepository == null;
+
+    if (switchedBackToDefault ||
+        readerRepositoryChanged ||
+        (defaultDownloadsUsesConfig && configChanged)) {
+      _defaultDownloadsRepository = null;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final cacheClient = PublicCacheClient(config: config);
+    final cacheClient = PublicCacheClient(config: widget.config);
     final bootstrapRepository = BootstrapRepository(cacheClient);
     final effectiveHomeRepository =
-        homeRepository ??
+        widget.homeRepository ??
         PublicHomeRepository(
           bootstrapRepository: bootstrapRepository,
           cacheClient: cacheClient,
         );
     final effectiveCatalogRepository =
-        catalogRepository ??
+        widget.catalogRepository ??
         PublicCatalogRepository(
           bootstrapRepository: bootstrapRepository,
           cacheClient: cacheClient,
         );
     final effectiveNovelRepository =
-        novelRepository ?? PublicNovelRepository(cacheClient: cacheClient);
+        widget.novelRepository ??
+        PublicNovelRepository(cacheClient: cacheClient);
     final effectiveReaderRepository =
-        readerRepository ?? PublicReaderRepository(cacheClient: cacheClient);
+        widget.readerRepository ??
+        PublicReaderRepository(cacheClient: cacheClient);
     final effectiveDownloadsRepository =
-        downloadsRepository ??
-        StoredDownloadsRepository(
-          store: SharedPreferencesDownloadStore(),
-          readerRepository: effectiveReaderRepository,
-        );
+        widget.downloadsRepository ??
+        _defaultDownloadsRepositoryFor(effectiveReaderRepository);
     final effectiveReadingHistoryRepository =
-        readingHistoryRepository ?? _defaultReadingHistoryRepository;
+        widget.readingHistoryRepository ?? _defaultReadingHistoryRepository;
 
     return AppDependencies(
-      config: config,
+      config: widget.config,
       homeRepository: effectiveHomeRepository,
       catalogRepository: effectiveCatalogRepository,
       novelRepository: effectiveNovelRepository,
@@ -101,6 +128,15 @@ class GalaxyNovelsApp extends StatelessWidget {
           child: AppShell(),
         ),
       ),
+    );
+  }
+
+  StoredDownloadsRepository _defaultDownloadsRepositoryFor(
+    ReaderRepository readerRepository,
+  ) {
+    return _defaultDownloadsRepository ??= StoredDownloadsRepository(
+      store: SharedPreferencesDownloadStore(),
+      readerRepository: readerRepository,
     );
   }
 }
