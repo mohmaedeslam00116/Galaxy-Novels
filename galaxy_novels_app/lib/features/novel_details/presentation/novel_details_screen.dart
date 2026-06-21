@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../app/app_dependencies.dart';
@@ -7,6 +9,7 @@ import '../../../data/repositories/downloads_repository.dart';
 import '../../../data/repositories/novel_repository.dart';
 import '../../../shared/widgets/section_title.dart';
 import '../../downloads/presentation/chapter_download_button.dart';
+import '../../downloads/presentation/download_chapters_sheet.dart';
 import '../../reader/presentation/reader_screen.dart';
 import 'widgets/novel_chapter_tile.dart';
 import 'widgets/novel_details_header.dart';
@@ -23,6 +26,7 @@ class NovelDetailsScreen extends StatefulWidget {
 class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
   Future<NovelDetailsLoadResult>? _future;
   NovelRepository? _repository;
+  DownloadsRepository? _downloadsRepository;
 
   @override
   void didChangeDependencies() {
@@ -31,6 +35,12 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
     if (_repository != repository) {
       _repository = repository;
       _future = repository.loadNovel(widget.manifestPath);
+    }
+
+    final downloadsRepository = AppDependencies.of(context).downloadsRepository;
+    if (_downloadsRepository != downloadsRepository) {
+      _downloadsRepository = downloadsRepository;
+      unawaited(downloadsRepository.load());
     }
   }
 
@@ -56,6 +66,7 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
           return _NovelDetailsContent(
             result: snapshot.data!,
             onRead: _openReader,
+            onDownloadChapters: () => _openDownloadSheet(snapshot.data!),
           );
         },
       ),
@@ -83,13 +94,90 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
       ),
     );
   }
+
+  Future<void> _openDownloadSheet(NovelDetailsLoadResult result) async {
+    final repository = _downloadsRepository;
+    if (repository == null || result.chapters.isEmpty) {
+      return;
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheetContext) {
+        return ValueListenableBuilder<DownloadsState>(
+          valueListenable: repository.state,
+          builder: (context, downloadsState, _) {
+            return DownloadChaptersSheet(
+              details: result.details,
+              chapters: result.chapters,
+              downloadsState: downloadsState,
+              onStart: (chapters) {
+                unawaited(_downloadSelectedChapters(result, chapters));
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _downloadSelectedChapters(
+    NovelDetailsLoadResult result,
+    List<NovelChapter> chapters,
+  ) async {
+    final repository = _downloadsRepository;
+    if (repository == null || chapters.isEmpty) {
+      return;
+    }
+
+    final requests = chapters
+        .map(
+          (chapter) => ChapterDownloadRequest(
+            novelId: result.details.id,
+            novelTitle: result.details.title,
+            novelCover: result.details.bestCover,
+            chapter: chapter,
+          ),
+        )
+        .toList(growable: false);
+
+    try {
+      DownloadBatchProgress? lastProgress;
+      await for (final progress in repository.downloadChaptersBatch(requests)) {
+        lastProgress = progress;
+      }
+      if (!mounted || lastProgress == null) {
+        return;
+      }
+      final message = lastProgress.failed == 0
+          ? 'اكتمل تحميل ${lastProgress.completed} فصل'
+          : 'تم تحميل ${lastProgress.completed} فصل، فشل '
+                '${lastProgress.failed}';
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    } on DownloadLimitExceededException {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('وصلت إلى حد 100 فصل محمل')),
+        );
+      }
+    }
+  }
 }
 
 class _NovelDetailsContent extends StatelessWidget {
-  const _NovelDetailsContent({required this.result, required this.onRead});
+  const _NovelDetailsContent({
+    required this.result,
+    required this.onRead,
+    required this.onDownloadChapters,
+  });
 
   final NovelDetailsLoadResult result;
   final void Function(NovelChapter chapter, String novelTitle) onRead;
+  final VoidCallback onDownloadChapters;
 
   @override
   Widget build(BuildContext context) {
@@ -109,7 +197,11 @@ class _NovelDetailsContent extends StatelessWidget {
             NovelDetailsHeader(details: details),
             if (details.summary.isNotEmpty)
               _SummarySection(summary: details.summary),
-            _ChaptersSection(result: result, onRead: onRead),
+            _ChaptersSection(
+              result: result,
+              onRead: onRead,
+              onDownloadChapters: onDownloadChapters,
+            ),
           ],
         ),
         if (canRead)
@@ -266,17 +358,20 @@ class _DetailsBottomBar extends StatelessWidget {
 }
 
 class _ChaptersSection extends StatelessWidget {
-  const _ChaptersSection({required this.result, required this.onRead});
+  const _ChaptersSection({
+    required this.result,
+    required this.onRead,
+    required this.onDownloadChapters,
+  });
 
   final NovelDetailsLoadResult result;
   final void Function(NovelChapter chapter, String novelTitle) onRead;
+  final VoidCallback onDownloadChapters;
 
   @override
   Widget build(BuildContext context) {
     final chapters = result.chapters;
     final downloadsRepository = AppDependencies.of(context).downloadsRepository;
-    final theme = Theme.of(context);
-    final tokens = theme.extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -286,12 +381,10 @@ class _ChaptersSection extends StatelessWidget {
           leadingIcon: Icons.menu_book_outlined,
           action: chapters.isEmpty
               ? null
-              : Text(
-                  '${chapters.length} فصل',
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    color: tokens.textSecondary,
-                    fontWeight: FontWeight.w800,
-                  ),
+              : TextButton.icon(
+                  onPressed: onDownloadChapters,
+                  icon: const Icon(Icons.download_outlined),
+                  label: const Text('تحميل الفصول'),
                 ),
         ),
         if (result.chaptersError != null)

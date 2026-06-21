@@ -350,6 +350,34 @@ void main() {
     expect(find.byTooltip('محمل'), findsOneWidget);
   });
 
+  testWidgets('opens batch download picker from novel details', (tester) async {
+    await tester.pumpWidget(
+      GalaxyNovelsApp(
+        homeRepository: _TestHomeRepository(_homeData),
+        catalogRepository: const _TestCatalogRepository(),
+        novelRepository: const _TestNovelRepository(),
+        readerRepository: const _TestReaderRepository(),
+        downloadsRepository: FakeDownloadsRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('المكتبة'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('مكتبة الاختبار'));
+    await tester.pumpAndSettle();
+    final batchDownloadButton = find.widgetWithText(TextButton, 'تحميل الفصول');
+    await tester.scrollUntilVisible(batchDownloadButton, 320);
+    await tester.ensureVisible(batchDownloadButton);
+    await tester.pumpAndSettle();
+    await tester.tap(batchDownloadButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('0 محدد'), findsOneWidget);
+    expect(find.text('آخر 10 فصول'), findsOneWidget);
+    expect(find.text('غير المحمل'), findsOneWidget);
+  });
+
   testWidgets('opens novel details from the home screen', (tester) async {
     await tester.pumpWidget(
       GalaxyNovelsApp(
