@@ -3,13 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../app/app_dependencies.dart';
-import '../../../app/app_theme.dart';
 import '../../../data/models/downloaded_chapter.dart';
 import '../../../data/repositories/downloads_repository.dart';
-import '../../../shared/widgets/section_title.dart';
 
 class DownloadsScreen extends StatefulWidget {
-  const DownloadsScreen({super.key});
+  const DownloadsScreen({this.onOpenLibrary, super.key});
+
+  final VoidCallback? onOpenLibrary;
 
   @override
   State<DownloadsScreen> createState() => _DownloadsScreenState();
@@ -43,21 +43,55 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
           final groups = _groupByNovel(state.chapters);
 
           return ListView(
-            padding: const EdgeInsets.only(bottom: 24),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
             children: [
-              const SectionTitle(
-                title: 'التنزيلات',
-                leadingIcon: Icons.download_rounded,
-              ),
+              const _DownloadsHeading(),
+              const SizedBox(height: 14),
               _DownloadsCountBanner(state: state),
+              const SizedBox(height: 16),
               if (groups.isEmpty)
-                const _DownloadsEmptyState()
+                _DownloadsEmptyState(onOpenLibrary: widget.onOpenLibrary)
               else
-                for (final group in groups) _DownloadedNovelRow(group: group),
+                for (final group in groups) ...[
+                  _DownloadedNovelRow(group: group),
+                  const SizedBox(height: 12),
+                ],
             ],
           );
         },
       ),
+    );
+  }
+}
+
+class _DownloadsHeading extends StatelessWidget {
+  const _DownloadsHeading();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    return Row(
+      children: [
+        Container(
+          width: 44,
+          height: 44,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: colors.secondary.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(Icons.download_rounded, color: colors.secondary),
+        ),
+        const SizedBox(width: 12),
+        Text(
+          'التنزيلات',
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -70,31 +104,27 @@ class _DownloadsCountBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final tokens = theme.extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
+    final colors = theme.colorScheme;
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: tokens.surface,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: tokens.border),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          child: Row(
-            children: [
-              Icon(Icons.offline_pin_rounded, color: tokens.accent),
-              const SizedBox(width: 10),
-              Text(
-                '${state.downloadedCount} / ${state.maxChapters} فصل محمل',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  color: tokens.textPrimary,
-                  fontWeight: FontWeight.w900,
-                ),
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: colors.outline),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            Icon(Icons.offline_pin_rounded, color: colors.secondary),
+            const SizedBox(width: 10),
+            Text(
+              '${state.downloadedCount} / ${state.maxChapters} فصل محمل',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w900,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -109,66 +139,63 @@ class _DownloadedNovelRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final tokens = theme.extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
+    final colors = theme.colorScheme;
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: tokens.surface,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: tokens.border),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            children: [
-              Container(
-                width: 50,
-                height: 50,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: tokens.surfaceRaised,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(Icons.menu_book_rounded, color: tokens.primary),
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: colors.outline),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          children: [
+            Container(
+              width: 50,
+              height: 50,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: colors.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(8),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      group.novelTitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      ),
+              child: Icon(Icons.menu_book_rounded, color: colors.primary),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    group.novelTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w900,
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      group.chapterLabel,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: tokens.textSecondary,
-                        fontWeight: FontWeight.w700,
-                      ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    group.chapterLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: colors.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 12),
-              Text(
-                '${group.downloadedCount} فصل',
-                style: theme.textTheme.labelLarge?.copyWith(
-                  color: tokens.accent,
-                  fontWeight: FontWeight.w900,
-                ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              '${group.downloadedCount} فصل',
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: colors.secondary,
+                fontWeight: FontWeight.w900,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -176,20 +203,22 @@ class _DownloadedNovelRow extends StatelessWidget {
 }
 
 class _DownloadsEmptyState extends StatelessWidget {
-  const _DownloadsEmptyState();
+  const _DownloadsEmptyState({required this.onOpenLibrary});
+
+  final VoidCallback? onOpenLibrary;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final tokens = theme.extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
+    final colors = theme.colorScheme;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 48, 24, 0),
+      padding: const EdgeInsets.fromLTRB(8, 48, 8, 0),
       child: Column(
         children: [
           Icon(
             Icons.download_for_offline_outlined,
-            color: tokens.accent,
+            color: colors.secondary,
             size: 44,
           ),
           const SizedBox(height: 16),
@@ -197,13 +226,16 @@ class _DownloadsEmptyState extends StatelessWidget {
             'الفصول التي تحملها ستظهر هنا للقراءة بدون إنترنت',
             textAlign: TextAlign.center,
             style: theme.textTheme.titleMedium?.copyWith(
-              color: tokens.textSecondary,
+              color: colors.onSurfaceVariant,
               fontWeight: FontWeight.w800,
               height: 1.5,
             ),
           ),
           const SizedBox(height: 18),
-          OutlinedButton(onPressed: () {}, child: const Text('فتح المكتبة')),
+          OutlinedButton(
+            onPressed: onOpenLibrary,
+            child: const Text('فتح المكتبة'),
+          ),
         ],
       ),
     );

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:galaxy_novels_app/app/app_dependencies.dart';
-import 'package:galaxy_novels_app/app/app_theme.dart';
 import 'package:galaxy_novels_app/core/config/app_config.dart';
 import 'package:galaxy_novels_app/data/models/downloaded_chapter.dart';
 import 'package:galaxy_novels_app/data/models/reader_content_data.dart';
@@ -44,8 +43,12 @@ void main() {
   testWidgets('shows empty state when no chapters are downloaded', (
     tester,
   ) async {
+    var openedLibrary = false;
     await tester.pumpWidget(
-      _DownloadsTestApp(downloadsRepository: FakeDownloadsRepository()),
+      _DownloadsTestApp(
+        downloadsRepository: FakeDownloadsRepository(),
+        onOpenLibrary: () => openedLibrary = true,
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -54,13 +57,21 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('فتح المكتبة'), findsOneWidget);
+
+    await tester.tap(find.text('فتح المكتبة'));
+
+    expect(openedLibrary, isTrue);
   });
 }
 
 class _DownloadsTestApp extends StatelessWidget {
-  const _DownloadsTestApp({required this.downloadsRepository});
+  const _DownloadsTestApp({
+    required this.downloadsRepository,
+    this.onOpenLibrary,
+  });
 
   final DownloadsRepository downloadsRepository;
+  final VoidCallback? onOpenLibrary;
 
   @override
   Widget build(BuildContext context) {
@@ -76,11 +87,10 @@ class _DownloadsTestApp extends StatelessWidget {
       downloadsRepository: downloadsRepository,
       child: MaterialApp(
         locale: const Locale('ar'),
-        theme: AppTheme.light(),
-        darkTheme: AppTheme.dark(),
-        home: const Directionality(
+        theme: ThemeData(useMaterial3: true),
+        home: Directionality(
           textDirection: TextDirection.rtl,
-          child: DownloadsScreen(),
+          child: DownloadsScreen(onOpenLibrary: onOpenLibrary),
         ),
       ),
     );

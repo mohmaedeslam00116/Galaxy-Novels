@@ -17,14 +17,6 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   int _index = 0;
 
-  static const _screens = [
-    HomeScreen(),
-    CatalogScreen(),
-    DownloadsScreen(),
-    HistoryScreen(),
-    RankingsScreen(),
-  ];
-
   static const _titles = [
     'الرئيسية',
     'المكتبة',
@@ -35,10 +27,18 @@ class _AppShellState extends State<AppShell> {
 
   @override
   Widget build(BuildContext context) {
+    final screens = [
+      const HomeScreen(),
+      const CatalogScreen(),
+      DownloadsScreen(onOpenLibrary: () => setState(() => _index = 1)),
+      const HistoryScreen(),
+      const RankingsScreen(),
+    ];
+
     return Scaffold(
       drawer: const AppDrawer(),
       appBar: AppBar(title: Text(_titles[_index])),
-      body: IndexedStack(index: _index, children: _screens),
+      body: IndexedStack(index: _index, children: screens),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (value) => setState(() => _index = value),
