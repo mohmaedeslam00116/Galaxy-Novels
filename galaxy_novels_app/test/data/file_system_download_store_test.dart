@@ -22,6 +22,7 @@ void main() {
     expect(index, isNot(contains('محتوى كبير')));
     expect(jsonDecode(index), isA<Map<String, dynamic>>());
     expect(restored.single.contentHtml, isEmpty);
+    expect(restored.single.contentByteSize, greaterThan(0));
     expect(
       await store.readChapterContent(restored.single),
       '<p>محتوى كبير</p>',

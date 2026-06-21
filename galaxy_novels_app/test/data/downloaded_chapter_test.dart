@@ -17,6 +17,7 @@ void main() {
       contentApi: '/wp-json/wor-reader-app/v1/chapters/55',
       contentHtml: '<p>نص الفصل</p>',
       plainTextPreview: 'نص الفصل',
+      contentByteSize: 42,
       downloadedAt: downloadedAt,
       lastOpenedAt: null,
     );
@@ -28,6 +29,7 @@ void main() {
     expect(restored.chapterId, 55);
     expect(restored.contentApi, '/wp-json/wor-reader-app/v1/chapters/55');
     expect(restored.contentHtml, '<p>نص الفصل</p>');
+    expect(restored.contentByteSize, 42);
     expect(restored.downloadedAt, downloadedAt);
     expect(restored.lastOpenedAt, isNull);
   });

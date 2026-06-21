@@ -75,6 +75,9 @@ class FileSystemDownloadStore
       final metadata = Map<String, dynamic>.from(chapter.toJson())
         ..remove('contentHtml')
         ..['contentFile'] = contentFileName;
+      if (chapter.contentByteSize <= 0 && chapter.contentHtml.isNotEmpty) {
+        metadata['contentByteSize'] = utf8.encode(chapter.contentHtml).length;
+      }
       entries.add(metadata);
     }
 
@@ -137,6 +140,9 @@ class FileSystemDownloadStore
       return null;
     }
 
+    if (_asInt(metadata['contentByteSize']) <= 0) {
+      metadata['contentByteSize'] = await contentFile.length();
+    }
     return DownloadedChapter.fromJson({...metadata, 'contentHtml': ''});
   }
 
@@ -212,4 +218,14 @@ String _fileName(String path) {
 
 Map<String, dynamic> _asMap(Map value) {
   return value.map((key, value) => MapEntry(key.toString(), value));
+}
+
+int _asInt(Object? value) {
+  if (value is int) {
+    return value;
+  }
+  if (value is num) {
+    return value.toInt();
+  }
+  return int.tryParse(value?.toString() ?? '') ?? 0;
 }

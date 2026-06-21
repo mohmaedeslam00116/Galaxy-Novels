@@ -13,6 +13,7 @@ class DownloadedChapter {
     required this.plainTextPreview,
     required this.downloadedAt,
     required this.lastOpenedAt,
+    this.contentByteSize = 0,
   });
 
   factory DownloadedChapter.fromJson(Map<String, dynamic> json) {
@@ -28,6 +29,7 @@ class DownloadedChapter {
       contentApi: _asString(json['contentApi']),
       contentHtml: _asString(json['contentHtml']),
       plainTextPreview: _asString(json['plainTextPreview']),
+      contentByteSize: _asInt(json['contentByteSize']),
       downloadedAt:
           DateTime.tryParse(_asString(json['downloadedAt'])) ??
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
@@ -46,6 +48,7 @@ class DownloadedChapter {
   final String contentApi;
   final String contentHtml;
   final String plainTextPreview;
+  final int contentByteSize;
   final DateTime downloadedAt;
   final DateTime? lastOpenedAt;
 
@@ -62,6 +65,7 @@ class DownloadedChapter {
       'contentApi': contentApi,
       'contentHtml': contentHtml,
       'plainTextPreview': plainTextPreview,
+      'contentByteSize': contentByteSize,
       'downloadedAt': downloadedAt.toIso8601String(),
       'lastOpenedAt': lastOpenedAt?.toIso8601String(),
     };
@@ -80,6 +84,7 @@ class DownloadedChapter {
       contentApi: contentApi,
       contentHtml: contentHtml ?? this.contentHtml,
       plainTextPreview: plainTextPreview,
+      contentByteSize: contentByteSize,
       downloadedAt: downloadedAt,
       lastOpenedAt: lastOpenedAt ?? this.lastOpenedAt,
     );

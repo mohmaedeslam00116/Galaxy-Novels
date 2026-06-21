@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
@@ -224,6 +225,7 @@ class StoredDownloadsRepository implements DownloadsRepository {
       contentApi: contentApi,
       contentHtml: content.contentHtml,
       plainTextPreview: _plainTextPreview(content.contentHtml),
+      contentByteSize: utf8.encode(content.contentHtml).length,
       downloadedAt: DateTime.now().toUtc(),
       lastOpenedAt: null,
     );

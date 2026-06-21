@@ -28,6 +28,7 @@ void main() {
     expect(repository.state.value.downloadedCount, 1);
     expect(repository.state.value.contains('/chapters/1'), isTrue);
     expect(store.chapters.single.contentHtml, '<p>الفصل 1</p>');
+    expect(store.chapters.single.contentByteSize, greaterThan(0));
 
     final content = await repository.findReaderContent('/chapters/1');
     expect(content?.contentHtml, '<p>الفصل 1</p>');

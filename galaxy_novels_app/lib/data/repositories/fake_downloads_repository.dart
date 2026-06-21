@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 
 import '../models/downloaded_chapter.dart';
@@ -72,6 +74,7 @@ class FakeDownloadsRepository implements DownloadsRepository {
       contentApi: contentApi,
       contentHtml: contentHtml,
       plainTextPreview: title,
+      contentByteSize: utf8.encode(contentHtml).length,
       downloadedAt: DateTime.now().toUtc(),
       lastOpenedAt: null,
     );

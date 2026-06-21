@@ -35,10 +35,16 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('التنزيلات'), findsOneWidget);
     expect(find.text('1 / 100 فصل محمل'), findsOneWidget);
+    expect(find.text('1.0 KB'), findsWidgets);
     expect(find.text('رواية الاختبار'), findsOneWidget);
-    expect(find.text('الفصل 1'), findsOneWidget);
+    expect(find.textContaining('الفصل 1'), findsOneWidget);
+
+    await tester.tap(find.text('رواية الاختبار'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('الفصول المحملة'), findsOneWidget);
+    expect(find.text('1 فصل متاح دون إنترنت'), findsOneWidget);
   });
 
   testWidgets('shows empty state when no chapters are downloaded', (
@@ -92,7 +98,7 @@ class _DownloadsTestApp extends StatelessWidget {
         theme: ThemeData(useMaterial3: true),
         home: Directionality(
           textDirection: TextDirection.rtl,
-          child: DownloadsScreen(onOpenLibrary: onOpenLibrary),
+          child: Scaffold(body: DownloadsScreen(onOpenLibrary: onOpenLibrary)),
         ),
       ),
     );
@@ -117,6 +123,7 @@ DownloadedChapter _downloadedChapter({
     contentApi: '/wp-json/wor-reader-app/v1/chapters/$chapterId',
     contentHtml: '<p>$chapterLabel</p>',
     plainTextPreview: chapterLabel,
+    contentByteSize: 1024,
     downloadedAt: DateTime.utc(2026, 6, 20),
     lastOpenedAt: null,
   );
