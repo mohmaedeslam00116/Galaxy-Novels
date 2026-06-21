@@ -10,6 +10,7 @@ import '../../../data/repositories/novel_repository.dart';
 import '../../../shared/widgets/section_title.dart';
 import '../../downloads/presentation/chapter_download_button.dart';
 import '../../downloads/presentation/download_chapters_sheet.dart';
+import '../../downloads/presentation/download_progress_overlay.dart';
 import '../../reader/presentation/reader_screen.dart';
 import 'widgets/novel_chapter_tile.dart';
 import 'widgets/novel_details_header.dart';
@@ -27,6 +28,9 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
   Future<NovelDetailsLoadResult>? _future;
   NovelRepository? _repository;
   DownloadsRepository? _downloadsRepository;
+  StreamSubscription<DownloadBatchProgress>? _downloadSubscription;
+  DownloadBatchProgress? _downloadProgress;
+  bool _isDownloadOverlayVisible = false;
 
   @override
   void didChangeDependencies() {
@@ -48,29 +52,51 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('تفاصيل الرواية')),
-      body: FutureBuilder<NovelDetailsLoadResult>(
-        future: _future,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const _NovelDetailsSkeleton();
-          }
+      body: Stack(
+        children: [
+          FutureBuilder<NovelDetailsLoadResult>(
+            future: _future,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState != ConnectionState.done) {
+                return const _NovelDetailsSkeleton();
+              }
 
-          if (snapshot.hasError || !snapshot.hasData) {
-            return _DetailsMessage(
-              title: 'تعذر تحميل تفاصيل الرواية الآن',
-              actionLabel: 'إعادة المحاولة',
-              onAction: _retry,
-            );
-          }
+              if (snapshot.hasError || !snapshot.hasData) {
+                return _DetailsMessage(
+                  title: 'تعذر تحميل تفاصيل الرواية الآن',
+                  actionLabel: 'إعادة المحاولة',
+                  onAction: _retry,
+                );
+              }
 
-          return _NovelDetailsContent(
-            result: snapshot.data!,
-            onRead: _openReader,
-            onDownloadChapters: () => _openDownloadSheet(snapshot.data!),
-          );
-        },
+              return _NovelDetailsContent(
+                result: snapshot.data!,
+                onRead: _openReader,
+                onDownloadChapters: () => _openDownloadSheet(snapshot.data!),
+              );
+            },
+          ),
+          Positioned.fill(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 180),
+              child: _isDownloadOverlayVisible && _downloadProgress != null
+                  ? DownloadProgressOverlay(
+                      key: const ValueKey('download-progress-overlay'),
+                      progress: _downloadProgress!,
+                      onDismiss: _dismissDownloadOverlay,
+                    )
+                  : const SizedBox.shrink(),
+            ),
+          ),
+        ],
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _downloadSubscription?.cancel();
+    super.dispose();
   }
 
   void _retry() {
@@ -100,6 +126,12 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
     if (repository == null || result.chapters.isEmpty) {
       return;
     }
+    if (_downloadProgress != null && !_downloadProgress!.isComplete) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('يوجد تنزيل جار بالفعل')));
+      return;
+    }
 
     await showModalBottomSheet<void>(
       context: context,
@@ -113,9 +145,7 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
               details: result.details,
               chapters: result.chapters,
               downloadsState: downloadsState,
-              onStart: (chapters) {
-                unawaited(_downloadSelectedChapters(result, chapters));
-              },
+              onStart: (chapters) => _startBatchDownload(result, chapters),
             );
           },
         );
@@ -123,10 +153,10 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
     );
   }
 
-  Future<void> _downloadSelectedChapters(
+  void _startBatchDownload(
     NovelDetailsLoadResult result,
     List<NovelChapter> chapters,
-  ) async {
+  ) {
     final repository = _downloadsRepository;
     if (repository == null || chapters.isEmpty) {
       return;
@@ -143,27 +173,58 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
         )
         .toList(growable: false);
 
-    try {
-      DownloadBatchProgress? lastProgress;
-      await for (final progress in repository.downloadChaptersBatch(requests)) {
-        lastProgress = progress;
-      }
-      if (!mounted || lastProgress == null) {
-        return;
-      }
-      final message = lastProgress.failed == 0
-          ? 'اكتمل تحميل ${lastProgress.completed} فصل'
-          : 'تم تحميل ${lastProgress.completed} فصل، فشل '
-                '${lastProgress.failed}';
+    _downloadSubscription?.cancel();
+    setState(() {
+      _downloadProgress = DownloadBatchProgress(
+        novelTitle: result.details.title,
+        novelCover: result.details.bestCover,
+        total: requests.length,
+        completed: 0,
+        failed: 0,
+        isComplete: false,
+      );
+      _isDownloadOverlayVisible = true;
+    });
+
+    _downloadSubscription = repository
+        .downloadChaptersBatch(requests)
+        .listen(
+          (progress) {
+            if (!mounted) {
+              return;
+            }
+            setState(() => _downloadProgress = progress);
+          },
+          onError: (Object error, StackTrace stackTrace) {
+            if (!mounted) {
+              return;
+            }
+            setState(() {
+              _downloadProgress = null;
+              _isDownloadOverlayVisible = false;
+            });
+            final message = error is DownloadLimitExceededException
+                ? 'وصلت إلى حد 100 فصل محمل'
+                : 'تعذر إكمال تنزيل الفصول';
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text(message)));
+          },
+        );
+  }
+
+  void _dismissDownloadOverlay() {
+    setState(() {
+      _isDownloadOverlayVisible = false;
+    });
+    final progress = _downloadProgress;
+    if (progress != null && progress.isComplete) {
+      final message = progress.failed == 0
+          ? 'اكتمل تحميل ${progress.completed} فصل'
+          : 'تم تحميل ${progress.completed} فصل، فشل ${progress.failed}';
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(message)));
-    } on DownloadLimitExceededException {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('وصلت إلى حد 100 فصل محمل')),
-        );
-      }
     }
   }
 }

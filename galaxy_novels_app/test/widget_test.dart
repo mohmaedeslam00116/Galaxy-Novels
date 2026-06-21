@@ -378,6 +378,42 @@ void main() {
     expect(find.text('غير المحمل'), findsOneWidget);
   });
 
+  testWidgets('shows batch download progress over novel details', (
+    tester,
+  ) async {
+    final downloadsRepository = FakeDownloadsRepository();
+    await tester.pumpWidget(
+      GalaxyNovelsApp(
+        homeRepository: _TestHomeRepository(_homeData),
+        catalogRepository: const _TestCatalogRepository(),
+        novelRepository: const _TestNovelRepository(),
+        readerRepository: const _TestReaderRepository(),
+        downloadsRepository: downloadsRepository,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('المكتبة'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('مكتبة الاختبار'));
+    await tester.pumpAndSettle();
+    final batchDownloadButton = find.widgetWithText(TextButton, 'تحميل الفصول');
+    await tester.scrollUntilVisible(batchDownloadButton, 320);
+    await tester.ensureVisible(batchDownloadButton);
+    await tester.pumpAndSettle();
+    await tester.tap(batchDownloadButton);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('download-chapter-1')));
+    await tester.pump();
+    await tester.tap(find.text('تحميل 1 فصل'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('اكتمل التنزيل'), findsOneWidget);
+    expect(find.text('تم تحميل 1 فصل بنجاح'), findsOneWidget);
+    expect(downloadsRepository.state.value.downloadedCount, 1);
+  });
+
   testWidgets('opens novel details from the home screen', (tester) async {
     await tester.pumpWidget(
       GalaxyNovelsApp(
