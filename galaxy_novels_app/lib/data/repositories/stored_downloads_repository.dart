@@ -219,8 +219,9 @@ class StoredDownloadsRepository implements DownloadsRepository {
   }
 
   Future<void> _replaceChapters(List<DownloadedChapter> chapters) async {
-    _chapters = List.unmodifiable(chapters);
-    await _store.writeChapters(_chapters);
+    final next = List<DownloadedChapter>.unmodifiable(chapters);
+    await _store.writeChapters(next);
+    _chapters = next;
     _emit();
   }
 

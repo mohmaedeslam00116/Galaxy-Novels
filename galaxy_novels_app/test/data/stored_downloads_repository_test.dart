@@ -8,12 +8,10 @@ import 'package:galaxy_novels_app/data/repositories/reader_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/shared_preferences_download_store.dart';
 import 'package:galaxy_novels_app/data/repositories/stored_downloads_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
-import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
 
 void main() {
   tearDown(() {
-    SharedPreferencesAsyncPlatform.instance = null;
+    SharedPreferences.setMockInitialValues({});
   });
 
   test('downloads a chapter and exposes it in state', () async {
@@ -213,32 +211,31 @@ void main() {
     expect(repository.state.value.remainingSlots, 1);
   });
 
+  test('store failure does not mutate state or future reads', () async {
+    final repository = StoredDownloadsRepository(
+      store: _FailingDownloadStore(),
+      readerRepository: _ReaderRepository(),
+    );
+
+    await repository.load();
+
+    await expectLater(
+      repository.downloadChapter(_request(1)),
+      throwsA(isA<Exception>()),
+    );
+
+    expect(repository.state.value.downloadedCount, 0);
+    expect(await repository.findChapter('/chapters/1'), isNull);
+  });
+
   test('shared preferences store reads missing data as empty', () async {
-    final preferences = _testPreferences();
-    final store = SharedPreferencesDownloadStore(preferences: preferences);
-
-    expect(await store.readChapters(), isEmpty);
-  });
-
-  test('shared preferences store reads invalid data as empty', () async {
-    final preferences = _testPreferences();
-    await preferences.setString(SharedPreferencesDownloadStore.key, '{');
-    final store = SharedPreferencesDownloadStore(preferences: preferences);
-
-    expect(await store.readChapters(), isEmpty);
-  });
-
-  test('shared preferences store reads non-list data as empty', () async {
-    final preferences = _testPreferences();
-    await preferences.setString(SharedPreferencesDownloadStore.key, '{}');
-    final store = SharedPreferencesDownloadStore(preferences: preferences);
+    final store = _testSharedPreferencesStore();
 
     expect(await store.readChapters(), isEmpty);
   });
 
   test('shared preferences store writes and restores chapters', () async {
-    final preferences = _testPreferences();
-    final store = SharedPreferencesDownloadStore(preferences: preferences);
+    final store = _testSharedPreferencesStore();
 
     await store.writeChapters([_downloaded(1)]);
     final chapters = await store.readChapters();
@@ -288,10 +285,9 @@ DownloadedChapter _downloaded(int id, {int novelId = 10}) {
   );
 }
 
-SharedPreferencesAsync _testPreferences() {
-  SharedPreferencesAsyncPlatform.instance =
-      InMemorySharedPreferencesAsync.empty();
-  return SharedPreferencesAsync();
+SharedPreferencesDownloadStore _testSharedPreferencesStore() {
+  SharedPreferences.setMockInitialValues({});
+  return SharedPreferencesDownloadStore();
 }
 
 class _MemoryDownloadStore implements LocalDownloadStore {
@@ -303,6 +299,16 @@ class _MemoryDownloadStore implements LocalDownloadStore {
   @override
   Future<void> writeChapters(List<DownloadedChapter> value) async {
     chapters = value;
+  }
+}
+
+class _FailingDownloadStore implements LocalDownloadStore {
+  @override
+  Future<List<DownloadedChapter>> readChapters() async => const [];
+
+  @override
+  Future<void> writeChapters(List<DownloadedChapter> chapters) async {
+    throw Exception('failed to persist downloads');
   }
 }
 
