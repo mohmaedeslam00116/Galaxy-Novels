@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:galaxy_novels_app/app/app_dependencies.dart';
 import 'package:galaxy_novels_app/core/config/app_config.dart';
+import 'package:galaxy_novels_app/data/models/downloaded_chapter.dart';
 import 'package:galaxy_novels_app/data/models/reader_content_data.dart';
 import 'package:galaxy_novels_app/data/models/reading_progress.dart';
+import 'package:galaxy_novels_app/data/repositories/downloads_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/fake_catalog_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/fake_downloads_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/fake_home_repository.dart';
@@ -182,6 +184,49 @@ void main() {
     expect(find.text('تعذر تحميل الفصل'), findsOneWidget);
     expect(find.text('إعادة المحاولة'), findsOneWidget);
   });
+
+  testWidgets('opens a downloaded chapter without using the network', (
+    tester,
+  ) async {
+    final downloadsRepository = FakeDownloadsRepository(
+      chapters: [
+        DownloadedChapter(
+          novelId: 7,
+          novelTitle: 'رواية محلية',
+          novelCover: '',
+          chapterId: 70,
+          chapterTitle: 'عنوان الفصل المحلي',
+          chapterLabel: 'الفصل 7',
+          chapterPosition: 7,
+          chaptersTotal: 120,
+          contentApi: '/chapters/70',
+          contentHtml: '<p>هذا النص متاح دون إنترنت</p>',
+          plainTextPreview: 'هذا النص متاح دون إنترنت',
+          downloadedAt: DateTime.utc(2026, 6, 20),
+          lastOpenedAt: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      _ReaderTestApp(
+        readerRepository: const _FailingReaderRepository(),
+        downloadsRepository: downloadsRepository,
+        child: const ReaderScreen(
+          contentApi: '/chapters/70',
+          novelTitle: 'رواية محلية',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('هذا النص متاح دون إنترنت'), findsOneWidget);
+    expect(find.text('تعذر تحميل الفصل'), findsNothing);
+    expect(
+      downloadsRepository.state.value.chapters.single.lastOpenedAt,
+      isNotNull,
+    );
+  });
 }
 
 class _ReaderTestApp extends StatelessWidget {
@@ -189,11 +234,13 @@ class _ReaderTestApp extends StatelessWidget {
     required this.child,
     this.readerRepository = const _TestReaderRepository(),
     this.readingHistoryRepository,
+    this.downloadsRepository,
   });
 
   final Widget child;
   final ReaderRepository readerRepository;
   final ReadingHistoryRepository? readingHistoryRepository;
+  final DownloadsRepository? downloadsRepository;
 
   @override
   Widget build(BuildContext context) {
@@ -207,7 +254,7 @@ class _ReaderTestApp extends StatelessWidget {
       searchRepository: const FakeSearchRepository(),
       readingHistoryRepository:
           readingHistoryRepository ?? _TestReadingHistoryRepository(),
-      downloadsRepository: FakeDownloadsRepository(),
+      downloadsRepository: downloadsRepository ?? FakeDownloadsRepository(),
       child: MaterialApp(
         locale: const Locale('ar'),
         home: Directionality(textDirection: TextDirection.rtl, child: child),

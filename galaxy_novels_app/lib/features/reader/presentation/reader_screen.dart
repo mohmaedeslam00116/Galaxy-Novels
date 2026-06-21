@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../app/app_dependencies.dart';
 import '../../../data/models/reader_content_data.dart';
 import '../../../data/models/reading_progress.dart';
+import '../../../data/repositories/downloads_repository.dart';
 import '../../../data/repositories/reader_repository.dart';
 import '../../../data/repositories/reading_history_repository.dart';
 import 'native_reader_content.dart';
@@ -32,6 +33,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
   Future<ReaderChapterContent>? _future;
   ReaderRepository? _repository;
   ReadingHistoryRepository? _historyRepository;
+  DownloadsRepository? _downloadsRepository;
 
   @override
   void initState() {
@@ -46,9 +48,13 @@ class _ReaderScreenState extends State<ReaderScreen> {
     final dependencies = AppDependencies.of(context);
     final repository = dependencies.readerRepository;
     final historyRepository = dependencies.readingHistoryRepository;
-    if (_repository != repository || _historyRepository != historyRepository) {
+    final downloadsRepository = dependencies.downloadsRepository;
+    if (_repository != repository ||
+        _historyRepository != historyRepository ||
+        _downloadsRepository != downloadsRepository) {
       _repository = repository;
       _historyRepository = historyRepository;
+      _downloadsRepository = downloadsRepository;
       _future = _loadChapter(_contentApi);
     }
   }
@@ -118,8 +124,18 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
   Future<ReaderChapterContent> _loadChapter(String contentApi) async {
     final repository = _repository;
-    if (repository == null) {
+    final downloadsRepository = _downloadsRepository;
+    if (repository == null || downloadsRepository == null) {
       throw StateError('Reader repository is not ready.');
+    }
+
+    final localContent = await downloadsRepository.findReaderContent(
+      contentApi,
+    );
+    if (localContent != null) {
+      await downloadsRepository.markOpened(contentApi);
+      await _recordProgress(localContent);
+      return localContent;
     }
 
     final content = await repository.loadChapter(contentApi);
