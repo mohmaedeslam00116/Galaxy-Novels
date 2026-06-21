@@ -28,6 +28,9 @@ import '../data/repositories/stored_downloads_repository.dart';
 import '../data/repositories/stored_reading_history_repository.dart';
 import '../features/downloads/application/download_manager.dart';
 import '../features/downloads/presentation/download_activity_layer.dart';
+import '../features/reader/application/reader_preferences_repository.dart';
+import '../features/reader/data/shared_preferences_reader_preferences_store.dart';
+import '../features/reader/data/stored_reader_preferences_repository.dart';
 import '../features/shell/presentation/app_shell.dart';
 import 'app_dependencies.dart';
 import 'app_theme.dart';
@@ -47,6 +50,7 @@ class GalaxyNovelsApp extends StatefulWidget {
     this.searchRepository,
     this.readingHistoryRepository,
     this.downloadsRepository,
+    this.readerPreferencesRepository,
     super.key,
   }) : config = config ?? const AppConfig();
 
@@ -59,12 +63,17 @@ class GalaxyNovelsApp extends StatefulWidget {
   final SearchRepository? searchRepository;
   final ReadingHistoryRepository? readingHistoryRepository;
   final DownloadsRepository? downloadsRepository;
+  final ReaderPreferencesRepository? readerPreferencesRepository;
 
   @override
   State<GalaxyNovelsApp> createState() => _GalaxyNovelsAppState();
 }
 
 class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
+  late final StoredReaderPreferencesRepository
+  _defaultReaderPreferencesRepository = StoredReaderPreferencesRepository(
+    store: SharedPreferencesReaderPreferencesStore(),
+  );
   StoredDownloadsRepository? _defaultDownloadsRepository;
   DownloadsRepository? _downloadManagerRepository;
   DownloadManager? _downloadManager;
@@ -135,6 +144,10 @@ class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
         );
     final effectiveReadingHistoryRepository =
         widget.readingHistoryRepository ?? _defaultReadingHistoryRepository;
+    final effectiveReaderPreferencesRepository =
+        widget.readerPreferencesRepository ??
+        _defaultReaderPreferencesRepository;
+    unawaited(effectiveReaderPreferencesRepository.load());
 
     return AppDependencies(
       config: widget.config,
@@ -147,6 +160,7 @@ class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
       readingHistoryRepository: effectiveReadingHistoryRepository,
       downloadsRepository: effectiveDownloadsRepository,
       downloadManager: effectiveDownloadManager,
+      readerPreferencesRepository: effectiveReaderPreferencesRepository,
       child: MaterialApp(
         title: 'مجرة الروايات',
         debugShowCheckedModeBanner: false,
@@ -202,6 +216,7 @@ class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
     if (manager != null) {
       unawaited(manager.dispose());
     }
+    _defaultReaderPreferencesRepository.dispose();
     super.dispose();
   }
 }

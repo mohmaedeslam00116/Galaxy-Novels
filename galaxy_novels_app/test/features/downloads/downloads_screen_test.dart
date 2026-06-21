@@ -17,6 +17,8 @@ import 'package:galaxy_novels_app/data/repositories/reading_history_repository.d
 import 'package:galaxy_novels_app/features/downloads/application/download_manager.dart';
 import 'package:galaxy_novels_app/features/downloads/presentation/downloads_screen.dart';
 
+import '../../helpers/fake_reader_preferences_repository.dart';
+
 void main() {
   testWidgets('renders downloaded chapters grouped by novel', (tester) async {
     await tester.pumpWidget(
@@ -93,6 +95,7 @@ class _DownloadsTestApp extends StatelessWidget {
       readingHistoryRepository: const _TestReadingHistoryRepository(),
       downloadsRepository: downloadsRepository,
       downloadManager: DownloadManager(repository: downloadsRepository),
+      readerPreferencesRepository: FakeReaderPreferencesRepository(),
       child: MaterialApp(
         locale: const Locale('ar'),
         theme: ThemeData(useMaterial3: true),

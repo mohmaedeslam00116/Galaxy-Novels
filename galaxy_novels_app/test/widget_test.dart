@@ -17,6 +17,8 @@ import 'package:galaxy_novels_app/data/repositories/reader_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/rankings_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/search_repository.dart';
 
+import 'helpers/fake_reader_preferences_repository.dart';
+
 void main() {
   testWidgets('shows Galaxy Novels Arabic shell', (tester) async {
     await tester.pumpWidget(
@@ -66,6 +68,49 @@ void main() {
       find.text('سجّل الدخول لمزامنة القراءة والمفضلة و XP.'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('reader settings stay shared after closing and reopening', (
+    tester,
+  ) async {
+    final preferencesRepository = FakeReaderPreferencesRepository();
+    await tester.pumpWidget(
+      GalaxyNovelsApp(
+        homeRepository: _TestHomeRepository(_homeData),
+        catalogRepository: const _TestCatalogRepository(),
+        novelRepository: const _TestNovelRepository(),
+        readerPreferencesRepository: preferencesRepository,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.menu));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('إعدادات القراءة'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('reader-settings-preview')),
+      findsOneWidget,
+    );
+    expect(find.text('100%'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('reader-font-increase')));
+    await tester.pumpAndSettle();
+
+    expect(preferencesRepository.value.fontScale, 1.1);
+    expect(find.text('110%'), findsOneWidget);
+
+    Navigator.of(
+      tester.element(find.byKey(const ValueKey('reader-settings-preview'))),
+    ).pop();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.menu));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('إعدادات القراءة'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('110%'), findsOneWidget);
   });
 
   testWidgets('home screen renders repository-provided sections', (

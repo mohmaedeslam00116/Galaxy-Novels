@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../app/app_dependencies.dart';
@@ -6,6 +8,7 @@ import '../../../data/models/reading_progress.dart';
 import '../../../data/repositories/downloads_repository.dart';
 import '../../../data/repositories/reader_repository.dart';
 import '../../../data/repositories/reading_history_repository.dart';
+import '../application/reader_preferences_repository.dart';
 import 'native_reader_content.dart';
 import 'reader_preferences.dart';
 import 'reader_settings_sheet.dart';
@@ -34,6 +37,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
   ReaderRepository? _repository;
   ReadingHistoryRepository? _historyRepository;
   DownloadsRepository? _downloadsRepository;
+  ReaderPreferencesRepository? _preferencesRepository;
 
   @override
   void initState() {
@@ -49,6 +53,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
     final repository = dependencies.readerRepository;
     final historyRepository = dependencies.readingHistoryRepository;
     final downloadsRepository = dependencies.downloadsRepository;
+    final preferencesRepository = dependencies.readerPreferencesRepository;
     if (_repository != repository ||
         _historyRepository != historyRepository ||
         _downloadsRepository != downloadsRepository) {
@@ -56,6 +61,14 @@ class _ReaderScreenState extends State<ReaderScreen> {
       _historyRepository = historyRepository;
       _downloadsRepository = downloadsRepository;
       _future = _loadChapter(_contentApi);
+    }
+
+    if (_preferencesRepository != preferencesRepository) {
+      _preferencesRepository?.removeListener(_syncPreferences);
+      _preferencesRepository = preferencesRepository;
+      _preferences = preferencesRepository.value;
+      preferencesRepository.addListener(_syncPreferences);
+      unawaited(preferencesRepository.load());
     }
   }
 
@@ -167,13 +180,35 @@ class _ReaderScreenState extends State<ReaderScreen> {
     showReaderSettingsSheet(
       context: context,
       preferences: _preferences,
-      onChanged: (preferences) {
-        if (!mounted) {
-          return;
-        }
-        setState(() => _preferences = preferences);
-      },
+      onChanged: (preferences) => unawaited(_savePreferences(preferences)),
     );
+  }
+
+  void _syncPreferences() {
+    final preferences = _preferencesRepository?.value;
+    if (!mounted || preferences == null || preferences == _preferences) {
+      return;
+    }
+    setState(() => _preferences = preferences);
+  }
+
+  Future<void> _savePreferences(ReaderPreferences preferences) async {
+    try {
+      await _preferencesRepository?.update(preferences);
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('تعذر حفظ إعدادات القراءة')));
+    }
+  }
+
+  @override
+  void dispose() {
+    _preferencesRepository?.removeListener(_syncPreferences);
+    super.dispose();
   }
 }
 

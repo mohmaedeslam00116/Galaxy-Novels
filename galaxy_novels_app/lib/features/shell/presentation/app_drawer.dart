@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../app/app_theme.dart';
 import '../../account/presentation/account_screen.dart';
+import '../../reader/presentation/reader_settings_screen.dart';
 
 class AppDrawer extends StatelessWidget {
   const AppDrawer({super.key});
@@ -16,11 +17,18 @@ class AppDrawer extends StatelessWidget {
         child: NavigationDrawer(
           selectedIndex: null,
           onDestinationSelected: (index) {
-            Navigator.pop(context);
+            final navigator = Navigator.of(context);
+            navigator.pop();
             if (index == 0) {
-              Navigator.of(context).push(
+              navigator.push(
                 MaterialPageRoute<void>(
                   builder: (context) => const AccountScreen(),
+                ),
+              );
+            } else if (index == 2) {
+              navigator.push(
+                MaterialPageRoute<void>(
+                  builder: (context) => const ReaderSettingsScreen(),
                 ),
               );
             }

@@ -17,6 +17,8 @@ import 'package:galaxy_novels_app/data/repositories/reading_history_repository.d
 import 'package:galaxy_novels_app/features/downloads/application/download_manager.dart';
 import 'package:galaxy_novels_app/features/reader/presentation/reader_screen.dart';
 
+import '../../helpers/fake_reader_preferences_repository.dart';
+
 void main() {
   testWidgets('loads chapter content and renders it natively', (tester) async {
     await tester.pumpWidget(
@@ -261,6 +263,7 @@ class _ReaderTestApp extends StatelessWidget {
       downloadManager: DownloadManager(
         repository: effectiveDownloadsRepository,
       ),
+      readerPreferencesRepository: FakeReaderPreferencesRepository(),
       child: MaterialApp(
         locale: const Locale('ar'),
         home: Directionality(textDirection: TextDirection.rtl, child: child),

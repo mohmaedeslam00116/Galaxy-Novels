@@ -16,6 +16,8 @@ import 'package:galaxy_novels_app/data/repositories/reading_history_repository.d
 import 'package:galaxy_novels_app/features/downloads/application/download_manager.dart';
 import 'package:galaxy_novels_app/features/downloads/presentation/downloaded_novel_screen.dart';
 
+import '../../helpers/fake_reader_preferences_repository.dart';
+
 void main() {
   testWidgets('opens a downloaded chapter in the native reader', (
     tester,
@@ -113,6 +115,7 @@ class _TestApp extends StatelessWidget {
       readingHistoryRepository: _TestReadingHistoryRepository(),
       downloadsRepository: repository,
       downloadManager: DownloadManager(repository: repository),
+      readerPreferencesRepository: FakeReaderPreferencesRepository(),
       child: const MaterialApp(
         locale: Locale('ar'),
         home: Directionality(
