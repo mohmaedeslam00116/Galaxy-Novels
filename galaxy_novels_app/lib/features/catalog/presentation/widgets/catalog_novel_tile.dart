@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../../../../app/app_dependencies.dart';
+import '../../../../app/app_theme.dart';
 import '../../../../data/models/catalog_data.dart';
+import '../../../../shared/widgets/novel_cover.dart';
+import '../../../../shared/widgets/status_badge.dart';
 
 class CatalogNovelTile extends StatelessWidget {
   const CatalogNovelTile({required this.novel, this.onTap, super.key});
@@ -12,58 +14,62 @@ class CatalogNovelTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final meta = _buildMeta(novel);
-    final genres = novel.genres.take(2).map((genre) => genre.name).join('، ');
+    final tokens = theme.extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
+    final imageUrl = novel.coverMedium.isNotEmpty
+        ? novel.coverMedium
+        : novel.coverThumbnail;
 
     return InkWell(
       borderRadius: BorderRadius.circular(8),
       onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        child: Row(
+      child: Ink(
+        decoration: BoxDecoration(
+          color: tokens.surface,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: tokens.border),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.10),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            SizedBox(
-              width: 54,
-              height: 76,
-              child: _CatalogCover(
-                title: novel.title,
-                url: novel.coverThumbnail.isNotEmpty
-                    ? novel.coverThumbnail
-                    : novel.coverMedium,
+            Expanded(
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  NovelCover(
+                    title: novel.title,
+                    imageUrl: imageUrl,
+                    width: double.infinity,
+                    height: double.infinity,
+                    borderRadius: 8,
+                  ),
+                  if (novel.statusLabel.isNotEmpty)
+                    PositionedDirectional(
+                      top: 7,
+                      end: 7,
+                      child: StatusBadge(label: novel.statusLabel),
+                    ),
+                ],
               ),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    novel.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  if (genres.isNotEmpty)
-                    Text(
-                      genres,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall,
-                    ),
-                  const SizedBox(height: 6),
-                  Text(
-                    meta,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: theme.colorScheme.primary,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
+            _CatalogStatsBar(novel: novel),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 10),
+              child: Text(
+                novel.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w900,
+                  height: 1.22,
+                ),
               ),
             ),
           ],
@@ -73,81 +79,82 @@ class CatalogNovelTile extends StatelessWidget {
   }
 }
 
-class _CatalogCover extends StatelessWidget {
-  const _CatalogCover({required this.title, required this.url});
+class _CatalogStatsBar extends StatelessWidget {
+  const _CatalogStatsBar({required this.novel});
 
-  final String title;
-  final String url;
-
-  @override
-  Widget build(BuildContext context) {
-    final resolvedUrl = _resolveImageUrl(context, url);
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(6),
-      child: resolvedUrl == null
-          ? _CoverFallback(title: title)
-          : Image.network(
-              resolvedUrl,
-              fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => _CoverFallback(title: title),
-            ),
-    );
-  }
-}
-
-class _CoverFallback extends StatelessWidget {
-  const _CoverFallback({required this.title});
-
-  final String title;
+  final CatalogNovel novel;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final tokens = theme.extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
 
-    return ColoredBox(
-      color: theme.colorScheme.primary.withValues(alpha: 0.12),
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(6),
-          child: Text(
-            'غلاف',
-            maxLines: 1,
-            textAlign: TextAlign.center,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.primary,
-              fontWeight: FontWeight.w800,
+    return Container(
+      height: 34,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        color: tokens.surfaceRaised,
+        border: Border(top: BorderSide(color: tokens.border)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _TinyStat(
+              icon: Icons.visibility_outlined,
+              value: _compactNumber(novel.views),
             ),
           ),
-        ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: _TinyStat(
+              icon: Icons.menu_book_outlined,
+              value: novel.chaptersCount > 0 ? '${novel.chaptersCount}' : '-',
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-String _buildMeta(CatalogNovel novel) {
-  final parts = <String>[
-    if (novel.chaptersCount > 0) '${novel.chaptersCount} فصل',
-    if (novel.statusLabel.isNotEmpty) novel.statusLabel,
-    if (novel.updatedAt != null) _dateLabel(novel.updatedAt!),
-  ];
+class _TinyStat extends StatelessWidget {
+  const _TinyStat({required this.icon, required this.value});
 
-  return parts.join(' • ');
+  final IconData icon;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tokens = theme.extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Flexible(
+          child: Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: tokens.textPrimary,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
+        const SizedBox(width: 4),
+        Icon(icon, size: 13, color: tokens.accent),
+      ],
+    );
+  }
 }
 
-String _dateLabel(DateTime date) {
-  return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-}
-
-String? _resolveImageUrl(BuildContext context, String url) {
-  if (url.isEmpty) {
-    return null;
+String _compactNumber(int value) {
+  if (value >= 1000000) {
+    return '${(value / 1000000).toStringAsFixed(1)}M';
   }
-
-  try {
-    return AppDependencies.of(context).config.resolve(url).toString();
-  } on Object {
-    return null;
+  if (value >= 1000) {
+    return '${(value / 1000).toStringAsFixed(1)}K';
   }
+  return value.toString();
 }

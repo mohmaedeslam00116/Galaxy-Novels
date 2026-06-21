@@ -6,20 +6,43 @@ import '../config/app_config.dart';
 typedef JsonGet =
     Future<Object?> Function(Uri uri, Map<String, String> headers);
 
+abstract class PublicCacheStore {
+  Future<String?> read(String key);
+
+  Future<void> write(String key, String value);
+}
+
 class PublicCacheClient {
-  PublicCacheClient({required this.config, JsonGet? jsonGet})
-    : _jsonGet = jsonGet ?? _defaultJsonGet;
+  PublicCacheClient({
+    required this.config,
+    JsonGet? jsonGet,
+    PublicCacheStore? cacheStore,
+  }) : _jsonGet = jsonGet ?? _defaultJsonGet,
+       _cacheStore = cacheStore;
 
   final AppConfig config;
   final JsonGet _jsonGet;
+  final PublicCacheStore? _cacheStore;
 
   Map<String, String> get publicJsonHeaders => {
     'Accept': 'application/json',
     'User-Agent': config.userAgent,
   };
 
-  Future<Object?> loadJsonValue(String urlOrPath) {
-    return _jsonGet(config.resolve(urlOrPath), publicJsonHeaders);
+  Future<Object?> loadJsonValue(String urlOrPath) async {
+    final uri = config.resolve(urlOrPath);
+    final cacheKey = uri.toString();
+    try {
+      final value = await _jsonGet(uri, publicJsonHeaders);
+      await _writeCache(cacheKey, value);
+      return value;
+    } on Object {
+      final cached = await _readCache(cacheKey);
+      if (cached != null) {
+        return cached;
+      }
+      rethrow;
+    }
   }
 
   Future<Map<String, dynamic>> loadJson(String urlOrPath) async {
@@ -72,6 +95,36 @@ class PublicCacheClient {
       return jsonDecode(body);
     } finally {
       client.close(force: true);
+    }
+  }
+
+  Future<void> _writeCache(String key, Object? value) async {
+    final store = _cacheStore;
+    if (store == null) {
+      return;
+    }
+
+    try {
+      await store.write(key, jsonEncode(value));
+    } on Object {
+      // Cache writes must not break fresh network data.
+    }
+  }
+
+  Future<Object?> _readCache(String key) async {
+    final store = _cacheStore;
+    if (store == null) {
+      return null;
+    }
+
+    try {
+      final raw = await store.read(key);
+      if (raw == null || raw.isEmpty) {
+        return null;
+      }
+      return jsonDecode(raw);
+    } on Object {
+      return null;
     }
   }
 }

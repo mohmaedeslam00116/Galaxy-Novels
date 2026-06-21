@@ -140,6 +140,8 @@ class _ReaderScreenState extends State<ReaderScreen> {
         chapterId: content.id,
         chapterTitle: content.effectiveTitle,
         contentApi: _contentApi,
+        chapterPosition: content.position,
+        chaptersTotal: content.total,
         updatedAt: DateTime.now().toUtc(),
       ),
     );

@@ -3,7 +3,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../app/app_dependencies.dart';
+import '../../../app/app_theme.dart';
+import '../../../data/models/catalog_data.dart';
+import '../../../data/models/search_index_data.dart';
 import '../../../data/repositories/catalog_repository.dart';
+import '../../../data/repositories/search_repository.dart';
 import '../../novel_details/presentation/novel_details_screen.dart';
 import '../domain/catalog_query.dart';
 import 'widgets/catalog_novel_tile.dart';
@@ -19,7 +23,9 @@ class _CatalogScreenState extends State<CatalogScreen> {
   final _searchController = TextEditingController();
 
   CatalogRepository? _repository;
+  SearchRepository? _searchRepository;
   Stream<CatalogLoadState>? _catalogStream;
+  Future<SearchIndex>? _searchIndexFuture;
   CatalogQuery _query = const CatalogQuery();
   Timer? _searchDebounce;
 
@@ -27,9 +33,14 @@ class _CatalogScreenState extends State<CatalogScreen> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     final repository = AppDependencies.of(context).catalogRepository;
+    final searchRepository = AppDependencies.of(context).searchRepository;
     if (_repository != repository) {
       _repository = repository;
       _catalogStream = repository.watchCatalog();
+    }
+    if (_searchRepository != searchRepository) {
+      _searchRepository = searchRepository;
+      _searchIndexFuture = null;
     }
   }
 
@@ -64,60 +75,101 @@ class _CatalogScreenState extends State<CatalogScreen> {
           return const _CatalogMessage(title: 'لا توجد روايات في المكتبة الآن');
         }
 
-        final result = applyCatalogQuery(items, _query);
+        final searchFuture = _query.searchText.trim().isEmpty
+            ? null
+            : _searchIndexFuture;
+        if (searchFuture == null) {
+          return _buildCatalogContent(state: state, items: items);
+        }
 
-        return ListView.builder(
-          padding: const EdgeInsets.only(bottom: 24),
-          itemCount: result.items.length + 2,
-          itemBuilder: (context, index) {
-            if (index == 0) {
-              return _CatalogControls(
-                searchController: _searchController,
-                query: _query,
-                resultCount: result.items.length,
-                availableStatuses: result.availableStatuses,
-                availableGenres: result.availableGenres,
-                onSearchChanged: _onSearchChanged,
-                onSortChanged: (sort) {
-                  setState(() => _query = _query.copyWith(sort: sort));
-                },
-                onFiltersChanged: (status, genre) {
-                  setState(() {
-                    _query = _query.copyWith(
-                      statusLabel: status,
-                      genreName: genre,
-                      clearStatus: status == null,
-                      clearGenre: genre == null,
-                    );
-                  });
-                },
-                onClear: _clearQuery,
+        return FutureBuilder<SearchIndex>(
+          future: searchFuture,
+          builder: (context, searchSnapshot) {
+            return _buildCatalogContent(
+              state: state,
+              items: items,
+              searchIndex: searchSnapshot.data,
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildCatalogContent({
+    required CatalogLoadState? state,
+    required List<CatalogNovel> items,
+    SearchIndex? searchIndex,
+  }) {
+    final searchItems = searchIndex == null || _query.searchText.trim().isEmpty
+        ? null
+        : searchIndex
+              .search(_query.searchText)
+              .map((item) {
+                return item.toCatalogNovel();
+              })
+              .toList(growable: false);
+    final source = searchItems ?? items;
+    final effectiveQuery = searchItems == null
+        ? _query
+        : _query.copyWith(searchText: '');
+    final result = applyCatalogQuery(source, effectiveQuery);
+
+    return ListView(
+      padding: const EdgeInsets.only(bottom: 24),
+      children: [
+        _CatalogControls(
+          searchController: _searchController,
+          query: _query,
+          resultCount: result.items.length,
+          availableStatuses: result.availableStatuses,
+          availableGenres: result.availableGenres,
+          onSearchChanged: _onSearchChanged,
+          onSortChanged: (sort) {
+            setState(() => _query = _query.copyWith(sort: sort));
+          },
+          onFiltersChanged: (status, genre) {
+            setState(() {
+              _query = _query.copyWith(
+                statusLabel: status,
+                genreName: genre,
+                clearStatus: status == null,
+                clearGenre: genre == null,
               );
-            }
-
-            if (result.items.isEmpty && index == 1) {
-              return _CatalogMessage(
-                title: 'لا توجد نتائج مطابقة',
-                actionLabel: 'مسح البحث والفلاتر',
-                onAction: _clearQuery,
-              );
-            }
-
-            final itemIndex = index - 1;
-            if (itemIndex < result.items.length) {
-              final novel = result.items[itemIndex];
+            });
+          },
+          onClear: _clearQuery,
+        ),
+        if (result.items.isEmpty)
+          _CatalogMessage(
+            title: 'لا توجد نتائج مطابقة',
+            actionLabel: 'مسح البحث والفلاتر',
+            onAction: _clearQuery,
+          )
+        else
+          GridView.builder(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: result.items.length,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 16,
+              mainAxisExtent: 258,
+            ),
+            itemBuilder: (context, index) {
+              final novel = result.items[index];
               return CatalogNovelTile(
                 novel: novel,
                 onTap: novel.manifest.isEmpty
                     ? null
                     : () => _openNovelDetails(novel.manifest),
               );
-            }
-
-            return _CatalogLoadStatus(state: state, onRetry: _retryCatalog);
-          },
-        );
-      },
+            },
+          ),
+        _CatalogLoadStatus(state: state, onRetry: _retryCatalog),
+      ],
     );
   }
 
@@ -128,6 +180,9 @@ class _CatalogScreenState extends State<CatalogScreen> {
         return;
       }
       setState(() => _query = _query.copyWith(searchText: value));
+      if (value.trim().isNotEmpty && _searchIndexFuture == null) {
+        _searchIndexFuture = _searchRepository?.loadSearchIndex();
+      }
     });
   }
 
@@ -182,53 +237,106 @@ class _CatalogControls extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final tokens = theme.extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           TextField(
             controller: searchController,
             onChanged: onSearchChanged,
-            decoration: const InputDecoration(
-              prefixIcon: Icon(Icons.search),
-              hintText: 'ابحث في المكتبة',
+            decoration: InputDecoration(
+              prefixIcon: const Icon(Icons.search_rounded),
+              hintText: 'ابحث عن رواية...',
+              fillColor: tokens.surfaceRaised,
             ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _CatalogToolButton(
+                  icon: Icons.category_outlined,
+                  label: query.genreName ?? 'كل التصنيفات',
+                  onTap: () => _showFilters(context),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: tokens.surface,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: tokens.border),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<CatalogSort>(
+                        value: query.sort,
+                        isExpanded: true,
+                        icon: Icon(
+                          Icons.sort_rounded,
+                          color: tokens.accent,
+                          size: 20,
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                        items: [
+                          for (final sort in CatalogSort.values)
+                            DropdownMenuItem(
+                              value: sort,
+                              child: Text(
+                                sort.label,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                        ],
+                        onChanged: (sort) {
+                          if (sort != null) {
+                            onSortChanged(sort);
+                          }
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 10),
           Row(
             children: [
-              DropdownButton<CatalogSort>(
-                value: query.sort,
-                items: [
-                  for (final sort in CatalogSort.values)
-                    DropdownMenuItem(value: sort, child: Text(sort.label)),
-                ],
-                onChanged: (sort) {
-                  if (sort != null) {
-                    onSortChanged(sort);
-                  }
-                },
-              ),
-              const SizedBox(width: 8),
-              OutlinedButton.icon(
-                onPressed: () => _showFilters(context),
-                icon: const Icon(Icons.tune),
-                label: const Text('فلاتر'),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 7,
+                ),
+                decoration: BoxDecoration(
+                  color: tokens.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: tokens.primary.withValues(alpha: 0.20),
+                  ),
+                ),
+                child: Text(
+                  '$resultCount رواية',
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: tokens.primary,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
               ),
               const Spacer(),
               if (query.hasActiveFilters)
-                TextButton(onPressed: onClear, child: const Text('مسح')),
+                TextButton.icon(
+                  onPressed: onClear,
+                  icon: const Icon(Icons.close_rounded, size: 18),
+                  label: const Text('مسح'),
+                ),
             ],
           ),
-          if (query.hasActiveFilters)
-            Text(
-              '$resultCount نتيجة',
-              style: theme.textTheme.labelMedium?.copyWith(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.62),
-              ),
-            ),
         ],
       ),
     );
@@ -255,6 +363,56 @@ class _CatalogControls extends StatelessWidget {
     if (result != null) {
       onFiltersChanged(result.status, result.genre);
     }
+  }
+}
+
+class _CatalogToolButton extends StatelessWidget {
+  const _CatalogToolButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tokens = theme.extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: onTap,
+      child: Ink(
+        height: 56,
+        decoration: BoxDecoration(
+          color: tokens.surface,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: tokens.border),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Row(
+            children: [
+              Icon(icon, color: tokens.accent, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

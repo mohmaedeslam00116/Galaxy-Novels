@@ -90,6 +90,75 @@ void main() {
     expect(value, isA<List<Object?>>());
     expect((value as List).single, isA<Map<String, dynamic>>());
   });
+
+  test('stores successful public JSON responses in the local cache', () async {
+    final store = _FakePublicCacheStore();
+    final client = PublicCacheClient(
+      config: const AppConfig(siteBaseUrl: 'https://example.com/'),
+      cacheStore: store,
+      jsonGet: (uri, headers) async {
+        return {
+          'pack': '/wp-content/uploads/wor-reader-cache/app/packs/home.json',
+        };
+      },
+    );
+
+    await client.loadJson(
+      '/wp-content/uploads/wor-reader-cache/app/manifest/home.json',
+    );
+
+    expect(
+      store.values.keys,
+      contains(
+        'https://example.com/wp-content/uploads/wor-reader-cache/app/manifest/home.json',
+      ),
+    );
+    expect(
+      store.values.values.single,
+      contains('/wp-content/uploads/wor-reader-cache/app/packs/home.json'),
+    );
+  });
+
+  test(
+    'falls back to cached public JSON when the network request fails',
+    () async {
+      final store = _FakePublicCacheStore();
+      await store.write(
+        'https://example.com/wp-content/uploads/wor-reader-cache/app/packs/home.json',
+        '{"data":{"recent_novels":[{"title":"من الكاش"}]}}',
+      );
+      final client = PublicCacheClient(
+        config: const AppConfig(siteBaseUrl: 'https://example.com/'),
+        cacheStore: store,
+        jsonGet: (uri, headers) async {
+          throw const PublicCacheException('Network failed.');
+        },
+      );
+
+      final json = await client.loadJson(
+        '/wp-content/uploads/wor-reader-cache/app/packs/home.json',
+      );
+
+      expect(json['data'], isA<Map<String, dynamic>>());
+      expect(
+        ((json['data'] as Map<String, dynamic>)['recent_novels'] as List)
+            .single,
+        containsPair('title', 'من الكاش'),
+      );
+    },
+  );
+}
+
+class _FakePublicCacheStore implements PublicCacheStore {
+  final values = <String, String>{};
+
+  @override
+  Future<String?> read(String key) async => values[key];
+
+  @override
+  Future<void> write(String key, String value) async {
+    values[key] = value;
+  }
 }
 
 class _Request {

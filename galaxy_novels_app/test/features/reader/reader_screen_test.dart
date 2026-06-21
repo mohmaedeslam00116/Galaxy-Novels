@@ -8,6 +8,8 @@ import 'package:galaxy_novels_app/data/repositories/fake_catalog_repository.dart
 import 'package:galaxy_novels_app/data/repositories/fake_downloads_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/fake_home_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/fake_novel_repository.dart';
+import 'package:galaxy_novels_app/data/repositories/fake_rankings_repository.dart';
+import 'package:galaxy_novels_app/data/repositories/fake_search_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/reader_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/reading_history_repository.dart';
 import 'package:galaxy_novels_app/features/reader/presentation/reader_screen.dart';
@@ -162,6 +164,8 @@ void main() {
     expect(historyRepository.records.single.novelTitle, 'رواية الاختبار');
     expect(historyRepository.records.single.chapterId, 10);
     expect(historyRepository.records.single.chapterTitle, 'عنوان الفصل');
+    expect(historyRepository.records.single.chapterPosition, 1);
+    expect(historyRepository.records.single.chaptersTotal, 2);
   });
 
   testWidgets('shows an error when chapter content fails', (tester) async {
@@ -199,6 +203,8 @@ class _ReaderTestApp extends StatelessWidget {
       catalogRepository: const FakeCatalogRepository(),
       novelRepository: const FakeNovelRepository(result: null),
       readerRepository: readerRepository,
+      rankingsRepository: const FakeRankingsRepository(),
+      searchRepository: const FakeSearchRepository(),
       readingHistoryRepository:
           readingHistoryRepository ?? _TestReadingHistoryRepository(),
       downloadsRepository: FakeDownloadsRepository(),

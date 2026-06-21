@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../app/app_theme.dart';
 import '../../account/presentation/account_screen.dart';
 
 class AppDrawer extends StatelessWidget {
@@ -8,14 +9,25 @@ class AppDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final tokens = theme.extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
 
     return Drawer(
       child: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        child: NavigationDrawer(
+          selectedIndex: null,
+          onDestinationSelected: (index) {
+            Navigator.pop(context);
+            if (index == 0) {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (context) => const AccountScreen(),
+                ),
+              );
+            }
+          },
           children: [
             Padding(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -28,66 +40,42 @@ class AppDrawer extends StatelessWidget {
                   const SizedBox(height: 6),
                   Text(
                     'حسابك وإعدادات القراءة',
-                    style: theme.textTheme.bodyMedium,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: tokens.textSecondary,
+                    ),
                   ),
                 ],
               ),
             ),
-            const Divider(height: 1),
-            _DrawerItem(
-              icon: Icons.person_outline,
-              title: 'حسابي',
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (context) => const AccountScreen(),
-                  ),
-                );
-              },
+            const NavigationDrawerDestination(
+              icon: Icon(Icons.person_outline),
+              selectedIcon: Icon(Icons.person),
+              label: Text('حسابي'),
             ),
-            _DrawerItem(
-              icon: Icons.favorite_border,
-              title: 'المفضلة',
-              onTap: () => Navigator.pop(context),
+            const NavigationDrawerDestination(
+              icon: Icon(Icons.favorite_border),
+              selectedIcon: Icon(Icons.favorite),
+              label: Text('المفضلة'),
             ),
-            _DrawerItem(
-              icon: Icons.tune,
-              title: 'إعدادات القراءة',
-              onTap: () => Navigator.pop(context),
+            const NavigationDrawerDestination(
+              icon: Icon(Icons.tune),
+              selectedIcon: Icon(Icons.tune),
+              label: Text('إعدادات القراءة'),
             ),
-            _DrawerItem(
-              icon: Icons.workspace_premium_outlined,
-              title: 'الاشتراك و VIP',
-              onTap: () => Navigator.pop(context),
+            const NavigationDrawerDestination(
+              icon: Icon(Icons.workspace_premium_outlined),
+              selectedIcon: Icon(Icons.workspace_premium),
+              label: Text('الاشتراك و VIP'),
             ),
-            const Spacer(),
-            const Divider(height: 1),
-            _DrawerItem(
-              icon: Icons.info_outline,
-              title: 'حول التطبيق',
-              onTap: () => Navigator.pop(context),
+            const Divider(height: 24),
+            const NavigationDrawerDestination(
+              icon: Icon(Icons.info_outline),
+              selectedIcon: Icon(Icons.info),
+              label: Text('حول التطبيق'),
             ),
           ],
         ),
       ),
     );
-  }
-}
-
-class _DrawerItem extends StatelessWidget {
-  const _DrawerItem({
-    required this.icon,
-    required this.title,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String title;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(leading: Icon(icon), title: Text(title), onTap: onTap);
   }
 }

@@ -13,6 +13,8 @@ void main() {
       chapterId: 10,
       chapterTitle: 'الفصل 10',
       contentApi: '/wp-json/wor-reader-app/v1/chapters/10',
+      chapterPosition: 10,
+      chaptersTotal: 120,
       updatedAt: DateTime.utc(2026, 6, 20, 10),
     );
 
@@ -20,6 +22,8 @@ void main() {
 
     expect(store.value, contains('"novelTitle":"تفاصيل الاختبار"'));
     expect(store.value, contains('"chapterId":10'));
+    expect(store.value, contains('"chapterPosition":10'));
+    expect(store.value, contains('"chaptersTotal":120'));
 
     final loaded = await repository.load();
 
@@ -27,6 +31,8 @@ void main() {
     expect(loaded.single.novelTitle, 'تفاصيل الاختبار');
     expect(loaded.single.chapterTitle, 'الفصل 10');
     expect(loaded.single.contentApi, '/wp-json/wor-reader-app/v1/chapters/10');
+    expect(loaded.single.chapterPosition, 10);
+    expect(loaded.single.chaptersTotal, 120);
   });
 
   test('keeps one latest entry per novel and sorts by recency', () async {

@@ -129,6 +129,15 @@ class _NativeReaderContentState extends State<NativeReaderContent> {
                       ? _ReaderFloatingControls(
                           key: const ValueKey('reader-controls-visible'),
                           colorScheme: readerScheme,
+                          progressLabel: content.total > 0
+                              ? '${content.position} / ${content.total}'
+                              : '',
+                          progressValue: content.total > 0
+                              ? (content.position / content.total).clamp(
+                                  0.0,
+                                  1.0,
+                                )
+                              : 0,
                           hasPrevious: hasPrevious,
                           hasNext: hasNext,
                           onPrevious: () => widget.onOpenChapter(
@@ -162,6 +171,8 @@ class _NativeReaderContentState extends State<NativeReaderContent> {
 class _ReaderFloatingControls extends StatelessWidget {
   const _ReaderFloatingControls({
     required this.colorScheme,
+    required this.progressLabel,
+    required this.progressValue,
     required this.hasPrevious,
     required this.hasNext,
     required this.onPrevious,
@@ -171,6 +182,8 @@ class _ReaderFloatingControls extends StatelessWidget {
   });
 
   final ColorScheme colorScheme;
+  final String progressLabel;
+  final double progressValue;
   final bool hasPrevious;
   final bool hasNext;
   final VoidCallback onPrevious;
@@ -188,37 +201,70 @@ class _ReaderFloatingControls extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.18),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
+            color: Colors.black.withValues(alpha: 0.20),
+            blurRadius: 14,
+            offset: const Offset(0, 7),
           ),
         ],
       ),
       child: Padding(
-        padding: const EdgeInsets.all(10),
-        child: Row(
+        padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: hasPrevious ? onPrevious : null,
-                icon: const Icon(Icons.chevron_right),
-                label: const Text('السابق'),
+            if (progressLabel.isNotEmpty) ...[
+              Row(
+                children: [
+                  Expanded(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: LinearProgressIndicator(
+                        value: progressValue,
+                        minHeight: 3,
+                        backgroundColor: colorScheme.outlineVariant.withValues(
+                          alpha: 0.28,
+                        ),
+                        color: colorScheme.primary,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    progressLabel,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: colorScheme.onSurface.withValues(alpha: 0.72),
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(width: 10),
-            IconButton.filledTonal(
-              key: const ValueKey('reader-settings-button'),
-              tooltip: 'إعدادات القراءة',
-              onPressed: onSettings,
-              icon: const Icon(Icons.tune),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: FilledButton.icon(
-                onPressed: hasNext ? onNext : null,
-                icon: const Icon(Icons.chevron_left),
-                label: const Text('التالي'),
-              ),
+              const SizedBox(height: 10),
+            ],
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: hasPrevious ? onPrevious : null,
+                    icon: const Icon(Icons.chevron_right),
+                    label: const Text('السابق'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                IconButton.filledTonal(
+                  key: const ValueKey('reader-settings-button'),
+                  tooltip: 'إعدادات القراءة',
+                  onPressed: onSettings,
+                  icon: const Icon(Icons.tune_rounded),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: hasNext ? onNext : null,
+                    icon: const Icon(Icons.chevron_left),
+                    label: const Text('التالي'),
+                  ),
+                ),
+              ],
             ),
           ],
         ),

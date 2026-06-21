@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../../../../app/app_dependencies.dart';
+import '../../../../app/app_theme.dart';
 import '../../../../data/models/novel_details_data.dart';
+import '../../../../shared/widgets/novel_cover.dart';
+import '../../../../shared/widgets/status_badge.dart';
 
 class NovelDetailsHeader extends StatelessWidget {
   const NovelDetailsHeader({required this.details, super.key});
@@ -11,28 +13,27 @@ class NovelDetailsHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final meta = [
-      if (details.author.isNotEmpty) 'المؤلف: ${details.author}',
-      if (details.translator.isNotEmpty) 'المترجم: ${details.translator}',
-      if (details.statusLabel.isNotEmpty) details.statusLabel,
-    ].join(' • ');
+    final tokens = theme.extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
+    final byline = [
+      if (details.author.isNotEmpty) 'تأليف: ${details.author}',
+      if (details.translator.isNotEmpty) 'ترجمة: ${details.translator}',
+    ].join('  •  ');
+    final countryLabel = _countryLabel(details.country);
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
       child: Column(
         children: [
-          SizedBox(
-            width: 150,
-            height: 224,
-            child: _NovelCover(title: details.title, url: details.bestCover),
-          ),
-          const SizedBox(height: 16),
+          _CoverShowcase(details: details),
+          const SizedBox(height: 18),
           Text(
             details.title,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
             style: theme.textTheme.headlineSmall?.copyWith(
               fontWeight: FontWeight.w900,
-              height: 1.25,
+              height: 1.18,
             ),
           ),
           if (details.originalTitle.isNotEmpty) ...[
@@ -43,121 +44,200 @@ class NovelDetailsHeader extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.62),
+                color: tokens.textSecondary,
+                height: 1.35,
               ),
             ),
           ],
-          if (meta.isNotEmpty) ...[
-            const SizedBox(height: 10),
+          if (byline.isNotEmpty) ...[
+            const SizedBox(height: 8),
             Text(
-              meta,
+              byline,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
               style: theme.textTheme.labelLarge?.copyWith(
-                color: theme.colorScheme.primary,
-                fontWeight: FontWeight.w800,
+                color: tokens.textSecondary,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ],
+          const SizedBox(height: 14),
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              if (details.statusLabel.isNotEmpty)
+                StatusBadge(
+                  label: details.statusLabel,
+                  emphasis: StatusBadgeEmphasis.gold,
+                ),
+              if (countryLabel.isNotEmpty)
+                _MetaPill(
+                  icon: Icons.public_rounded,
+                  label: countryLabel,
+                  color: tokens.accent,
+                ),
+            ],
+          ),
           const SizedBox(height: 18),
-          _StatsRow(details: details),
+          _HeroStats(details: details),
+          if (details.genres.isNotEmpty) ...[
+            const SizedBox(height: 18),
+            _GenreChips(genres: details.genres),
+          ],
         ],
       ),
     );
   }
 }
 
-class _StatsRow extends StatelessWidget {
-  const _StatsRow({required this.details});
+class _CoverShowcase extends StatelessWidget {
+  const _CoverShowcase({required this.details});
 
   final NovelDetails details;
 
   @override
   Widget build(BuildContext context) {
-    final stats = <_StatData>[
-      _StatData(
-        value: details.chaptersCount.toString(),
-        label: 'فصل',
-        icon: Icons.menu_book_outlined,
-      ),
-      if (details.views > 0)
-        _StatData(
-          value: details.views.toString(),
-          label: 'مشاهدة',
-          icon: Icons.visibility_outlined,
-        ),
-      if (details.ratingAverage > 0)
-        _StatData(
-          value: details.ratingAverage.toStringAsFixed(1),
-          label: 'التقييم',
-          icon: Icons.star_rounded,
-        ),
-    ];
+    final tokens =
+        Theme.of(context).extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
 
-    if (stats.isEmpty) {
-      return const SizedBox.shrink();
-    }
+    return Semantics(
+      label: 'غلاف رواية ${details.title}',
+      image: true,
+      child: Container(
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: tokens.surfaceRaised,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: tokens.border),
+          boxShadow: [
+            BoxShadow(
+              color: tokens.primary.withValues(alpha: 0.18),
+              blurRadius: 12,
+              offset: const Offset(0, 6),
+            ),
+            BoxShadow(
+              color: tokens.accent.withValues(alpha: 0.10),
+              blurRadius: 8,
+              offset: const Offset(0, 0),
+            ),
+          ],
+        ),
+        child: NovelCover(
+          title: details.title,
+          imageUrl: details.bestCover,
+          width: 176,
+          height: 264,
+          borderRadius: 8,
+        ),
+      ),
+    );
+  }
+}
+
+class _HeroStats extends StatelessWidget {
+  const _HeroStats({required this.details});
+
+  final NovelDetails details;
+
+  @override
+  Widget build(BuildContext context) {
+    final rating = details.ratingAverage > 0
+        ? details.ratingAverage.toStringAsFixed(1)
+        : '0.0';
 
     return Row(
       children: [
-        for (var index = 0; index < stats.length; index += 1) ...[
-          if (index > 0) const SizedBox(width: 8),
-          Expanded(child: _StatItem(data: stats[index])),
-        ],
+        Expanded(
+          child: _HeroStatCard(
+            icon: Icons.menu_book_outlined,
+            value: details.chaptersCount.toString(),
+            label: 'فصل',
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _HeroStatCard(
+            icon: Icons.visibility_outlined,
+            value: _compactNumber(details.views),
+            label: 'مشاهدة',
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _HeroStatCard(
+            icon: Icons.star_rounded,
+            value: rating,
+            label: 'تقييم',
+            highlight: true,
+          ),
+        ),
       ],
     );
   }
 }
 
-class _StatData {
-  const _StatData({
+class _HeroStatCard extends StatelessWidget {
+  const _HeroStatCard({
+    required this.icon,
     required this.value,
     required this.label,
-    required this.icon,
+    this.highlight = false,
   });
 
+  final IconData icon;
   final String value;
   final String label;
-  final IconData icon;
-}
-
-class _StatItem extends StatelessWidget {
-  const _StatItem({required this.data});
-
-  final _StatData data;
+  final bool highlight;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final tokens = theme.extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
+    final color = highlight ? tokens.gold : tokens.accent;
 
     return Container(
-      height: 72,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
+      height: 82,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
+        color: tokens.surface,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: theme.dividerColor),
+        border: Border.all(color: color.withValues(alpha: 0.22)),
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: 0.07),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(data.icon, size: 18, color: theme.colorScheme.primary),
-          const SizedBox(height: 4),
+          Icon(icon, color: color, size: 21),
+          const SizedBox(height: 7),
           Text(
-            data.value,
+            value,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.titleSmall?.copyWith(
+            textAlign: TextAlign.center,
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: tokens.textPrimary,
               fontWeight: FontWeight.w900,
-              height: 1.1,
+              height: 1,
             ),
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: 4),
           Text(
-            data.label,
+            label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
             style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.62),
+              color: tokens.textSecondary,
+              fontWeight: FontWeight.w700,
               height: 1.1,
             ),
           ),
@@ -167,70 +247,91 @@ class _StatItem extends StatelessWidget {
   }
 }
 
-class _NovelCover extends StatelessWidget {
-  const _NovelCover({required this.title, required this.url});
+class _GenreChips extends StatelessWidget {
+  const _GenreChips({required this.genres});
 
-  final String title;
-  final String url;
+  final List<NovelGenre> genres;
 
   @override
   Widget build(BuildContext context) {
-    final resolvedUrl = _resolveImageUrl(context, url);
+    final tokens =
+        Theme.of(context).extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(8),
-      child: resolvedUrl == null
-          ? _CoverFallback(title: title)
-          : Image.network(
-              resolvedUrl,
-              fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => _CoverFallback(title: title),
-            ),
+    return Wrap(
+      alignment: WrapAlignment.center,
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (final genre in genres.take(8))
+          _MetaPill(label: genre.name, color: tokens.accent),
+      ],
     );
   }
 }
 
-class _CoverFallback extends StatelessWidget {
-  const _CoverFallback({required this.title});
+class _MetaPill extends StatelessWidget {
+  const _MetaPill({required this.label, required this.color, this.icon});
 
-  final String title;
+  final String label;
+  final Color color;
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final tokens = theme.extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
 
-    return DecoratedBox(
+    return Container(
+      constraints: const BoxConstraints(minHeight: 30, maxWidth: 170),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: theme.colorScheme.primary.withValues(alpha: 0.12),
+        color: tokens.surfaceRaised,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
       ),
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(10),
-          child: Text(
-            'غلاف',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: theme.textTheme.labelLarge?.copyWith(
-              color: theme.colorScheme.primary,
-              fontWeight: FontWeight.w900,
-              height: 1.25,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 15, color: color),
+            const SizedBox(width: 5),
+          ],
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: tokens.textPrimary,
+                fontWeight: FontWeight.w800,
+                height: 1.1,
+              ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }
 }
 
-String? _resolveImageUrl(BuildContext context, String url) {
-  if (url.isEmpty) {
-    return null;
+String _compactNumber(int value) {
+  if (value >= 1000000) {
+    return '${(value / 1000000).toStringAsFixed(1)}M';
   }
+  if (value >= 1000) {
+    return '${(value / 1000).toStringAsFixed(1)}K';
+  }
+  return value.toString();
+}
 
-  try {
-    return AppDependencies.of(context).config.resolve(url).toString();
-  } on Object {
-    return null;
-  }
+String _countryLabel(String value) {
+  final normalized = value.trim().toLowerCase();
+  return switch (normalized) {
+    '' => '',
+    'cn' || 'china' => 'الصينية',
+    'jp' || 'japan' => 'اليابانية',
+    'kr' || 'korea' || 'south korea' => 'الكورية',
+    'us' || 'usa' || 'en' || 'english' => 'الإنجليزية',
+    _ => value,
+  };
 }

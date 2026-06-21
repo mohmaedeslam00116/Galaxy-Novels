@@ -7,10 +7,12 @@ import 'package:galaxy_novels_app/features/novel_details/presentation/widgets/no
 void main() {
   testWidgets('novel details header renders title and stats', (tester) async {
     await tester.pumpWidget(
-      const MaterialApp(
+      MaterialApp(
         home: Directionality(
           textDirection: TextDirection.rtl,
-          child: Scaffold(body: NovelDetailsHeader(details: _details)),
+          child: Scaffold(
+            body: ListView(children: [NovelDetailsHeader(details: _details)]),
+          ),
         ),
       ),
     );

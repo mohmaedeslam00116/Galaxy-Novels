@@ -6,7 +6,9 @@ import '../data/repositories/downloads_repository.dart';
 import '../data/repositories/home_repository.dart';
 import '../data/repositories/novel_repository.dart';
 import '../data/repositories/reader_repository.dart';
+import '../data/repositories/rankings_repository.dart';
 import '../data/repositories/reading_history_repository.dart';
+import '../data/repositories/search_repository.dart';
 
 class AppDependencies extends InheritedWidget {
   const AppDependencies({
@@ -15,6 +17,8 @@ class AppDependencies extends InheritedWidget {
     required this.catalogRepository,
     required this.novelRepository,
     required this.readerRepository,
+    required this.rankingsRepository,
+    required this.searchRepository,
     required this.readingHistoryRepository,
     required this.downloadsRepository,
     required super.child,
@@ -26,6 +30,8 @@ class AppDependencies extends InheritedWidget {
   final CatalogRepository catalogRepository;
   final NovelRepository novelRepository;
   final ReaderRepository readerRepository;
+  final RankingsRepository rankingsRepository;
+  final SearchRepository searchRepository;
   final ReadingHistoryRepository readingHistoryRepository;
   final DownloadsRepository downloadsRepository;
 
@@ -44,6 +50,8 @@ class AppDependencies extends InheritedWidget {
         catalogRepository != oldWidget.catalogRepository ||
         novelRepository != oldWidget.novelRepository ||
         readerRepository != oldWidget.readerRepository ||
+        rankingsRepository != oldWidget.rankingsRepository ||
+        searchRepository != oldWidget.searchRepository ||
         readingHistoryRepository != oldWidget.readingHistoryRepository ||
         downloadsRepository != oldWidget.downloadsRepository;
   }

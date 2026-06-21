@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import '../core/config/app_config.dart';
+import '../core/network/file_system_public_cache_store.dart';
 import '../core/network/public_cache_client.dart';
 import '../data/repositories/bootstrap_repository.dart';
 import '../data/repositories/catalog_repository.dart';
@@ -11,9 +12,13 @@ import '../data/repositories/novel_repository.dart';
 import '../data/repositories/public_catalog_repository.dart';
 import '../data/repositories/public_home_repository.dart';
 import '../data/repositories/public_novel_repository.dart';
+import '../data/repositories/public_rankings_repository.dart';
 import '../data/repositories/public_reader_repository.dart';
+import '../data/repositories/public_search_repository.dart';
 import '../data/repositories/reader_repository.dart';
+import '../data/repositories/rankings_repository.dart';
 import '../data/repositories/reading_history_repository.dart';
+import '../data/repositories/search_repository.dart';
 import '../data/repositories/shared_preferences_download_store.dart';
 import '../data/repositories/shared_preferences_reading_history_store.dart';
 import '../data/repositories/stored_downloads_repository.dart';
@@ -33,6 +38,8 @@ class GalaxyNovelsApp extends StatefulWidget {
     this.catalogRepository,
     this.novelRepository,
     this.readerRepository,
+    this.rankingsRepository,
+    this.searchRepository,
     this.readingHistoryRepository,
     this.downloadsRepository,
     super.key,
@@ -43,6 +50,8 @@ class GalaxyNovelsApp extends StatefulWidget {
   final CatalogRepository? catalogRepository;
   final NovelRepository? novelRepository;
   final ReaderRepository? readerRepository;
+  final RankingsRepository? rankingsRepository;
+  final SearchRepository? searchRepository;
   final ReadingHistoryRepository? readingHistoryRepository;
   final DownloadsRepository? downloadsRepository;
 
@@ -76,7 +85,10 @@ class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
 
   @override
   Widget build(BuildContext context) {
-    final cacheClient = PublicCacheClient(config: widget.config);
+    final cacheClient = PublicCacheClient(
+      config: widget.config,
+      cacheStore: FileSystemPublicCacheStore(),
+    );
     final bootstrapRepository = BootstrapRepository(cacheClient);
     final effectiveHomeRepository =
         widget.homeRepository ??
@@ -99,6 +111,18 @@ class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
     final effectiveDownloadsRepository =
         widget.downloadsRepository ??
         _defaultDownloadsRepositoryFor(effectiveReaderRepository);
+    final effectiveRankingsRepository =
+        widget.rankingsRepository ??
+        PublicRankingsRepository(
+          bootstrapRepository: bootstrapRepository,
+          cacheClient: cacheClient,
+        );
+    final effectiveSearchRepository =
+        widget.searchRepository ??
+        PublicSearchRepository(
+          bootstrapRepository: bootstrapRepository,
+          cacheClient: cacheClient,
+        );
     final effectiveReadingHistoryRepository =
         widget.readingHistoryRepository ?? _defaultReadingHistoryRepository;
 
@@ -108,6 +132,8 @@ class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
       catalogRepository: effectiveCatalogRepository,
       novelRepository: effectiveNovelRepository,
       readerRepository: effectiveReaderRepository,
+      rankingsRepository: effectiveRankingsRepository,
+      searchRepository: effectiveSearchRepository,
       readingHistoryRepository: effectiveReadingHistoryRepository,
       downloadsRepository: effectiveDownloadsRepository,
       child: MaterialApp(

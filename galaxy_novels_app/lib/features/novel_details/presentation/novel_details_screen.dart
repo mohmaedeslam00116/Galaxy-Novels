@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/app_dependencies.dart';
+import '../../../app/app_theme.dart';
 import '../../../data/models/novel_details_data.dart';
 import '../../../data/repositories/novel_repository.dart';
+import '../../../shared/widgets/section_title.dart';
 import '../../reader/presentation/reader_screen.dart';
 import 'widgets/novel_chapter_tile.dart';
 import 'widgets/novel_details_header.dart';
@@ -93,25 +95,30 @@ class _NovelDetailsContent extends StatelessWidget {
     final firstReadableChapter = result.chapters.isNotEmpty
         ? result.chapters.first
         : null;
+    final canRead =
+        firstReadableChapter != null &&
+        firstReadableChapter.effectiveContentApi.isNotEmpty;
 
-    return ListView(
-      padding: const EdgeInsets.only(bottom: 28),
+    return Stack(
       children: [
-        NovelDetailsHeader(details: details),
-        if (firstReadableChapter != null &&
-            firstReadableChapter.effectiveContentApi.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-            child: FilledButton.icon(
-              onPressed: () => onRead(firstReadableChapter, details.title),
-              icon: const Icon(Icons.menu_book_outlined),
-              label: const Text('ابدأ القراءة'),
+        ListView(
+          padding: EdgeInsets.only(bottom: canRead ? 118 : 28),
+          children: [
+            NovelDetailsHeader(details: details),
+            if (details.summary.isNotEmpty)
+              _SummarySection(summary: details.summary),
+            _ChaptersSection(result: result, onRead: onRead),
+          ],
+        ),
+        if (canRead)
+          PositionedDirectional(
+            start: 0,
+            end: 0,
+            bottom: 0,
+            child: _DetailsBottomBar(
+              onRead: () => onRead(firstReadableChapter, details.title),
             ),
           ),
-        if (details.summary.isNotEmpty)
-          _SummarySection(summary: details.summary),
-        if (details.genres.isNotEmpty) _GenresSection(genres: details.genres),
-        _ChaptersSection(result: result, onRead: onRead),
       ],
     );
   }
@@ -132,58 +139,125 @@ class _SummarySectionState extends State<_SummarySection> {
   @override
   Widget build(BuildContext context) {
     final isLong = widget.summary.length > 220;
+    final theme = Theme.of(context);
+    final tokens = theme.extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const _SectionTitle(title: 'عن الرواية'),
-          const SizedBox(height: 10),
-          Text(
-            widget.summary,
-            maxLines: isLong && !_expanded ? 5 : null,
-            overflow: isLong && !_expanded ? TextOverflow.ellipsis : null,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              height: 1.65,
-              color: Theme.of(
-                context,
-              ).colorScheme.onSurface.withValues(alpha: 0.84),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SectionTitle(title: 'عن الرواية'),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: tokens.surface,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: tokens.border),
             ),
-          ),
-          if (isLong)
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: () => setState(() => _expanded = !_expanded),
-                child: Text(_expanded ? 'عرض أقل' : 'عرض المزيد'),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.summary,
+                    maxLines: isLong && !_expanded ? 6 : null,
+                    overflow: isLong && !_expanded
+                        ? TextOverflow.ellipsis
+                        : null,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      height: 1.75,
+                      color: tokens.textPrimary.withValues(alpha: 0.88),
+                    ),
+                  ),
+                  if (isLong)
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: () => setState(() => _expanded = !_expanded),
+                        child: Text(_expanded ? 'عرض أقل' : 'عرض المزيد'),
+                      ),
+                    ),
+                ],
               ),
             ),
-        ],
-      ),
+          ),
+        ),
+      ],
     );
   }
 }
 
-class _GenresSection extends StatelessWidget {
-  const _GenresSection({required this.genres});
+class _DetailsBottomBar extends StatelessWidget {
+  const _DetailsBottomBar({required this.onRead});
 
-  final List<NovelGenre> genres;
+  final VoidCallback onRead;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 22),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: [
-          for (final genre in genres)
-            Chip(
-              label: Text(genre.name),
-              side: BorderSide(color: Theme.of(context).dividerColor),
-            ),
+    final theme = Theme.of(context);
+    final tokens = theme.extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: tokens.background,
+        border: Border(top: BorderSide(color: tokens.border)),
+        boxShadow: [
+          BoxShadow(
+            color: tokens.primary.withValues(alpha: 0.08),
+            blurRadius: 12,
+            offset: const Offset(0, -4),
+          ),
         ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 56,
+                height: 56,
+                child: IconButton(
+                  tooltip: 'إضافة للمفضلة',
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('سيتم تفعيل المفضلة في مرحلة لاحقة'),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.bookmark_add_outlined),
+                  style: IconButton.styleFrom(
+                    backgroundColor: tokens.surface,
+                    foregroundColor: tokens.accent,
+                    side: BorderSide(
+                      color: tokens.accent.withValues(alpha: 0.26),
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: onRead,
+                  icon: const Icon(Icons.menu_book_outlined),
+                  label: const Text('ابدأ القراءة'),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(56),
+                    textStyle: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -198,15 +272,24 @@ class _ChaptersSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final chapters = result.chapters;
+    final theme = Theme.of(context);
+    final tokens = theme.extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-          child: _SectionTitle(
-            title: chapters.isEmpty ? 'الفصول' : 'الفصول (${chapters.length})',
-          ),
+        SectionTitle(
+          title: 'آخر الفصول',
+          leadingIcon: Icons.menu_book_outlined,
+          action: chapters.isEmpty
+              ? null
+              : Text(
+                  '${chapters.length} فصل',
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: tokens.textSecondary,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
         ),
         if (result.chaptersError != null)
           _InlineMessage(
@@ -235,39 +318,6 @@ class _ChaptersSection extends StatelessWidget {
   }
 }
 
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle({required this.title});
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Row(
-      children: [
-        Container(
-          width: 4,
-          height: 28,
-          decoration: BoxDecoration(
-            color: theme.colorScheme.primary,
-            borderRadius: BorderRadius.circular(8),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            title,
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 class _InlineMessage extends StatelessWidget {
   const _InlineMessage({required this.title, this.subtitle});
 
@@ -277,6 +327,7 @@ class _InlineMessage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final tokens = theme.extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -284,9 +335,9 @@ class _InlineMessage extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: theme.colorScheme.surface,
+          color: tokens.surface,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: theme.dividerColor),
+          border: Border.all(color: tokens.border),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -302,7 +353,7 @@ class _InlineMessage extends StatelessWidget {
               Text(
                 subtitle!,
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.62),
+                  color: tokens.textSecondary,
                 ),
               ),
             ],

@@ -7,10 +7,14 @@ import 'package:galaxy_novels_app/data/models/home_data.dart';
 import 'package:galaxy_novels_app/data/models/novel_details_data.dart';
 import 'package:galaxy_novels_app/data/models/novel_summary.dart';
 import 'package:galaxy_novels_app/data/models/reader_content_data.dart';
+import 'package:galaxy_novels_app/data/models/rankings_data.dart';
+import 'package:galaxy_novels_app/data/models/search_index_data.dart';
 import 'package:galaxy_novels_app/data/repositories/catalog_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/home_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/novel_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/reader_repository.dart';
+import 'package:galaxy_novels_app/data/repositories/rankings_repository.dart';
+import 'package:galaxy_novels_app/data/repositories/search_repository.dart';
 
 void main() {
   testWidgets('shows Galaxy Novels Arabic shell', (tester) async {
@@ -19,6 +23,7 @@ void main() {
         homeRepository: _TestHomeRepository(_homeData),
         catalogRepository: const _TestCatalogRepository(),
         novelRepository: const _TestNovelRepository(),
+        searchRepository: const _TestSearchRepository.empty(),
       ),
     );
     await tester.pumpAndSettle();
@@ -79,7 +84,7 @@ void main() {
 
     expect(find.text('اختبار المجرة'), findsOneWidget);
     expect(find.text('رواية الاختبار'), findsWidgets);
-    expect(find.text('مستمرة'), findsWidgets);
+    expect(find.text('مختارة من المجرة'), findsOneWidget);
 
     await _scrollHomeDown(tester);
 
@@ -175,8 +180,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('مكتبة الاختبار'), findsOneWidget);
-    expect(find.textContaining('10 فصل'), findsOneWidget);
-    expect(find.text('آخر تحديث'), findsOneWidget);
+    expect(find.text('ابحث عن رواية...'), findsOneWidget);
+    expect(find.text('2 رواية'), findsOneWidget);
   });
 
   testWidgets('catalog search filters results locally', (tester) async {
@@ -203,6 +208,28 @@ void main() {
     expect(find.text('مكتبة الاختبار'), findsOneWidget);
   });
 
+  testWidgets('catalog search can use the public search index', (tester) async {
+    await tester.pumpWidget(
+      GalaxyNovelsApp(
+        homeRepository: _TestHomeRepository(_homeData),
+        catalogRepository: const _TestCatalogRepository(),
+        novelRepository: const _TestNovelRepository(),
+        searchRepository: const _TestSearchRepository.withExternalResult(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('المكتبة'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), 'خارجي');
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pumpAndSettle();
+
+    expect(find.text('بحث خارجي'), findsOneWidget);
+    expect(find.text('مكتبة الاختبار'), findsNothing);
+  });
+
   testWidgets('catalog filters are applied from the bottom sheet', (
     tester,
   ) async {
@@ -217,11 +244,16 @@ void main() {
 
     await tester.tap(find.text('المكتبة'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('فلاتر'));
+    await tester.tap(find.text('كل التصنيفات'));
     await tester.pumpAndSettle();
 
     expect(find.text('الحالة'), findsOneWidget);
-    await tester.tap(find.text('مكتملة'));
+    await tester.tap(
+      find.descendant(
+        of: find.byType(FilterChip),
+        matching: find.text('مكتملة'),
+      ),
+    );
     await tester.tap(find.text('تطبيق'));
     await tester.pumpAndSettle();
 
@@ -266,6 +298,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('تفاصيل الاختبار'), findsOneWidget);
+
+    await tester.scrollUntilVisible(
+      find.text('هذه نبذة تفاصيل الاختبار.'),
+      420,
+    );
+    await tester.pumpAndSettle();
+
     expect(find.text('هذه نبذة تفاصيل الاختبار.'), findsOneWidget);
     expect(find.text('ابدأ القراءة'), findsOneWidget);
 
@@ -297,6 +336,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('تفاصيل الاختبار'), findsOneWidget);
+
+    await tester.scrollUntilVisible(
+      find.text('هذه نبذة تفاصيل الاختبار.'),
+      420,
+    );
+    await tester.pumpAndSettle();
+
     expect(find.text('هذه نبذة تفاصيل الاختبار.'), findsOneWidget);
   });
 
@@ -317,10 +363,38 @@ void main() {
       await tester.tap(find.text('مكتبة الاختبار'));
       await tester.pumpAndSettle();
 
+      await tester.scrollUntilVisible(
+        find.text('لا توجد فصول متاحة للعرض الآن'),
+        420,
+      );
+      await tester.pumpAndSettle();
+
       expect(find.text('لا توجد فصول متاحة للعرض الآن'), findsOneWidget);
       expect(find.text('ابدأ القراءة'), findsNothing);
     },
   );
+
+  testWidgets('rankings tab renders repository-provided novels', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      GalaxyNovelsApp(
+        homeRepository: _TestHomeRepository(_homeData),
+        catalogRepository: const _TestCatalogRepository(),
+        novelRepository: const _TestNovelRepository(),
+        rankingsRepository: const _TestRankingsRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('الترتيب'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('ترتيب الاختبار'), findsOneWidget);
+    expect(find.text('#1'), findsOneWidget);
+    expect(find.textContaining('150 فصل'), findsOneWidget);
+    expect(find.text('حارس النجوم'), findsNothing);
+  });
 }
 
 Future<void> _scrollHomeDown(WidgetTester tester) async {
@@ -428,6 +502,67 @@ class _TestCatalogRepository implements CatalogRepository {
       isLoadingMore: false,
     );
   }
+}
+
+class _TestRankingsRepository implements RankingsRepository {
+  const _TestRankingsRepository();
+
+  @override
+  Future<RankingsData> loadRankings() async {
+    return const RankingsData(
+      period: 'month',
+      items: [
+        CatalogNovel(
+          id: 77,
+          title: 'ترتيب الاختبار',
+          originalTitle: '',
+          url: '/novel/ranking-test/',
+          coverThumbnail: '',
+          coverMedium: '',
+          statusKey: 'ongoing',
+          statusLabel: 'مستمرة',
+          genres: [CatalogGenre(id: 1, name: 'أكشن', slug: 'action')],
+          chaptersCount: 150,
+          ratingAverage: 4.8,
+          ratingCount: 22,
+          views: 15000,
+          updatedAt: null,
+          manifest: '/manifest/novel-77.json',
+        ),
+      ],
+    );
+  }
+}
+
+class _TestSearchRepository implements SearchRepository {
+  const _TestSearchRepository(this.index);
+
+  const _TestSearchRepository.empty() : index = const SearchIndex(items: []);
+
+  const _TestSearchRepository.withExternalResult()
+    : index = const SearchIndex(
+        items: [
+          SearchIndexItem(
+            id: 700,
+            title: 'بحث خارجي',
+            originalTitle: '',
+            url: '/novel/external-search/',
+            cover: '',
+            genres: ['خيال'],
+            chaptersCount: 77,
+            statusLabel: 'مستمرة',
+            views: 900,
+            normalizedSearch: 'بحث خارجي',
+            manifest:
+                '/wp-content/uploads/wor-reader-cache/app/manifest/novel-700.json',
+          ),
+        ],
+      );
+
+  final SearchIndex index;
+
+  @override
+  Future<SearchIndex> loadSearchIndex() async => index;
 }
 
 class _BackgroundErrorCatalogRepository implements CatalogRepository {
