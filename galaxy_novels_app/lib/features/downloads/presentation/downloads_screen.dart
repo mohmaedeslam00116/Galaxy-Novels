@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../app/app_dependencies.dart';
 import '../../../data/models/downloaded_chapter.dart';
 import '../../../data/repositories/downloads_repository.dart';
+import '../application/download_manager.dart';
 
 class DownloadsScreen extends StatefulWidget {
   const DownloadsScreen({this.onOpenLibrary, super.key});
@@ -33,35 +34,53 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final repository =
-        _repository ?? AppDependencies.of(context).downloadsRepository;
+    final dependencies = AppDependencies.of(context);
+    final repository = _repository ?? dependencies.downloadsRepository;
+    final downloadManager = dependencies.downloadManager;
 
     return SafeArea(
-      child: ValueListenableBuilder<DownloadsState>(
-        valueListenable: repository.state,
-        builder: (context, state, _) {
-          final groups = _groupByNovel(state.chapters);
+      child: ValueListenableBuilder<DownloadManagerState>(
+        valueListenable: downloadManager.state,
+        builder: (context, jobState, _) {
+          return ValueListenableBuilder<DownloadsState>(
+            valueListenable: repository.state,
+            builder: (context, downloadsState, _) {
+              final groups = _groupByNovel(downloadsState.chapters);
 
-          return ListView(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-            children: [
-              const _DownloadsHeading(),
-              const SizedBox(height: 14),
-              _DownloadsCountBanner(state: state),
-              const SizedBox(height: 16),
-              if (groups.isEmpty)
-                _DownloadsEmptyState(onOpenLibrary: widget.onOpenLibrary)
-              else
-                for (final group in groups) ...[
-                  _DownloadedNovelRow(group: group),
-                  const SizedBox(height: 12),
+              return ListView(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                children: [
+                  const _DownloadsHeading(),
+                  const SizedBox(height: 14),
+                  _DownloadsCountBanner(state: downloadsState),
+                  if (_showJobBanner(jobState)) ...[
+                    const SizedBox(height: 10),
+                    _DownloadJobBanner(
+                      state: jobState,
+                      onTap: downloadManager.showOverlay,
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  if (groups.isEmpty)
+                    _DownloadsEmptyState(onOpenLibrary: widget.onOpenLibrary)
+                  else
+                    for (final group in groups) ...[
+                      _DownloadedNovelRow(group: group),
+                      const SizedBox(height: 12),
+                    ],
                 ],
-            ],
+              );
+            },
           );
         },
       ),
     );
   }
+}
+
+bool _showJobBanner(DownloadManagerState state) {
+  return state.progress != null &&
+      (state.isActive || state.status == DownloadJobStatus.failed);
 }
 
 class _DownloadsHeading extends StatelessWidget {
@@ -124,6 +143,64 @@ class _DownloadsCountBanner extends StatelessWidget {
                 fontWeight: FontWeight.w900,
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DownloadJobBanner extends StatelessWidget {
+  const _DownloadJobBanner({required this.state, required this.onTap});
+
+  final DownloadManagerState state;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final progress = state.progress!;
+    final isPaused = state.status == DownloadJobStatus.paused;
+    final isFailed = state.status == DownloadJobStatus.failed;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Ink(
+        decoration: BoxDecoration(
+          color: colors.secondaryContainer,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Row(
+          children: [
+            Icon(
+              isFailed
+                  ? Icons.error_outline_rounded
+                  : isPaused
+                  ? Icons.pause_circle_outline_rounded
+                  : Icons.downloading_rounded,
+              color: isFailed ? colors.error : colors.onSecondaryContainer,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                isFailed
+                    ? 'تعذر إكمال التنزيل'
+                    : isPaused
+                    ? 'التنزيل متوقف مؤقتا'
+                    : 'جاري تحميل ${progress.completed + progress.failed} من ${progress.total}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: isFailed ? colors.error : colors.onSecondaryContainer,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Icon(Icons.open_in_new_rounded, size: 18),
           ],
         ),
       ),

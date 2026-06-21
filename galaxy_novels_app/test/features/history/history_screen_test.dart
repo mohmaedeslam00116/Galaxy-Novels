@@ -12,6 +12,7 @@ import 'package:galaxy_novels_app/data/repositories/fake_rankings_repository.dar
 import 'package:galaxy_novels_app/data/repositories/fake_search_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/reader_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/reading_history_repository.dart';
+import 'package:galaxy_novels_app/features/downloads/application/download_manager.dart';
 import 'package:galaxy_novels_app/features/history/presentation/history_screen.dart';
 
 void main() {
@@ -82,6 +83,7 @@ class _HistoryTestApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final downloadsRepository = FakeDownloadsRepository();
     return AppDependencies(
       config: const AppConfig(),
       homeRepository: const FakeHomeRepository(),
@@ -91,7 +93,8 @@ class _HistoryTestApp extends StatelessWidget {
       rankingsRepository: const FakeRankingsRepository(),
       searchRepository: const FakeSearchRepository(),
       readingHistoryRepository: readingHistoryRepository,
-      downloadsRepository: FakeDownloadsRepository(),
+      downloadsRepository: downloadsRepository,
+      downloadManager: DownloadManager(repository: downloadsRepository),
       child: const MaterialApp(
         locale: Locale('ar'),
         home: Scaffold(

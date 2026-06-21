@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:galaxy_novels_app/data/repositories/downloads_repository.dart';
+import 'package:galaxy_novels_app/features/downloads/application/download_manager.dart';
 import 'package:galaxy_novels_app/features/downloads/presentation/download_progress_overlay.dart';
 
 void main() {
@@ -45,6 +46,36 @@ void main() {
 
     expect(find.text('اكتمل التنزيل'), findsOneWidget);
     expect(find.text('تم تحميل 8 فصل، وفشل 2'), findsOneWidget);
+  });
+
+  testWidgets('offers resume and cancel controls while paused', (tester) async {
+    var resumed = false;
+    var cancelled = false;
+    await tester.pumpWidget(
+      _TestApp(
+        child: DownloadProgressOverlay(
+          progress: const DownloadBatchProgress(
+            novelTitle: 'رواية الاختبار',
+            novelCover: '',
+            total: 10,
+            completed: 4,
+            failed: 0,
+            isComplete: false,
+          ),
+          status: DownloadJobStatus.paused,
+          onDismiss: () {},
+          onResume: () => resumed = true,
+          onCancel: () => cancelled = true,
+        ),
+      ),
+    );
+
+    expect(find.text('التنزيل متوقف مؤقتا'), findsOneWidget);
+    await tester.tap(find.text('استكمال'));
+    await tester.tap(find.byIcon(Icons.stop_circle_outlined));
+
+    expect(resumed, isTrue);
+    expect(cancelled, isTrue);
   });
 }
 

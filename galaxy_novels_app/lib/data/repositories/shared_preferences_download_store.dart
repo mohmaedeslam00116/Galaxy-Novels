@@ -1,11 +1,13 @@
 import 'dart:convert';
 
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/downloaded_chapter.dart';
 import 'local_download_store.dart';
 
-class SharedPreferencesDownloadStore implements LocalDownloadStore {
+class SharedPreferencesDownloadStore
+    implements LocalDownloadStore, ClearableDownloadStore {
   SharedPreferencesDownloadStore({SharedPreferencesAsync? preferences})
     : _preferences = preferences;
 
@@ -40,24 +42,52 @@ class SharedPreferencesDownloadStore implements LocalDownloadStore {
   }
 
   @override
-  Future<void> writeChapters(List<DownloadedChapter> chapters) {
+  Future<void> writeChapters(List<DownloadedChapter> chapters) async {
     final value = jsonEncode(
       chapters.map((chapter) => chapter.toJson()).toList(),
     );
     final preferences = _safePreferences();
     if (preferences == null) {
       _fallbackValue = value;
-      return Future.value();
+      return;
     }
-    return preferences.setString(key, value);
+    try {
+      await preferences.setString(key, value);
+    } on MissingPluginException {
+      _fallbackValue = value;
+    } on PlatformException {
+      _fallbackValue = value;
+    }
   }
 
-  Future<String?> _readRaw() {
+  @override
+  Future<void> clear() async {
+    _fallbackValue = null;
     final preferences = _safePreferences();
     if (preferences == null) {
-      return Future.value(_fallbackValue);
+      return;
     }
-    return preferences.getString(key);
+    try {
+      await preferences.remove(key);
+    } on MissingPluginException {
+      return;
+    } on PlatformException {
+      return;
+    }
+  }
+
+  Future<String?> _readRaw() async {
+    final preferences = _safePreferences();
+    if (preferences == null) {
+      return _fallbackValue;
+    }
+    try {
+      return await preferences.getString(key);
+    } on MissingPluginException {
+      return _fallbackValue;
+    } on PlatformException {
+      return _fallbackValue;
+    }
   }
 
   SharedPreferencesAsync? _safePreferences() {

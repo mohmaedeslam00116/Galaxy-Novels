@@ -9,6 +9,7 @@ import '../data/repositories/reader_repository.dart';
 import '../data/repositories/rankings_repository.dart';
 import '../data/repositories/reading_history_repository.dart';
 import '../data/repositories/search_repository.dart';
+import '../features/downloads/application/download_manager.dart';
 
 class AppDependencies extends InheritedWidget {
   const AppDependencies({
@@ -21,6 +22,7 @@ class AppDependencies extends InheritedWidget {
     required this.searchRepository,
     required this.readingHistoryRepository,
     required this.downloadsRepository,
+    required this.downloadManager,
     required super.child,
     super.key,
   });
@@ -34,6 +36,7 @@ class AppDependencies extends InheritedWidget {
   final SearchRepository searchRepository;
   final ReadingHistoryRepository readingHistoryRepository;
   final DownloadsRepository downloadsRepository;
+  final DownloadManager downloadManager;
 
   static AppDependencies of(BuildContext context) {
     final dependencies = context
@@ -53,6 +56,7 @@ class AppDependencies extends InheritedWidget {
         rankingsRepository != oldWidget.rankingsRepository ||
         searchRepository != oldWidget.searchRepository ||
         readingHistoryRepository != oldWidget.readingHistoryRepository ||
-        downloadsRepository != oldWidget.downloadsRepository;
+        downloadsRepository != oldWidget.downloadsRepository ||
+        downloadManager != oldWidget.downloadManager;
   }
 }

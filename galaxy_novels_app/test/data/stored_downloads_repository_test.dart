@@ -33,6 +33,54 @@ void main() {
     expect(content?.contentHtml, '<p>الفصل 1</p>');
   });
 
+  test('keeps only a short plain text preview in metadata', () async {
+    final store = _MemoryDownloadStore();
+    final repository = StoredDownloadsRepository(
+      store: store,
+      readerRepository: _ReaderRepository(
+        contentHtml: '<p>${List.filled(400, 'ن').join()}</p>',
+      ),
+    );
+
+    await repository.downloadChapter(_request(1));
+
+    expect(store.chapters.single.plainTextPreview.runes.length, 240);
+  });
+
+  test('serializes concurrent chapter downloads without losing data', () async {
+    final store = _MemoryDownloadStore();
+    final repository = StoredDownloadsRepository(
+      store: store,
+      readerRepository: _ReaderRepository(),
+    );
+
+    await Future.wait([
+      repository.downloadChapter(_request(1)),
+      repository.downloadChapter(_request(2)),
+    ]);
+
+    expect(repository.state.value.downloadedCount, 2);
+    expect(repository.state.value.contains('/chapters/1'), isTrue);
+    expect(repository.state.value.contains('/chapters/2'), isTrue);
+  });
+
+  test('builds offline navigation from downloaded sibling chapters', () async {
+    final store = _MemoryDownloadStore();
+    final repository = StoredDownloadsRepository(
+      store: store,
+      readerRepository: _ReaderRepository(),
+    );
+    await store.writeChapters([_downloaded(1), _downloaded(2), _downloaded(3)]);
+    await repository.load();
+
+    final content = await repository.findReaderContent('/chapters/2');
+
+    expect(content?.navigation.previousApi, '/chapters/1');
+    expect(content?.navigation.previousId, 1);
+    expect(content?.navigation.nextApi, '/chapters/3');
+    expect(content?.navigation.nextId, 3);
+  });
+
   test('does not download above the 100 chapter limit', () async {
     final store = _MemoryDownloadStore();
     final reader = _ReaderRepository();
@@ -313,9 +361,10 @@ class _FailingDownloadStore implements LocalDownloadStore {
 }
 
 class _ReaderRepository implements ReaderRepository {
-  _ReaderRepository({this.failingApi});
+  _ReaderRepository({this.failingApi, this.contentHtml});
 
   final String? failingApi;
+  final String? contentHtml;
   final List<String> loadCalls = [];
 
   @override
@@ -333,7 +382,7 @@ class _ReaderRepository implements ReaderRepository {
       displayTitle: 'الفصل $id',
       position: id,
       total: 100,
-      contentHtml: '<p>الفصل $id</p>',
+      contentHtml: contentHtml ?? '<p>الفصل $id</p>',
       navigation: const ReaderChapterNavigation(
         previousApi: '',
         nextApi: '',

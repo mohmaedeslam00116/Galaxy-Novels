@@ -2,16 +2,29 @@ import 'package:flutter/material.dart';
 
 import '../../../data/repositories/downloads_repository.dart';
 import '../../../shared/widgets/novel_cover.dart';
+import '../application/download_manager.dart';
 
 class DownloadProgressOverlay extends StatelessWidget {
   const DownloadProgressOverlay({
     required this.progress,
     required this.onDismiss,
+    this.status = DownloadJobStatus.running,
+    this.errorMessage,
+    this.onPause,
+    this.onResume,
+    this.onCancel,
+    this.onRetry,
     super.key,
   });
 
   final DownloadBatchProgress progress;
   final VoidCallback onDismiss;
+  final DownloadJobStatus status;
+  final String? errorMessage;
+  final VoidCallback? onPause;
+  final VoidCallback? onResume;
+  final VoidCallback? onCancel;
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -54,9 +67,7 @@ class DownloadProgressOverlay extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  progress.isComplete
-                                      ? 'اكتمل التنزيل'
-                                      : 'جاري تنزيل الفصول',
+                                  _title(status, progress),
                                   style: theme.textTheme.titleMedium?.copyWith(
                                     fontWeight: FontWeight.w900,
                                   ),
@@ -75,7 +86,6 @@ class DownloadProgressOverlay extends StatelessWidget {
                             ),
                           ),
                           IconButton(
-                            tooltip: progress.isComplete ? 'إغلاق' : 'إخفاء',
                             onPressed: onDismiss,
                             icon: const Icon(Icons.close),
                           ),
@@ -83,7 +93,9 @@ class DownloadProgressOverlay extends StatelessWidget {
                       ),
                       const SizedBox(height: 16),
                       LinearProgressIndicator(
-                        value: progress.fraction,
+                        value: status == DownloadJobStatus.failed
+                            ? null
+                            : progress.fraction,
                         minHeight: 7,
                         borderRadius: BorderRadius.circular(4),
                       ),
@@ -92,7 +104,7 @@ class DownloadProgressOverlay extends StatelessWidget {
                         children: [
                           Expanded(
                             child: Text(
-                              _statusLabel(progress),
+                              _statusLabel(progress, status, errorMessage),
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: progress.failed > 0
                                     ? colors.error
@@ -110,6 +122,43 @@ class DownloadProgressOverlay extends StatelessWidget {
                           ),
                         ],
                       ),
+                      if (_hasControls) ...[
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            if (status == DownloadJobStatus.running &&
+                                onPause != null)
+                              TextButton.icon(
+                                onPressed: onPause,
+                                icon: const Icon(Icons.pause_rounded),
+                                label: const Text('إيقاف مؤقت'),
+                              ),
+                            if (status == DownloadJobStatus.paused &&
+                                onResume != null)
+                              FilledButton.tonalIcon(
+                                onPressed: onResume,
+                                icon: const Icon(Icons.play_arrow_rounded),
+                                label: const Text('استكمال'),
+                              ),
+                            if ((status == DownloadJobStatus.running ||
+                                    status == DownloadJobStatus.paused) &&
+                                onCancel != null)
+                              IconButton(
+                                onPressed: onCancel,
+                                icon: const Icon(Icons.stop_circle_outlined),
+                              ),
+                            if ((status == DownloadJobStatus.failed ||
+                                    progress.failed > 0) &&
+                                onRetry != null)
+                              FilledButton.tonalIcon(
+                                onPressed: onRetry,
+                                icon: const Icon(Icons.refresh_rounded),
+                                label: const Text('إعادة المحاولة'),
+                              ),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -120,9 +169,41 @@ class DownloadProgressOverlay extends StatelessWidget {
       ),
     );
   }
+
+  bool get _hasControls {
+    return (status == DownloadJobStatus.running && onPause != null) ||
+        (status == DownloadJobStatus.paused && onResume != null) ||
+        ((status == DownloadJobStatus.running ||
+                status == DownloadJobStatus.paused) &&
+            onCancel != null) ||
+        ((status == DownloadJobStatus.failed || progress.failed > 0) &&
+            onRetry != null);
+  }
 }
 
-String _statusLabel(DownloadBatchProgress progress) {
+String _title(DownloadJobStatus status, DownloadBatchProgress progress) {
+  return switch (status) {
+    DownloadJobStatus.paused => 'التنزيل متوقف مؤقتا',
+    DownloadJobStatus.failed => 'تعذر إكمال التنزيل',
+    DownloadJobStatus.cancelled => 'تم إلغاء التنزيل',
+    _ => progress.isComplete ? 'اكتمل التنزيل' : 'جاري تنزيل الفصول',
+  };
+}
+
+String _statusLabel(
+  DownloadBatchProgress progress, [
+  DownloadJobStatus status = DownloadJobStatus.running,
+  String? errorMessage,
+]) {
+  if (status == DownloadJobStatus.failed && errorMessage != null) {
+    return errorMessage;
+  }
+  if (status == DownloadJobStatus.paused) {
+    return 'تم تحميل ${progress.completed} من ${progress.total}';
+  }
+  if (status == DownloadJobStatus.cancelled) {
+    return 'بقيت الفصول المكتملة محفوظة على الجهاز';
+  }
   if (!progress.isComplete) {
     return 'جاري تحميل ${progress.completed + progress.failed} من '
         '${progress.total}';

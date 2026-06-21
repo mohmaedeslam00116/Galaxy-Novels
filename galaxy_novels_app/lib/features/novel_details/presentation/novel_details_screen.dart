@@ -8,9 +8,9 @@ import '../../../data/models/novel_details_data.dart';
 import '../../../data/repositories/downloads_repository.dart';
 import '../../../data/repositories/novel_repository.dart';
 import '../../../shared/widgets/section_title.dart';
+import '../../downloads/application/download_manager.dart';
 import '../../downloads/presentation/chapter_download_button.dart';
 import '../../downloads/presentation/download_chapters_sheet.dart';
-import '../../downloads/presentation/download_progress_overlay.dart';
 import '../../reader/presentation/reader_screen.dart';
 import 'widgets/novel_chapter_tile.dart';
 import 'widgets/novel_details_header.dart';
@@ -28,9 +28,7 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
   Future<NovelDetailsLoadResult>? _future;
   NovelRepository? _repository;
   DownloadsRepository? _downloadsRepository;
-  StreamSubscription<DownloadBatchProgress>? _downloadSubscription;
-  DownloadBatchProgress? _downloadProgress;
-  bool _isDownloadOverlayVisible = false;
+  DownloadManager? _downloadManager;
 
   @override
   void didChangeDependencies() {
@@ -41,62 +39,42 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
       _future = repository.loadNovel(widget.manifestPath);
     }
 
-    final downloadsRepository = AppDependencies.of(context).downloadsRepository;
+    final dependencies = AppDependencies.of(context);
+    final downloadsRepository = dependencies.downloadsRepository;
     if (_downloadsRepository != downloadsRepository) {
       _downloadsRepository = downloadsRepository;
       unawaited(downloadsRepository.load());
     }
+    _downloadManager = dependencies.downloadManager;
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('تفاصيل الرواية')),
-      body: Stack(
-        children: [
-          FutureBuilder<NovelDetailsLoadResult>(
-            future: _future,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState != ConnectionState.done) {
-                return const _NovelDetailsSkeleton();
-              }
+      body: FutureBuilder<NovelDetailsLoadResult>(
+        future: _future,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const _NovelDetailsSkeleton();
+          }
 
-              if (snapshot.hasError || !snapshot.hasData) {
-                return _DetailsMessage(
-                  title: 'تعذر تحميل تفاصيل الرواية الآن',
-                  actionLabel: 'إعادة المحاولة',
-                  onAction: _retry,
-                );
-              }
+          if (snapshot.hasError || !snapshot.hasData) {
+            return _DetailsMessage(
+              title: 'تعذر تحميل تفاصيل الرواية الآن',
+              actionLabel: 'إعادة المحاولة',
+              onAction: _retry,
+            );
+          }
 
-              return _NovelDetailsContent(
-                result: snapshot.data!,
-                onRead: _openReader,
-                onDownloadChapters: () => _openDownloadSheet(snapshot.data!),
-              );
-            },
-          ),
-          Positioned.fill(
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 180),
-              child: _isDownloadOverlayVisible && _downloadProgress != null
-                  ? DownloadProgressOverlay(
-                      key: const ValueKey('download-progress-overlay'),
-                      progress: _downloadProgress!,
-                      onDismiss: _dismissDownloadOverlay,
-                    )
-                  : const SizedBox.shrink(),
-            ),
-          ),
-        ],
+          return _NovelDetailsContent(
+            result: snapshot.data!,
+            onRead: _openReader,
+            onDownloadChapters: () => _openDownloadSheet(snapshot.data!),
+          );
+        },
       ),
     );
-  }
-
-  @override
-  void dispose() {
-    _downloadSubscription?.cancel();
-    super.dispose();
   }
 
   void _retry() {
@@ -126,7 +104,7 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
     if (repository == null || result.chapters.isEmpty) {
       return;
     }
-    if (_downloadProgress != null && !_downloadProgress!.isComplete) {
+    if (_downloadManager?.state.value.isActive ?? false) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('يوجد تنزيل جار بالفعل')));
@@ -157,8 +135,8 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
     NovelDetailsLoadResult result,
     List<NovelChapter> chapters,
   ) {
-    final repository = _downloadsRepository;
-    if (repository == null || chapters.isEmpty) {
+    final manager = _downloadManager;
+    if (manager == null || chapters.isEmpty) {
       return;
     }
 
@@ -173,58 +151,12 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
         )
         .toList(growable: false);
 
-    _downloadSubscription?.cancel();
-    setState(() {
-      _downloadProgress = DownloadBatchProgress(
-        novelTitle: result.details.title,
-        novelCover: result.details.bestCover,
-        total: requests.length,
-        completed: 0,
-        failed: 0,
-        isComplete: false,
-      );
-      _isDownloadOverlayVisible = true;
-    });
-
-    _downloadSubscription = repository
-        .downloadChaptersBatch(requests)
-        .listen(
-          (progress) {
-            if (!mounted) {
-              return;
-            }
-            setState(() => _downloadProgress = progress);
-          },
-          onError: (Object error, StackTrace stackTrace) {
-            if (!mounted) {
-              return;
-            }
-            setState(() {
-              _downloadProgress = null;
-              _isDownloadOverlayVisible = false;
-            });
-            final message = error is DownloadLimitExceededException
-                ? 'وصلت إلى حد 100 فصل محمل'
-                : 'تعذر إكمال تنزيل الفصول';
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(SnackBar(content: Text(message)));
-          },
-        );
-  }
-
-  void _dismissDownloadOverlay() {
-    setState(() {
-      _isDownloadOverlayVisible = false;
-    });
-    final progress = _downloadProgress;
-    if (progress != null && progress.isComplete) {
-      final message = progress.failed == 0
-          ? 'اكتمل تحميل ${progress.completed} فصل'
-          : 'تم تحميل ${progress.completed} فصل، فشل ${progress.failed}';
+    try {
+      unawaited(manager.startBatch(requests).catchError((_) {}));
+    } on DownloadJobInProgressException {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(message)));
+      ).showSnackBar(const SnackBar(content: Text('يوجد تنزيل جار بالفعل')));
     }
   }
 }
@@ -432,7 +364,9 @@ class _ChaptersSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final chapters = result.chapters;
-    final downloadsRepository = AppDependencies.of(context).downloadsRepository;
+    final dependencies = AppDependencies.of(context);
+    final downloadsRepository = dependencies.downloadsRepository;
+    final downloadManager = dependencies.downloadManager;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -474,11 +408,8 @@ class _ChaptersSection extends StatelessWidget {
                           chapter.effectiveContentApi,
                         ),
                         isEnabled: chapter.effectiveContentApi.isNotEmpty,
-                        onPressed: () => _downloadChapter(
-                          context,
-                          downloadsRepository,
-                          chapter,
-                        ),
+                        onPressed: () =>
+                            _downloadChapter(context, downloadManager, chapter),
                       ),
                       onTap: () {
                         if (chapter.effectiveContentApi.isNotEmpty) {
@@ -496,11 +427,11 @@ class _ChaptersSection extends StatelessWidget {
 
   Future<void> _downloadChapter(
     BuildContext context,
-    DownloadsRepository repository,
+    DownloadManager manager,
     NovelChapter chapter,
   ) async {
     try {
-      await repository.downloadChapter(
+      await manager.downloadChapter(
         ChapterDownloadRequest(
           novelId: result.details.id,
           novelTitle: result.details.title,
@@ -512,6 +443,12 @@ class _ChaptersSection extends StatelessWidget {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('تم تحميل الفصل')));
+      }
+    } on DownloadJobInProgressException {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('يوجد تنزيل جار بالفعل')));
       }
     } on DownloadLimitExceededException {
       if (context.mounted) {

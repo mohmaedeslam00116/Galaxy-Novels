@@ -7,3 +7,11 @@ abstract class LocalDownloadStore {
 
   Future<void> writeChapters(List<DownloadedChapter> chapters);
 }
+
+abstract interface class ClearableDownloadStore {
+  Future<void> clear();
+}
+
+abstract interface class DownloadContentStore {
+  Future<String?> readChapterContent(DownloadedChapter chapter);
+}

@@ -14,6 +14,7 @@ import 'package:galaxy_novels_app/data/repositories/fake_rankings_repository.dar
 import 'package:galaxy_novels_app/data/repositories/fake_search_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/reader_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/reading_history_repository.dart';
+import 'package:galaxy_novels_app/features/downloads/application/download_manager.dart';
 import 'package:galaxy_novels_app/features/downloads/presentation/downloads_screen.dart';
 
 void main() {
@@ -85,6 +86,7 @@ class _DownloadsTestApp extends StatelessWidget {
       searchRepository: const FakeSearchRepository(),
       readingHistoryRepository: const _TestReadingHistoryRepository(),
       downloadsRepository: downloadsRepository,
+      downloadManager: DownloadManager(repository: downloadsRepository),
       child: MaterialApp(
         locale: const Locale('ar'),
         theme: ThemeData(useMaterial3: true),

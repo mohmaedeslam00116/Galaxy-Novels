@@ -67,7 +67,7 @@ class DownloadedChapter {
     };
   }
 
-  DownloadedChapter copyWith({DateTime? lastOpenedAt}) {
+  DownloadedChapter copyWith({DateTime? lastOpenedAt, String? contentHtml}) {
     return DownloadedChapter(
       novelId: novelId,
       novelTitle: novelTitle,
@@ -78,7 +78,7 @@ class DownloadedChapter {
       chapterPosition: chapterPosition,
       chaptersTotal: chaptersTotal,
       contentApi: contentApi,
-      contentHtml: contentHtml,
+      contentHtml: contentHtml ?? this.contentHtml,
       plainTextPreview: plainTextPreview,
       downloadedAt: downloadedAt,
       lastOpenedAt: lastOpenedAt ?? this.lastOpenedAt,

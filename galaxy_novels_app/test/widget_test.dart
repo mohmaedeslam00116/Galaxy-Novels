@@ -289,6 +289,7 @@ void main() {
         catalogRepository: const _TestCatalogRepository(),
         novelRepository: const _TestNovelRepository(),
         readerRepository: const _TestReaderRepository(),
+        downloadsRepository: FakeDownloadsRepository(),
       ),
     );
     await tester.pumpAndSettle();
@@ -315,8 +316,7 @@ void main() {
     expect(find.text('الفصل 1'), findsOneWidget);
 
     await tester.tap(find.text('ابدأ القراءة'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pumpAndSettle();
 
     expect(find.text('الفصل 1'), findsWidgets);
     expect(find.text('قارئ تجريبي'), findsOneWidget);
