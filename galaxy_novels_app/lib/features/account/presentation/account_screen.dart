@@ -1,27 +1,43 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
-class AccountScreen extends StatelessWidget {
+import '../../../app/app_dependencies.dart';
+import '../application/auth_repository.dart';
+import '../domain/auth_session.dart';
+import 'widgets/account_session_view.dart';
+
+class AccountScreen extends StatefulWidget {
   const AccountScreen({super.key});
 
   @override
+  State<AccountScreen> createState() => _AccountScreenState();
+}
+
+class _AccountScreenState extends State<AccountScreen> {
+  AuthRepository? _repository;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final repository = AppDependencies.of(context).authRepository;
+    if (_repository == repository) {
+      return;
+    }
+
+    _repository = repository;
+    if (repository.value.status == AuthSessionStatus.idle) {
+      unawaited(repository.restoreSession());
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final repository = _repository!;
 
     return Scaffold(
       appBar: AppBar(title: const Text('حسابي')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Text(
-            'سجّل الدخول لمزامنة القراءة والمفضلة و XP.',
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 16),
-          FilledButton(onPressed: () {}, child: const Text('تسجيل الدخول')),
-        ],
-      ),
+      body: AccountSessionView(repository: repository),
     );
   }
 }

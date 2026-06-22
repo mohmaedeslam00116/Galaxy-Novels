@@ -16,6 +16,7 @@ import 'package:galaxy_novels_app/features/downloads/application/download_manage
 import 'package:galaxy_novels_app/features/history/presentation/history_screen.dart';
 
 import '../../helpers/fake_reader_preferences_repository.dart';
+import '../../helpers/fake_auth_repository.dart';
 
 void main() {
   testWidgets('renders saved reading history entries', (tester) async {
@@ -98,6 +99,7 @@ class _HistoryTestApp extends StatelessWidget {
       downloadsRepository: downloadsRepository,
       downloadManager: DownloadManager(repository: downloadsRepository),
       readerPreferencesRepository: FakeReaderPreferencesRepository(),
+      authRepository: FakeAuthRepository(),
       child: const MaterialApp(
         locale: Locale('ar'),
         home: Scaffold(

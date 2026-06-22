@@ -1,6 +1,6 @@
 # تدقيق حالة التطبيق والـ API
 
-تاريخ التدقيق: 21 يونيو 2026
+تاريخ آخر تحديث: 22 يونيو 2026
 
 ## الهدف
 
@@ -75,7 +75,7 @@ flowchart TD
 
 | المجال | Endpoints | حالة التطبيق |
 |---|---|---|
-| الجلسة | `POST /auth/login`, `POST /auth/logout`, `GET /session`, `GET /me` | غير منفذ. شاشة حسابي placeholder وزر الدخول بلا فعل. |
+| الجلسة | `POST /auth/login`, `POST /auth/logout`, `GET /session`, `GET /me` | منفذ جزئيا. يوجد `PrivateApiClient` بذاكرة كوكيز وnonce و`no-store`، وتعمل استعادة `/session` وحالات الحساب. تسجيل الدخول والخروج و`/me` والحفظ الآمن لم تنفذ بعد. |
 | حالة الرواية للمستخدم | `GET /me/novels/{novel_id}` | غير منفذ. |
 | المفضلة | `GET /me/favorites`, `POST /me/favorites/sync` | غير منفذ. زر التفاصيل placeholder ووجهة Drawer غير فعالة. |
 | السجل البعيد | `GET /me/history`, `GET /me/history/novel/{id}` | غير منفذ. |
@@ -113,8 +113,8 @@ flowchart TD
 
 ### المرحلة 2: أساس الجلسة والحساب
 
-1. `PrivateApiClient` موحد للكوكيز وnonce و`no-store` وUser-Agent حسب المنصة.
-2. `AuthRepository` مع restore session وتسجيل الدخول والخروج.
+1. `PrivateApiClient` موحد للكوكيز وnonce و`no-store`، ويأخذ User-Agent من `AppConfig`. (الأساس مكتمل، والكوكيز ذاكرية فقط حاليا)
+2. `AuthRepository` مع restore session وتسجيل الدخول والخروج. (استعادة `/session` مكتملة، والدخول والخروج هما الخطوة التالية)
 3. تخزين آمن للجلسة، ومعالجة انتهاء nonce و401.
 4. شاشة حساب فعلية وحالات ضيف/تحميل/خطأ/مسجل.
 
@@ -138,4 +138,4 @@ flowchart TD
 
 ## الخطوة التالية مباشرة
 
-نبدأ أساس الجلسة والحساب بإنشاء `PrivateApiClient` موحد ثم استعادة جلسة الضيف من `/session`، دون البدء في المفضلة أو VIP قبل ثبات المصادقة.
+نضيف تسجيل الدخول والخروج إلى `AuthRepository`، ثم ننقل كوكيز الجلسة إلى تخزين آمن ونختبر استعادة حساب حقيقي وانتهاء nonce و401. لا تبدأ المفضلة أو VIP قبل اكتمال هذه الدورة.

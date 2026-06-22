@@ -18,6 +18,7 @@ import 'package:galaxy_novels_app/features/novel_details/presentation/novel_deta
 import 'package:galaxy_novels_app/features/novel_details/presentation/widgets/novel_chapter_tile.dart';
 
 import '../../helpers/fake_reader_preferences_repository.dart';
+import '../../helpers/fake_auth_repository.dart';
 
 void main() {
   testWidgets('builds long chapter lists lazily and searches locally', (
@@ -91,6 +92,7 @@ class _TestApp extends StatelessWidget {
       downloadsRepository: downloadsRepository,
       downloadManager: DownloadManager(repository: downloadsRepository),
       readerPreferencesRepository: FakeReaderPreferencesRepository(),
+      authRepository: FakeAuthRepository(),
       child: const MaterialApp(
         locale: Locale('ar'),
         home: Directionality(

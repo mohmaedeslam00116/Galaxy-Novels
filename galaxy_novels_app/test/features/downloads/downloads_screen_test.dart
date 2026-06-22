@@ -18,6 +18,7 @@ import 'package:galaxy_novels_app/features/downloads/application/download_manage
 import 'package:galaxy_novels_app/features/downloads/presentation/downloads_screen.dart';
 
 import '../../helpers/fake_reader_preferences_repository.dart';
+import '../../helpers/fake_auth_repository.dart';
 
 void main() {
   testWidgets('renders downloaded chapters grouped by novel', (tester) async {
@@ -96,6 +97,7 @@ class _DownloadsTestApp extends StatelessWidget {
       downloadsRepository: downloadsRepository,
       downloadManager: DownloadManager(repository: downloadsRepository),
       readerPreferencesRepository: FakeReaderPreferencesRepository(),
+      authRepository: FakeAuthRepository(),
       child: MaterialApp(
         locale: const Locale('ar'),
         theme: ThemeData(useMaterial3: true),

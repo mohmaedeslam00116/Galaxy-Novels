@@ -20,7 +20,9 @@ import 'package:galaxy_novels_app/data/repositories/reading_history_repository.d
 import 'package:galaxy_novels_app/data/repositories/rankings_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/search_repository.dart';
 import 'package:galaxy_novels_app/features/about/presentation/about_screen.dart';
+import 'package:galaxy_novels_app/features/account/domain/auth_session.dart';
 
+import 'helpers/fake_auth_repository.dart';
 import 'helpers/fake_reader_preferences_repository.dart';
 
 void main() {
@@ -55,6 +57,9 @@ void main() {
         homeRepository: _TestHomeRepository(_homeData),
         catalogRepository: const _TestCatalogRepository(),
         novelRepository: const _TestNovelRepository(),
+        authRepository: FakeAuthRepository(
+          initialState: const AuthSessionState.idle(),
+        ),
       ),
     );
     await tester.pumpAndSettle();

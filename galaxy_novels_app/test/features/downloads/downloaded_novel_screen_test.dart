@@ -17,6 +17,7 @@ import 'package:galaxy_novels_app/features/downloads/application/download_manage
 import 'package:galaxy_novels_app/features/downloads/presentation/downloaded_novel_screen.dart';
 
 import '../../helpers/fake_reader_preferences_repository.dart';
+import '../../helpers/fake_auth_repository.dart';
 
 void main() {
   testWidgets('opens a downloaded chapter in the native reader', (
@@ -116,6 +117,7 @@ class _TestApp extends StatelessWidget {
       downloadsRepository: repository,
       downloadManager: DownloadManager(repository: repository),
       readerPreferencesRepository: FakeReaderPreferencesRepository(),
+      authRepository: FakeAuthRepository(),
       child: const MaterialApp(
         locale: Locale('ar'),
         home: Directionality(
