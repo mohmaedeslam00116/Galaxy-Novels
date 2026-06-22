@@ -69,6 +69,37 @@ void main() {
     });
   });
 
+  test('exports and imports a complete in-memory session snapshot', () async {
+    final responses = <PrivateRawResponse>[
+      const PrivateRawResponse(
+        statusCode: 200,
+        body: '{"logged_in":true,"nonce":"persisted-nonce"}',
+        setCookieHeaders: [
+          'wordpress_logged_in_test=persisted-cookie; Path=/; Secure; HttpOnly',
+        ],
+      ),
+    ];
+    final source = PrivateApiClient(
+      config: const AppConfig(siteBaseUrl: 'https://example.com/'),
+      requestSender: (request) async => responses.removeAt(0),
+    );
+    await source.getPublic('session');
+    final snapshot = source.exportSessionSnapshot();
+
+    late PrivateRawRequest restoredRequest;
+    final restored = PrivateApiClient(
+      config: const AppConfig(siteBaseUrl: 'https://example.com/'),
+      requestSender: (request) async {
+        restoredRequest = request;
+        return const PrivateRawResponse(statusCode: 200, body: '{}');
+      },
+    )..importSessionSnapshot(snapshot!);
+    await restored.getAuthenticated('me');
+
+    expect(restoredRequest.headers['X-WP-Nonce'], 'persisted-nonce');
+    expect(restoredRequest.headers['Cookie'], contains('persisted-cookie'));
+  });
+
   test(
     'fails before the network when an authenticated nonce is missing',
     () async {

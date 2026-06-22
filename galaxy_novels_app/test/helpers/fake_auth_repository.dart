@@ -8,10 +8,22 @@ class FakeAuthRepository extends ValueNotifier<AuthSessionState>
     AuthSessionState initialState = const AuthSessionState.guest(),
   }) : super(initialState);
 
+  LoginCredentials? lastLogin;
+
   @override
   Future<void> restoreSession() async {
     if (value.status == AuthSessionStatus.idle) {
       value = const AuthSessionState.guest();
     }
+  }
+
+  @override
+  Future<void> login(LoginCredentials credentials) async {
+    lastLogin = credentials;
+  }
+
+  @override
+  Future<void> logout() async {
+    value = const AuthSessionState.guest();
   }
 }

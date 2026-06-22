@@ -27,6 +27,25 @@ class PrivateApiClient {
 
   String? get nonce => _nonce;
 
+  PrivateSessionSnapshot? exportSessionSnapshot() {
+    final nonce = _nonce;
+    if (nonce == null) {
+      return null;
+    }
+    final cookieHeader = _cookieStore.headerFor(_resolveEndpoint('session'));
+    if (cookieHeader == null || cookieHeader.isEmpty) {
+      return null;
+    }
+    return PrivateSessionSnapshot(nonce: nonce, cookieHeader: cookieHeader);
+  }
+
+  void importSessionSnapshot(PrivateSessionSnapshot snapshot) {
+    clearSession();
+    final endpoint = _resolveEndpoint('session');
+    _cookieStore.restoreRequestHeader(endpoint, snapshot.cookieHeader);
+    updateNonce(snapshot.nonce);
+  }
+
   Future<Map<String, dynamic>> getPublic(String path) => _request('GET', path);
 
   Future<Map<String, dynamic>> getAuthenticated(String path) async {

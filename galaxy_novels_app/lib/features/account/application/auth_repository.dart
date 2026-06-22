@@ -5,5 +5,9 @@ import '../domain/auth_session.dart';
 abstract class AuthRepository implements ValueListenable<AuthSessionState> {
   Future<void> restoreSession();
 
+  Future<void> login(LoginCredentials credentials);
+
+  Future<void> logout();
+
   void dispose();
 }

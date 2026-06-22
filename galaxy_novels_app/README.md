@@ -1,17 +1,28 @@
-# galaxy_novels_app
+# مجرة الروايات
 
-A new Flutter project.
+تطبيق Flutter عربي لقراءة روايات `galaxynovels.com` بواجهة Native وقارئ فصول دون WebView.
 
-## Getting Started
+## التشغيل
 
-This project is a starting point for a Flutter application.
+```bash
+flutter pub get
+flutter run
+```
 
-A few resources to get you started if this is your first Flutter project:
+## التحقق
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+```bash
+flutter analyze
+flutter test
+flutter build apk --debug
+```
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## متطلبات المنصات
+
+- Android 7.0 (API 24) أو أحدث، وهو الحد الافتراضي في Flutter 3.41 المستخدم لبناء المشروع.
+- Android Backup معطل حتى لا تنتقل البيانات المشفرة دون مفاتيحها.
+- مشروع iOS مجهز بملفات Keychain entitlements، ويستهدف iOS 13 أو أحدث.
+
+## حالة الـ API
+
+راجع [تدقيق التطبيق والـ API](docs/app_api_gap_audit.md) لمعرفة الأجزاء المنفذة والخطوات التالية.

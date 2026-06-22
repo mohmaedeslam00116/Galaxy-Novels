@@ -28,6 +28,7 @@ import '../data/repositories/shared_preferences_reading_history_store.dart';
 import '../data/repositories/stored_downloads_repository.dart';
 import '../data/repositories/stored_reading_history_repository.dart';
 import '../features/account/application/auth_repository.dart';
+import '../features/account/data/secure_auth_session_store.dart';
 import '../features/account/data/session_auth_repository.dart';
 import '../features/downloads/application/download_manager.dart';
 import '../features/downloads/presentation/download_activity_layer.dart';
@@ -231,6 +232,7 @@ class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
   SessionAuthRepository _defaultAuthRepositoryFor() {
     return _defaultAuthRepository ??= SessionAuthRepository(
       client: PrivateApiClient(config: widget.config),
+      sessionStore: SecureAuthSessionStore(),
     );
   }
 

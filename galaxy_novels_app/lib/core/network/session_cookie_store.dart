@@ -5,6 +5,8 @@ abstract interface class SessionCookieStore {
 
   void absorb(Uri origin, Iterable<String> setCookieHeaders);
 
+  void restoreRequestHeader(Uri origin, String cookieHeader);
+
   void clear();
 }
 
@@ -51,6 +53,32 @@ class InMemorySessionCookieStore implements SessionCookieStore {
   }
 
   @override
+  void restoreRequestHeader(Uri origin, String cookieHeader) {
+    clear();
+    if (cookieHeader.contains('\r') || cookieHeader.contains('\n')) {
+      return;
+    }
+
+    for (final segment in cookieHeader.split(';')) {
+      final cookie = _tryParseRequestCookie(segment);
+      if (cookie == null) {
+        continue;
+      }
+      cookie
+        ..domain = origin.host
+        ..path = '/'
+        ..secure = true;
+      final key = _CookieKey(cookie.name, origin.host, '/');
+      _cookies[key] = _StoredCookie(
+        cookie: cookie,
+        domain: origin.host,
+        path: '/',
+        expiresAt: null,
+      );
+    }
+  }
+
+  @override
   void clear() => _cookies.clear();
 
   void _removeExpired() {
@@ -64,6 +92,25 @@ Cookie? _tryParseCookie(String value) {
   } on FormatException {
     return null;
   } on HttpException {
+    return null;
+  }
+}
+
+Cookie? _tryParseRequestCookie(String segment) {
+  final separator = segment.indexOf('=');
+  if (separator <= 0) {
+    return null;
+  }
+
+  final name = segment.substring(0, separator).trim();
+  final value = segment.substring(separator + 1).trim();
+  if (name.isEmpty) {
+    return null;
+  }
+
+  try {
+    return Cookie(name, value);
+  } on ArgumentError {
     return null;
   }
 }

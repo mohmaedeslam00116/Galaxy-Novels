@@ -1,20 +1,41 @@
-enum AuthSessionStatus { idle, loading, guest, authenticated, failure }
+enum AuthSessionStatus {
+  idle,
+  restoring,
+  guest,
+  authenticating,
+  authenticated,
+  signingOut,
+  failure,
+}
 
 class AuthSessionState {
   const AuthSessionState._({
     required this.status,
     this.user,
     this.errorMessage,
+    this.noticeMessage,
   });
 
   const AuthSessionState.idle() : this._(status: AuthSessionStatus.idle);
 
-  const AuthSessionState.loading() : this._(status: AuthSessionStatus.loading);
+  const AuthSessionState.restoring()
+    : this._(status: AuthSessionStatus.restoring);
 
-  const AuthSessionState.guest() : this._(status: AuthSessionStatus.guest);
+  const AuthSessionState.guest({String? errorMessage})
+    : this._(status: AuthSessionStatus.guest, errorMessage: errorMessage);
 
-  const AuthSessionState.authenticated(AuthUser user)
-    : this._(status: AuthSessionStatus.authenticated, user: user);
+  const AuthSessionState.authenticating()
+    : this._(status: AuthSessionStatus.authenticating);
+
+  const AuthSessionState.authenticated(AuthUser user, {String? noticeMessage})
+    : this._(
+        status: AuthSessionStatus.authenticated,
+        user: user,
+        noticeMessage: noticeMessage,
+      );
+
+  const AuthSessionState.signingOut(AuthUser user)
+    : this._(status: AuthSessionStatus.signingOut, user: user);
 
   const AuthSessionState.failure(String message)
     : this._(status: AuthSessionStatus.failure, errorMessage: message);
@@ -22,6 +43,19 @@ class AuthSessionState {
   final AuthSessionStatus status;
   final AuthUser? user;
   final String? errorMessage;
+  final String? noticeMessage;
+}
+
+class LoginCredentials {
+  const LoginCredentials({
+    required this.username,
+    required this.password,
+    required this.rememberSession,
+  });
+
+  final String username;
+  final String password;
+  final bool rememberSession;
 }
 
 class AuthUser {

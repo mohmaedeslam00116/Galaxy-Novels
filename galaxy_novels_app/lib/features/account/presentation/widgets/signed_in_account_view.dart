@@ -3,9 +3,18 @@ import 'package:flutter/material.dart';
 import '../../domain/auth_session.dart';
 
 class SignedInAccountView extends StatelessWidget {
-  const SignedInAccountView({required this.user, super.key});
+  const SignedInAccountView({
+    required this.user,
+    required this.isSigningOut,
+    required this.onLogout,
+    this.noticeMessage,
+    super.key,
+  });
 
   final AuthUser user;
+  final bool isSigningOut;
+  final String? noticeMessage;
+  final Future<void> Function() onLogout;
 
   @override
   Widget build(BuildContext context) {
@@ -43,6 +52,15 @@ class SignedInAccountView extends StatelessWidget {
             ),
           ),
         ],
+        if (user.vip.active) ...[
+          const SizedBox(height: 10),
+          Align(
+            child: Chip(
+              avatar: const Icon(Icons.workspace_premium_outlined, size: 18),
+              label: Text(user.vip.label.isEmpty ? 'عضو VIP' : user.vip.label),
+            ),
+          ),
+        ],
         const SizedBox(height: 28),
         Row(
           children: [
@@ -57,6 +75,27 @@ class SignedInAccountView extends StatelessWidget {
               ),
             ),
           ],
+        ),
+        if (noticeMessage case final message?) ...[
+          const SizedBox(height: 20),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.error,
+            ),
+          ),
+        ],
+        const SizedBox(height: 28),
+        OutlinedButton.icon(
+          onPressed: isSigningOut ? null : onLogout,
+          icon: isSigningOut
+              ? const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.logout_rounded),
+          label: Text(isSigningOut ? 'جارٍ تسجيل الخروج...' : 'تسجيل الخروج'),
         ),
       ],
     );

@@ -51,15 +51,18 @@ void main() {
     );
   });
 
-  testWidgets('opens account screen from the drawer', (tester) async {
+  testWidgets('opens account screen and submits login credentials', (
+    tester,
+  ) async {
+    final authRepository = FakeAuthRepository(
+      initialState: const AuthSessionState.idle(),
+    );
     await tester.pumpWidget(
       GalaxyNovelsApp(
         homeRepository: _TestHomeRepository(_homeData),
         catalogRepository: const _TestCatalogRepository(),
         novelRepository: const _TestNovelRepository(),
-        authRepository: FakeAuthRepository(
-          initialState: const AuthSessionState.idle(),
-        ),
+        authRepository: authRepository,
       ),
     );
     await tester.pumpAndSettle();
@@ -72,11 +75,46 @@ void main() {
     await tester.tap(find.text('حسابي'));
     await tester.pumpAndSettle();
 
-    expect(find.text('تسجيل الدخول'), findsOneWidget);
-    expect(
-      find.text('سجّل الدخول لمزامنة القراءة والمفضلة و XP.'),
-      findsOneWidget,
+    expect(find.text('تسجيل الدخول'), findsNWidgets(2));
+    await tester.enterText(
+      find.byKey(const ValueKey('login-username')),
+      'reader@example.com',
     );
+    await tester.enterText(
+      find.byKey(const ValueKey('login-password')),
+      'secret-value',
+    );
+    await tester.tap(find.byKey(const ValueKey('login-submit')));
+    await tester.pump();
+
+    expect(authRepository.lastLogin?.username, 'reader@example.com');
+    expect(authRepository.lastLogin?.password, 'secret-value');
+    expect(authRepository.lastLogin?.rememberSession, isTrue);
+  });
+
+  testWidgets('signed in account can log out', (tester) async {
+    final authRepository = FakeAuthRepository(
+      initialState: const AuthSessionState.authenticated(_testAuthUser),
+    );
+    await tester.pumpWidget(
+      GalaxyNovelsApp(
+        homeRepository: _TestHomeRepository(_homeData),
+        catalogRepository: const _TestCatalogRepository(),
+        novelRepository: const _TestNovelRepository(),
+        authRepository: authRepository,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.menu));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('حسابي'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('قارئ الاختبار'), findsOneWidget);
+    await tester.tap(find.text('تسجيل الخروج'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('login-submit')), findsOneWidget);
   });
 
   testWidgets('drawer exposes only working destinations and opens about', (
@@ -726,6 +764,20 @@ const _homeData = HomeData(
       manifest: '/novel-home-test.json',
     ),
   ],
+);
+
+const _testAuthUser = AuthUser(
+  id: 7,
+  displayName: 'قارئ الاختبار',
+  avatar: null,
+  vip: AuthVip(active: false, tier: '', label: '', expiresAt: null),
+  xp: AuthXp(
+    total: 120,
+    today: 10,
+    secondsTotal: 600,
+    chaptersTotal: 8,
+    rank: AuthRank(level: 2, display: 'مستكشف'),
+  ),
 );
 
 class _TestHomeRepository implements HomeRepository {

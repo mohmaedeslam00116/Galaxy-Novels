@@ -36,4 +36,27 @@ void main() {
 
     expect(store.headerFor(Uri.parse('https://example.com/me')), isNull);
   });
+
+  test('restores a persisted request cookie header for HTTPS only', () {
+    final store = InMemorySessionCookieStore();
+    final origin = Uri.parse('https://example.com/wp-json/session');
+
+    store.restoreRequestHeader(origin, 'session=one; preference=two');
+
+    expect(
+      store.headerFor(Uri.parse('https://example.com/wp-json/me')),
+      allOf(contains('session=one'), contains('preference=two')),
+    );
+    expect(store.headerFor(Uri.parse('http://example.com/wp-json/me')), isNull);
+  });
+
+  test('rejects persisted cookie headers containing line breaks', () {
+    final store = InMemorySessionCookieStore();
+    store.restoreRequestHeader(
+      Uri.parse('https://example.com/session'),
+      'session=one\r\nInjected: value',
+    );
+
+    expect(store.headerFor(Uri.parse('https://example.com/me')), isNull);
+  });
 }

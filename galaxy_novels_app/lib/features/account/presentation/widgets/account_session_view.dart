@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/auth_repository.dart';
 import '../../domain/auth_session.dart';
+import 'login_account_view.dart';
 import 'signed_in_account_view.dart';
 
 class AccountSessionView extends StatelessWidget {
@@ -16,14 +17,23 @@ class AccountSessionView extends StatelessWidget {
       builder: (context, state, _) {
         return switch (state.status) {
           AuthSessionStatus.idle ||
-          AuthSessionStatus.loading => const _LoadingAccount(),
-          AuthSessionStatus.guest => const _GuestAccount(),
+          AuthSessionStatus.restoring => const _LoadingAccount(),
+          AuthSessionStatus.guest ||
+          AuthSessionStatus.authenticating => LoginAccountView(
+            errorMessage: state.errorMessage,
+            isSubmitting: state.status == AuthSessionStatus.authenticating,
+            onLogin: repository.login,
+          ),
           AuthSessionStatus.failure => _AccountFailure(
             message: state.errorMessage ?? 'تعذر التحقق من الجلسة.',
             onRetry: repository.restoreSession,
           ),
-          AuthSessionStatus.authenticated => SignedInAccountView(
+          AuthSessionStatus.authenticated ||
+          AuthSessionStatus.signingOut => SignedInAccountView(
             user: state.user!,
+            noticeMessage: state.noticeMessage,
+            isSigningOut: state.status == AuthSessionStatus.signingOut,
+            onLogout: repository.logout,
           ),
         };
       },
@@ -36,52 +46,43 @@ class _LoadingAccount extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          CircularProgressIndicator(),
-          SizedBox(height: 16),
-          Text('جارٍ التحقق من الجلسة...'),
-        ],
-      ),
-    );
-  }
-}
-
-class _GuestAccount extends StatelessWidget {
-  const _GuestAccount();
-
-  @override
-  Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final placeholder = theme.colorScheme.surfaceContainerHighest;
     return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 32, 20, 24),
+      padding: const EdgeInsets.fromLTRB(24, 40, 24, 24),
       children: [
-        Icon(
-          Icons.person_outline_rounded,
-          size: 64,
-          color: theme.colorScheme.primary,
-        ),
-        const SizedBox(height: 20),
-        Text(
-          'أنت تتصفح كزائر',
-          textAlign: TextAlign.center,
-          style: theme.textTheme.headlineSmall?.copyWith(
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'سجّل الدخول لمزامنة القراءة والمفضلة و XP.',
-          textAlign: TextAlign.center,
-          style: theme.textTheme.bodyLarge?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-            height: 1.6,
+        Align(
+          child: Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(
+              color: placeholder,
+              shape: BoxShape.circle,
+            ),
           ),
         ),
         const SizedBox(height: 24),
-        const FilledButton(onPressed: null, child: Text('تسجيل الدخول')),
+        Align(
+          child: Container(
+            width: 160,
+            height: 20,
+            decoration: BoxDecoration(
+              color: placeholder,
+              borderRadius: BorderRadius.circular(6),
+            ),
+          ),
+        ),
+        const SizedBox(height: 28),
+        for (var index = 0; index < 2; index++) ...[
+          Container(
+            height: 56,
+            decoration: BoxDecoration(
+              color: placeholder,
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
       ],
     );
   }

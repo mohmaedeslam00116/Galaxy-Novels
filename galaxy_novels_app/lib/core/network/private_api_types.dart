@@ -1,6 +1,16 @@
 typedef PrivateRequestSender =
     Future<PrivateRawResponse> Function(PrivateRawRequest request);
 
+class PrivateSessionSnapshot {
+  const PrivateSessionSnapshot({
+    required this.nonce,
+    required this.cookieHeader,
+  });
+
+  final String nonce;
+  final String cookieHeader;
+}
+
 class PrivateRawRequest {
   PrivateRawRequest({
     required this.method,
