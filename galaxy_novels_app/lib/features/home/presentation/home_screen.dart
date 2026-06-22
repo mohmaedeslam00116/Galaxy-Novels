@@ -1,20 +1,18 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/app_dependencies.dart';
-import '../../../app/app_theme.dart';
 import '../../../data/models/chapter_summary.dart';
 import '../../../data/models/home_data.dart';
 import '../../../data/models/novel_summary.dart';
+import '../../../data/models/reading_progress.dart' as local_progress;
 import '../../../data/repositories/home_repository.dart';
-import '../../../shared/widgets/novel_cover.dart';
-import '../../../shared/widgets/novel_list_row.dart';
+import '../../../data/repositories/reading_history_repository.dart';
 import '../../../shared/widgets/novel_poster_tile.dart';
 import '../../../shared/widgets/section_title.dart';
 import '../../novel_details/presentation/novel_details_screen.dart';
-
-enum _LatestUpdatesView { list, grid }
-
-const double _latestUpdateCardHeight = 150;
+import '../../reader/presentation/reader_screen.dart';
+import 'home_continue_reading.dart';
+import 'latest_updates_section.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -25,18 +23,33 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   HomeRepository? _repository;
+  ReadingHistoryRepository? _historyRepository;
   Future<HomeData>? _homeFuture;
-  _LatestUpdatesView _latestUpdatesView = _LatestUpdatesView.list;
+  Future<List<local_progress.ReadingProgress>>? _historyFuture;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
 
-    final repository = AppDependencies.of(context).homeRepository;
+    final dependencies = AppDependencies.of(context);
+    final repository = dependencies.homeRepository;
+    final historyRepository = dependencies.readingHistoryRepository;
     if (_repository != repository) {
       _repository = repository;
       _homeFuture = repository.loadHome();
     }
+    if (_historyRepository != historyRepository) {
+      _historyRepository?.removeListener(_refreshHistory);
+      _historyRepository = historyRepository;
+      historyRepository.addListener(_refreshHistory);
+      _historyFuture = historyRepository.load();
+    }
+  }
+
+  @override
+  void dispose() {
+    _historyRepository?.removeListener(_refreshHistory);
+    super.dispose();
   }
 
   @override
@@ -53,72 +66,125 @@ class _HomeScreenState extends State<HomeScreen> {
         }
 
         final home = snapshot.data;
-        if (home == null || home.isEmpty) {
+        if (home == null) {
           return const _HomeStateMessage(message: 'لا توجد بيانات للعرض');
         }
 
-        final novelsById = {
-          for (final novel in home.recentNovels) novel.id: novel,
-        };
-
-        return ListView(
-          padding: const EdgeInsets.only(bottom: 28),
-          children: [
-            if (home.recentNovels.isNotEmpty)
-              _FeaturedNovelsShelf(
-                novels: home.recentNovels.take(8).toList(),
-                onNovelTap: _openNovelDetails,
-              ),
-            if (home.continueReading != null) ...[
-              const SectionTitle(
-                title: 'أكمل القراءة',
-                leadingIcon: Icons.play_circle_outline_rounded,
-              ),
-              _ContinueReadingTile(progress: home.continueReading!),
-            ],
-            if (home.recentNovels.isNotEmpty) ...[
-              const SectionTitle(
-                title: 'روايات محدثة',
-                leadingIcon: Icons.auto_stories_outlined,
-              ),
-              _RecentNovelsStrip(
-                novels: home.recentNovels,
-                onNovelTap: _openNovelDetails,
-              ),
-            ],
-            if (home.latestChapters.isNotEmpty) ...[
-              _LatestUpdatesHeader(
-                view: _latestUpdatesView,
-                onToggle: () {
-                  setState(() {
-                    _latestUpdatesView =
-                        _latestUpdatesView == _LatestUpdatesView.list
-                        ? _LatestUpdatesView.grid
-                        : _LatestUpdatesView.list;
-                  });
-                },
-              ),
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 180),
-                switchInCurve: Curves.easeOut,
-                switchOutCurve: Curves.easeIn,
-                child: _latestUpdatesView == _LatestUpdatesView.list
-                    ? _LatestUpdatesList(
-                        key: const ValueKey('latest-list'),
-                        chapters: home.latestChapters,
-                        novelsById: novelsById,
-                      )
-                    : _LatestUpdatesGrid(
-                        key: const ValueKey('latest-grid'),
-                        chapters: home.latestChapters,
-                        novelsById: novelsById,
-                        onNovelTap: _openNovelDetails,
-                      ),
-              ),
-            ],
-          ],
+        return FutureBuilder<List<local_progress.ReadingProgress>>(
+          future: _historyFuture,
+          builder: (context, historySnapshot) {
+            final history = historySnapshot.data ?? const [];
+            if (home.isEmpty && history.isEmpty) {
+              return const _HomeStateMessage(message: 'لا توجد بيانات للعرض');
+            }
+            return _buildHome(home, history.isEmpty ? null : history.first);
+          },
         );
       },
+    );
+  }
+
+  Widget _buildHome(
+    HomeData home,
+    local_progress.ReadingProgress? localProgress,
+  ) {
+    final novelsById = {for (final novel in home.recentNovels) novel.id: novel};
+    final HomeContinueReadingEntry? continueReading;
+    if (localProgress != null) {
+      continueReading = HomeContinueReadingEntry.fromLocal(localProgress);
+    } else if (home.continueReading != null) {
+      continueReading = HomeContinueReadingEntry.fromHome(
+        home.continueReading!,
+      );
+    } else {
+      continueReading = null;
+    }
+
+    return ListView(
+      padding: const EdgeInsets.only(bottom: 28),
+      children: [
+        if (home.recentNovels.isNotEmpty)
+          _FeaturedNovelsShelf(
+            novels: home.recentNovels.take(8).toList(),
+            onNovelTap: _openNovelDetails,
+          ),
+        if (continueReading != null) ...[
+          const SectionTitle(
+            title: 'أكمل القراءة',
+            leadingIcon: Icons.play_circle_outline_rounded,
+          ),
+          HomeContinueReadingTile(
+            key: const ValueKey('continue-reading-tile'),
+            progress: continueReading,
+            onTap: _continueReadingAction(continueReading),
+          ),
+        ],
+        if (home.recentNovels.isNotEmpty) ...[
+          const SectionTitle(
+            title: 'روايات محدثة',
+            leadingIcon: Icons.auto_stories_outlined,
+          ),
+          _RecentNovelsStrip(
+            novels: home.recentNovels,
+            onNovelTap: _openNovelDetails,
+          ),
+        ],
+        if (home.latestChapters.isNotEmpty)
+          LatestUpdatesSection(
+            key: const ValueKey('latest-updates-section'),
+            chapters: home.latestChapters,
+            novelsById: novelsById,
+            onChapterTap: _openLatestChapter,
+          ),
+      ],
+    );
+  }
+
+  void _refreshHistory() {
+    final repository = _historyRepository;
+    if (repository == null || !mounted) {
+      return;
+    }
+    setState(() {
+      _historyFuture = repository.load();
+    });
+  }
+
+  void _openContinueReading(HomeContinueReadingEntry progress) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => ReaderScreen(
+          contentApi: progress.contentApi,
+          chapterTitle: progress.chapterTitle,
+          novelTitle: progress.novelTitle,
+        ),
+      ),
+    );
+  }
+
+  VoidCallback? _continueReadingAction(HomeContinueReadingEntry progress) {
+    if (progress.contentApi.isEmpty) {
+      return null;
+    }
+    return () => _openContinueReading(progress);
+  }
+
+  void _openLatestChapter(ChapterSummary chapter) {
+    final contentApi = chapter.effectiveContentApi;
+    if (contentApi.isEmpty) {
+      return;
+    }
+
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => ReaderScreen(
+          contentApi: contentApi,
+          chapterTitle: chapter.label.isNotEmpty
+              ? chapter.label
+              : chapter.title,
+          novelTitle: chapter.novelTitle,
+        ),
+      ),
     );
   }
 
@@ -165,22 +231,6 @@ class _FeaturedNovelsShelf extends StatelessWidget {
   }
 }
 
-class _ContinueReadingTile extends StatelessWidget {
-  const _ContinueReadingTile({required this.progress});
-
-  final ReadingProgress progress;
-
-  @override
-  Widget build(BuildContext context) {
-    return NovelListRow(
-      title: progress.novelTitle,
-      subtitle: progress.chapterLabel,
-      meta: 'تقدم القراءة ${progress.progress}%',
-      leadingLabel: '${progress.progress}%',
-    );
-  }
-}
-
 class _RecentNovelsStrip extends StatelessWidget {
   const _RecentNovelsStrip({required this.novels, required this.onNovelTap});
 
@@ -208,218 +258,6 @@ class _RecentNovelsStrip extends StatelessWidget {
           );
         },
       ),
-    );
-  }
-}
-
-class _LatestUpdatesHeader extends StatelessWidget {
-  const _LatestUpdatesHeader({required this.view, required this.onToggle});
-
-  final _LatestUpdatesView view;
-  final VoidCallback onToggle;
-
-  @override
-  Widget build(BuildContext context) {
-    final showingList = view == _LatestUpdatesView.list;
-
-    return SectionTitle(
-      title: 'آخر تحديثات الروايات',
-      leadingIcon: Icons.update_rounded,
-      action: Tooltip(
-        message: showingList ? 'عرض كجرد ثلاثي' : 'عرض كقائمة',
-        child: IconButton.filledTonal(
-          onPressed: onToggle,
-          icon: Icon(showingList ? Icons.grid_view_rounded : Icons.view_agenda),
-        ),
-      ),
-    );
-  }
-}
-
-class _LatestUpdatesList extends StatelessWidget {
-  const _LatestUpdatesList({
-    required this.chapters,
-    required this.novelsById,
-    super.key,
-  });
-
-  final List<ChapterSummary> chapters;
-  final Map<int, NovelSummary> novelsById;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        for (final chapter in chapters.take(12))
-          _LatestChapterTile(
-            chapter: chapter,
-            novel: novelsById[chapter.novelId],
-          ),
-      ],
-    );
-  }
-}
-
-class _LatestChapterTile extends StatelessWidget {
-  const _LatestChapterTile({required this.chapter, required this.novel});
-
-  final ChapterSummary chapter;
-  final NovelSummary? novel;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final tokens = theme.extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
-    final previewChapters = chapter.visibleChapters.take(3).toList();
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        onTap: () {},
-        child: Ink(
-          height: _latestUpdateCardHeight,
-          decoration: BoxDecoration(
-            color: tokens.surface,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: tokens.border),
-          ),
-          child: Row(
-            children: [
-              NovelCover(
-                title: chapter.novelTitle,
-                imageUrl: novel?.coverThumbnail ?? '',
-                width: 104,
-                height: _latestUpdateCardHeight,
-                borderRadius: 8,
-              ),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        chapter.novelTitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w900,
-                          height: 1.2,
-                        ),
-                      ),
-                      const SizedBox(height: 5),
-                      for (final item in previewChapters)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 3),
-                          child: _ChapterLine(item: item),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ChapterLine extends StatelessWidget {
-  const _ChapterLine({required this.item});
-
-  final ChapterSummaryItem item;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final tokens = theme.extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
-
-    return Row(
-      children: [
-        Container(
-          width: 30,
-          height: 28,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: tokens.primary.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(
-            Icons.bookmark_border_rounded,
-            size: 16,
-            color: tokens.primary,
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            item.label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w900,
-              height: 1.1,
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        SizedBox(
-          width: 76,
-          child: Text(
-            item.dateLabel,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.left,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: tokens.textSecondary,
-              height: 1.1,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _LatestUpdatesGrid extends StatelessWidget {
-  const _LatestUpdatesGrid({
-    required this.chapters,
-    required this.novelsById,
-    required this.onNovelTap,
-    super.key,
-  });
-
-  final List<ChapterSummary> chapters;
-  final Map<int, NovelSummary> novelsById;
-  final ValueChanged<String> onNovelTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GridView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: chapters.take(18).length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 16,
-        mainAxisExtent: NovelPosterTile.height,
-      ),
-      itemBuilder: (context, index) {
-        final chapter = chapters[index];
-        final novel = novelsById[chapter.novelId];
-        return NovelPosterTile(
-          title: chapter.novelTitle,
-          imageUrl: novel?.coverThumbnail ?? '',
-          statusLabel: novel?.statusLabel ?? '',
-          onTap: novel == null || novel.manifest.isEmpty
-              ? null
-              : () => onNovelTap(novel.manifest),
-        );
-      },
     );
   }
 }

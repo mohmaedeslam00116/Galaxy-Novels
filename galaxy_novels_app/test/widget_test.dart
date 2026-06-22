@@ -7,6 +7,8 @@ import 'package:galaxy_novels_app/data/models/home_data.dart';
 import 'package:galaxy_novels_app/data/models/novel_details_data.dart';
 import 'package:galaxy_novels_app/data/models/novel_summary.dart';
 import 'package:galaxy_novels_app/data/models/reader_content_data.dart';
+import 'package:galaxy_novels_app/data/models/reading_progress.dart'
+    as local_progress;
 import 'package:galaxy_novels_app/data/models/rankings_data.dart';
 import 'package:galaxy_novels_app/data/models/search_index_data.dart';
 import 'package:galaxy_novels_app/data/repositories/catalog_repository.dart';
@@ -14,6 +16,7 @@ import 'package:galaxy_novels_app/data/repositories/fake_downloads_repository.da
 import 'package:galaxy_novels_app/data/repositories/home_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/novel_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/reader_repository.dart';
+import 'package:galaxy_novels_app/data/repositories/reading_history_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/rankings_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/search_repository.dart';
 
@@ -135,6 +138,81 @@ void main() {
     await _scrollHomeDown(tester);
 
     expect(find.text('الفصل 5'), findsOneWidget);
+  });
+
+  testWidgets('home prefers local history and continues in native reader', (
+    tester,
+  ) async {
+    final historyRepository = _TestReadingHistoryRepository();
+    String? requestedContentApi;
+    await tester.pumpWidget(
+      GalaxyNovelsApp(
+        homeRepository: _TestHomeRepository(_homeData),
+        catalogRepository: const _TestCatalogRepository(),
+        novelRepository: const _TestNovelRepository(),
+        readerRepository: _TestReaderRepository(
+          onLoad: (value) => requestedContentApi = value,
+        ),
+        readingHistoryRepository: historyRepository,
+        downloadsRepository: FakeDownloadsRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('اختبار المجرة'), findsOneWidget);
+
+    await historyRepository.record(
+      local_progress.ReadingProgress(
+        novelId: 99,
+        novelTitle: 'رواية السجل المحلي',
+        chapterId: 2,
+        chapterTitle: 'الفصل 2',
+        contentApi: '/wp-json/wor-reader-app/v1/chapters/2',
+        chapterPosition: 2,
+        chaptersTotal: 100,
+        updatedAt: DateTime.utc(2026, 6, 22),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('رواية السجل المحلي'), findsOneWidget);
+    expect(find.text('2%'), findsOneWidget);
+    expect(find.text('اختبار المجرة'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('continue-reading-tile')));
+    await tester.pumpAndSettle();
+
+    expect(requestedContentApi, '/wp-json/wor-reader-app/v1/chapters/2');
+    expect(find.text('قارئ تجريبي'), findsOneWidget);
+  });
+
+  testWidgets('latest update opens its newest chapter in native reader', (
+    tester,
+  ) async {
+    String? requestedContentApi;
+    await tester.pumpWidget(
+      GalaxyNovelsApp(
+        homeRepository: _TestHomeRepository(_homeData),
+        catalogRepository: const _TestCatalogRepository(),
+        novelRepository: const _TestNovelRepository(),
+        readerRepository: _TestReaderRepository(
+          onLoad: (value) => requestedContentApi = value,
+        ),
+        readingHistoryRepository: _TestReadingHistoryRepository(),
+        downloadsRepository: FakeDownloadsRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final latestUpdate = find.byKey(const ValueKey('latest-update-5'));
+    await _scrollHomeDown(tester);
+    await tester.ensureVisible(latestUpdate);
+    await tester.pumpAndSettle();
+    await tester.tap(latestUpdate);
+    await tester.pumpAndSettle();
+
+    expect(requestedContentApi, '/wp-json/wor-reader-app/v1/chapters/5');
+    expect(find.text('قارئ تجريبي'), findsOneWidget);
   });
 
   testWidgets('latest updates can switch between list and three-column grid', (
@@ -825,10 +903,13 @@ class _TestNovelRepository implements NovelRepository {
 }
 
 class _TestReaderRepository implements ReaderRepository {
-  const _TestReaderRepository();
+  const _TestReaderRepository({this.onLoad});
+
+  final ValueChanged<String>? onLoad;
 
   @override
   Future<ReaderChapterContent> loadChapter(String contentApi) async {
+    onLoad?.call(contentApi);
     return const ReaderChapterContent(
       id: 1,
       novelId: 99,
@@ -845,5 +926,29 @@ class _TestReaderRepository implements ReaderRepository {
         nextId: 0,
       ),
     );
+  }
+}
+
+class _TestReadingHistoryRepository extends ChangeNotifier
+    implements ReadingHistoryRepository {
+  _TestReadingHistoryRepository({
+    List<local_progress.ReadingProgress> items = const [],
+  }) : _items = [...items];
+
+  List<local_progress.ReadingProgress> _items;
+
+  @override
+  Future<List<local_progress.ReadingProgress>> load() async {
+    return List.unmodifiable(_items);
+  }
+
+  @override
+  Future<void> record(local_progress.ReadingProgress progress) async {
+    _items = [
+      progress,
+      for (final item in _items)
+        if (item.novelId != progress.novelId) item,
+    ];
+    notifyListeners();
   }
 }
