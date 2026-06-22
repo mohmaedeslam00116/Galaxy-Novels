@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../../../app/app_theme.dart';
 import '../../account/presentation/account_screen.dart';
+import '../../about/presentation/about_screen.dart';
 import '../../reader/presentation/reader_settings_screen.dart';
+
+enum _DrawerDestination { account, readerSettings, about }
 
 class AppDrawer extends StatelessWidget {
   const AppDrawer({super.key});
@@ -19,19 +22,15 @@ class AppDrawer extends StatelessWidget {
           onDestinationSelected: (index) {
             final navigator = Navigator.of(context);
             navigator.pop();
-            if (index == 0) {
-              navigator.push(
-                MaterialPageRoute<void>(
-                  builder: (context) => const AccountScreen(),
-                ),
-              );
-            } else if (index == 2) {
-              navigator.push(
-                MaterialPageRoute<void>(
-                  builder: (context) => const ReaderSettingsScreen(),
-                ),
-              );
-            }
+            final destination = _DrawerDestination.values[index];
+            final screen = switch (destination) {
+              _DrawerDestination.account => const AccountScreen(),
+              _DrawerDestination.readerSettings => const ReaderSettingsScreen(),
+              _DrawerDestination.about => const AboutScreen(),
+            };
+            navigator.push(
+              MaterialPageRoute<void>(builder: (context) => screen),
+            );
           },
           children: [
             Padding(
@@ -61,19 +60,9 @@ class AppDrawer extends StatelessWidget {
               label: Text('حسابي'),
             ),
             const NavigationDrawerDestination(
-              icon: Icon(Icons.favorite_border),
-              selectedIcon: Icon(Icons.favorite),
-              label: Text('المفضلة'),
-            ),
-            const NavigationDrawerDestination(
               icon: Icon(Icons.tune),
               selectedIcon: Icon(Icons.tune),
               label: Text('إعدادات القراءة'),
-            ),
-            const NavigationDrawerDestination(
-              icon: Icon(Icons.workspace_premium_outlined),
-              selectedIcon: Icon(Icons.workspace_premium),
-              label: Text('الاشتراك و VIP'),
             ),
             const Divider(height: 24),
             const NavigationDrawerDestination(

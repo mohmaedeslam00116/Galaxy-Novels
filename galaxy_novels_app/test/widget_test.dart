@@ -19,6 +19,7 @@ import 'package:galaxy_novels_app/data/repositories/reader_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/reading_history_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/rankings_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/search_repository.dart';
+import 'package:galaxy_novels_app/features/about/presentation/about_screen.dart';
 
 import 'helpers/fake_reader_preferences_repository.dart';
 
@@ -71,6 +72,41 @@ void main() {
       find.text('سجّل الدخول لمزامنة القراءة والمفضلة و XP.'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('drawer exposes only working destinations and opens about', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 720);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(
+      GalaxyNovelsApp(
+        homeRepository: _TestHomeRepository(_homeData),
+        catalogRepository: const _TestCatalogRepository(),
+        novelRepository: const _TestNovelRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.menu));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(NavigationDrawerDestination), findsNWidgets(3));
+    expect(find.text('المفضلة'), findsNothing);
+    expect(find.text('الاشتراك و VIP'), findsNothing);
+
+    await tester.tap(find.text('حول التطبيق'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AboutScreen), findsOneWidget);
+    expect(find.text('الإصدار 0.1.0 (1)'), findsOneWidget);
+    expect(find.text('تراخيص البرمجيات المفتوحة'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('reader settings stay shared after closing and reopening', (
