@@ -9,10 +9,9 @@ import '../../../data/repositories/downloads_repository.dart';
 import '../../../data/repositories/novel_repository.dart';
 import '../../../shared/widgets/section_title.dart';
 import '../../downloads/application/download_manager.dart';
-import '../../downloads/presentation/chapter_download_button.dart';
 import '../../downloads/presentation/download_chapters_sheet.dart';
 import '../../reader/presentation/reader_screen.dart';
-import 'widgets/novel_chapter_tile.dart';
+import 'widgets/novel_chapters_section.dart';
 import 'widgets/novel_details_header.dart';
 
 class NovelDetailsScreen extends StatefulWidget {
@@ -184,17 +183,19 @@ class _NovelDetailsContent extends StatelessWidget {
 
     return Stack(
       children: [
-        ListView(
-          padding: EdgeInsets.only(bottom: canRead ? 118 : 28),
-          children: [
-            NovelDetailsHeader(details: details),
+        CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(child: NovelDetailsHeader(details: details)),
             if (details.summary.isNotEmpty)
-              _SummarySection(summary: details.summary),
-            _ChaptersSection(
+              SliverToBoxAdapter(
+                child: _SummarySection(summary: details.summary),
+              ),
+            NovelChaptersSection(
               result: result,
               onRead: onRead,
               onDownloadChapters: onDownloadChapters,
             ),
+            SliverToBoxAdapter(child: SizedBox(height: canRead ? 118 : 28)),
           ],
         ),
         if (canRead)
@@ -344,168 +345,6 @@ class _DetailsBottomBar extends StatelessWidget {
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ChaptersSection extends StatelessWidget {
-  const _ChaptersSection({
-    required this.result,
-    required this.onRead,
-    required this.onDownloadChapters,
-  });
-
-  final NovelDetailsLoadResult result;
-  final void Function(NovelChapter chapter, String novelTitle) onRead;
-  final VoidCallback onDownloadChapters;
-
-  @override
-  Widget build(BuildContext context) {
-    final chapters = result.chapters;
-    final dependencies = AppDependencies.of(context);
-    final downloadsRepository = dependencies.downloadsRepository;
-    final downloadManager = dependencies.downloadManager;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SectionTitle(
-          title: 'آخر الفصول',
-          leadingIcon: Icons.menu_book_outlined,
-          action: chapters.isEmpty
-              ? null
-              : TextButton.icon(
-                  onPressed: onDownloadChapters,
-                  icon: const Icon(Icons.download_outlined),
-                  label: const Text('تحميل الفصول'),
-                ),
-        ),
-        if (result.chaptersError != null)
-          _InlineMessage(
-            title: 'تعذر تحميل الفصول الآن',
-            subtitle: result.chaptersError,
-          )
-        else if (chapters.isEmpty)
-          _InlineMessage(
-            title: 'لا توجد فصول متاحة للعرض الآن',
-            subtitle: result.details.chaptersCount > 0
-                ? 'قد تكون الفصول غير منشورة في الفهرس العام بعد'
-                : null,
-          )
-        else
-          ValueListenableBuilder<DownloadsState>(
-            valueListenable: downloadsRepository.state,
-            builder: (context, downloadsState, _) {
-              return Column(
-                children: [
-                  for (final chapter in chapters)
-                    NovelChapterTile(
-                      chapter: chapter,
-                      trailingAction: ChapterDownloadButton(
-                        isDownloaded: downloadsState.contains(
-                          chapter.effectiveContentApi,
-                        ),
-                        isEnabled: chapter.effectiveContentApi.isNotEmpty,
-                        onPressed: () =>
-                            _downloadChapter(context, downloadManager, chapter),
-                      ),
-                      onTap: () {
-                        if (chapter.effectiveContentApi.isNotEmpty) {
-                          onRead(chapter, result.details.title);
-                        }
-                      },
-                    ),
-                ],
-              );
-            },
-          ),
-      ],
-    );
-  }
-
-  Future<void> _downloadChapter(
-    BuildContext context,
-    DownloadManager manager,
-    NovelChapter chapter,
-  ) async {
-    try {
-      await manager.downloadChapter(
-        ChapterDownloadRequest(
-          novelId: result.details.id,
-          novelTitle: result.details.title,
-          novelCover: result.details.bestCover,
-          chapter: chapter,
-        ),
-      );
-      if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('تم تحميل الفصل')));
-      }
-    } on DownloadJobInProgressException {
-      if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('يوجد تنزيل جار بالفعل')));
-      }
-    } on DownloadLimitExceededException {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('وصلت إلى حد 100 فصل محمل')),
-        );
-      }
-    } catch (_) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('تعذر تحميل الفصل، حاول مجددا')),
-        );
-      }
-    }
-  }
-}
-
-class _InlineMessage extends StatelessWidget {
-  const _InlineMessage({required this.title, this.subtitle});
-
-  final String title;
-  final String? subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final tokens = theme.extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: tokens.surface,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: tokens.border),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            if (subtitle != null) ...[
-              const SizedBox(height: 6),
-              Text(
-                subtitle!,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: tokens.textSecondary,
-                ),
-              ),
-            ],
-          ],
         ),
       ),
     );

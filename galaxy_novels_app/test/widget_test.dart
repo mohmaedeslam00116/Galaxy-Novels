@@ -427,13 +427,18 @@ void main() {
     await tester.scrollUntilVisible(
       find.text('هذه نبذة تفاصيل الاختبار.'),
       420,
+      scrollable: _verticalScrollable(),
     );
     await tester.pumpAndSettle();
 
     expect(find.text('هذه نبذة تفاصيل الاختبار.'), findsOneWidget);
     expect(find.text('ابدأ القراءة'), findsOneWidget);
 
-    await tester.scrollUntilVisible(find.text('الفصل 1'), 320);
+    await tester.scrollUntilVisible(
+      find.text('الفصل 1'),
+      320,
+      scrollable: _verticalScrollable(),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('الفصل 1'), findsOneWidget);
@@ -463,7 +468,11 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('مكتبة الاختبار'));
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.byTooltip('تحميل الفصل'), 320);
+    await tester.scrollUntilVisible(
+      find.byTooltip('تحميل الفصل'),
+      320,
+      scrollable: _verticalScrollable(),
+    );
     await tester.pumpAndSettle();
 
     await tester.tap(find.byTooltip('تحميل الفصل'));
@@ -490,7 +499,11 @@ void main() {
     await tester.tap(find.text('مكتبة الاختبار'));
     await tester.pumpAndSettle();
     final batchDownloadButton = find.widgetWithText(TextButton, 'تحميل الفصول');
-    await tester.scrollUntilVisible(batchDownloadButton, 320);
+    await tester.scrollUntilVisible(
+      batchDownloadButton,
+      320,
+      scrollable: _verticalScrollable(),
+    );
     await tester.ensureVisible(batchDownloadButton);
     await tester.pumpAndSettle();
     await tester.tap(batchDownloadButton);
@@ -521,7 +534,11 @@ void main() {
     await tester.tap(find.text('مكتبة الاختبار'));
     await tester.pumpAndSettle();
     final batchDownloadButton = find.widgetWithText(TextButton, 'تحميل الفصول');
-    await tester.scrollUntilVisible(batchDownloadButton, 320);
+    await tester.scrollUntilVisible(
+      batchDownloadButton,
+      320,
+      scrollable: _verticalScrollable(),
+    );
     await tester.ensureVisible(batchDownloadButton);
     await tester.pumpAndSettle();
     await tester.tap(batchDownloadButton);
@@ -555,6 +572,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.text('هذه نبذة تفاصيل الاختبار.'),
       420,
+      scrollable: _verticalScrollable(),
     );
     await tester.pumpAndSettle();
 
@@ -581,6 +599,7 @@ void main() {
       await tester.scrollUntilVisible(
         find.text('لا توجد فصول متاحة للعرض الآن'),
         420,
+        scrollable: _verticalScrollable(),
       );
       await tester.pumpAndSettle();
 
@@ -619,6 +638,13 @@ Future<void> _scrollHomeDown(WidgetTester tester) async {
 
   await tester.drag(mainList, const Offset(0, -640));
   await tester.pumpAndSettle();
+}
+
+Finder _verticalScrollable() {
+  return find.byWidgetPredicate(
+    (widget) =>
+        widget is Scrollable && widget.axisDirection == AxisDirection.down,
+  );
 }
 
 const _homeData = HomeData(
