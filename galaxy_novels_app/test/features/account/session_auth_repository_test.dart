@@ -53,6 +53,154 @@ void main() {
   });
 
   test(
+    'refreshes an authenticated profile without publishing restoring',
+    () async {
+      final harness = _AuthHarness(
+        responses: [
+          _authenticatedResponse(nonce: 'profile-nonce'),
+          _profileResponse(totalXp: 1840, todayXp: 35),
+        ],
+      );
+      addTearDown(harness.repository.dispose);
+      await harness.repository.login(
+        const LoginCredentials(
+          username: 'reader',
+          password: 'secret',
+          rememberSession: false,
+        ),
+      );
+      final publishedStatuses = <AuthSessionStatus>[];
+      void recordStatus() {
+        publishedStatuses.add(harness.repository.value.status);
+      }
+
+      harness.repository.addListener(recordStatus);
+      addTearDown(() => harness.repository.removeListener(recordStatus));
+
+      await harness.repository.refreshProfile();
+
+      expect(harness.repository.value.user?.xp.total, 1840);
+      expect(harness.repository.value.user?.xp.today, 35);
+      expect(harness.requests, hasLength(2));
+      expect(harness.requests[1].method, 'GET');
+      expect(harness.requests[1].uri.path, endsWith('/me'));
+      expect(harness.requests[1].headers['X-WP-Nonce'], 'profile-nonce');
+      expect(publishedStatuses, isNot(contains(AuthSessionStatus.restoring)));
+    },
+  );
+
+  test('network failure retains the authenticated profile', () async {
+    final harness = _AuthHarness(
+      responses: const [],
+      responseHandler: (request) async {
+        if (request.uri.path.endsWith('/auth/login')) {
+          return _authenticatedResponse(nonce: 'profile-nonce');
+        }
+        throw const PrivateApiException(
+          code: 'network_unavailable',
+          message: 'offline',
+        );
+      },
+    );
+    addTearDown(harness.repository.dispose);
+    await harness.repository.login(
+      const LoginCredentials(
+        username: 'reader',
+        password: 'secret',
+        rememberSession: false,
+      ),
+    );
+    final originalUser = harness.repository.value.user;
+
+    await expectLater(harness.repository.refreshProfile(), completes);
+
+    expect(harness.repository.value.status, AuthSessionStatus.authenticated);
+    expect(harness.repository.value.user, same(originalUser));
+  });
+
+  test('server failure retains the authenticated profile', () async {
+    final harness = _AuthHarness(
+      responses: [
+        _authenticatedResponse(nonce: 'profile-nonce'),
+        const PrivateRawResponse(
+          statusCode: 503,
+          body: '{"code":"service_unavailable"}',
+        ),
+      ],
+    );
+    addTearDown(harness.repository.dispose);
+    await harness.repository.login(
+      const LoginCredentials(
+        username: 'reader',
+        password: 'secret',
+        rememberSession: false,
+      ),
+    );
+    final originalUser = harness.repository.value.user;
+
+    await expectLater(harness.repository.refreshProfile(), completes);
+
+    expect(harness.repository.value.status, AuthSessionStatus.authenticated);
+    expect(harness.repository.value.user, same(originalUser));
+  });
+
+  for (final scenario in {
+    'malformed': const PrivateRawResponse(statusCode: 200, body: '{}'),
+    'mismatched': _profileResponse(totalXp: 1840, todayXp: 35, userId: 8),
+  }.entries) {
+    test('${scenario.key} profile retains the authenticated user', () async {
+      final harness = _AuthHarness(
+        responses: [
+          _authenticatedResponse(nonce: 'profile-nonce'),
+          scenario.value,
+        ],
+      );
+      addTearDown(harness.repository.dispose);
+      await harness.repository.login(
+        const LoginCredentials(
+          username: 'reader',
+          password: 'secret',
+          rememberSession: false,
+        ),
+      );
+      final originalUser = harness.repository.value.user;
+
+      await expectLater(harness.repository.refreshProfile(), completes);
+
+      expect(harness.repository.value.status, AuthSessionStatus.authenticated);
+      expect(harness.repository.value.user, same(originalUser));
+    });
+  }
+
+  test('unauthorized profile refresh restores the session to guest', () async {
+    final harness = _AuthHarness(
+      responses: [
+        _authenticatedResponse(nonce: 'profile-nonce'),
+        const PrivateRawResponse(
+          statusCode: 401,
+          body: '{"code":"wor_reader_app_login_required"}',
+        ),
+        const PrivateRawResponse(statusCode: 200, body: '{"logged_in":false}'),
+      ],
+    );
+    addTearDown(harness.repository.dispose);
+    await harness.repository.login(
+      const LoginCredentials(
+        username: 'reader',
+        password: 'secret',
+        rememberSession: false,
+      ),
+    );
+
+    await harness.repository.refreshProfile();
+
+    expect(harness.repository.value.status, AuthSessionStatus.guest);
+    expect(harness.requests, hasLength(3));
+    expect(harness.requests[1].uri.path, endsWith('/me'));
+    expect(harness.requests[2].uri.path, endsWith('/session'));
+  });
+
+  test(
     'login persists cookies only when remember session is enabled',
     () async {
       final rememberedStore = FakeAuthSessionStore();
@@ -244,12 +392,16 @@ class _AuthHarness {
   _AuthHarness({
     required List<PrivateRawResponse> responses,
     FakeAuthSessionStore? sessionStore,
+    PrivateRequestSender? responseHandler,
   }) : responses = [...responses],
        sessionStore = sessionStore ?? FakeAuthSessionStore() {
     final client = PrivateApiClient(
       config: const AppConfig(siteBaseUrl: 'https://example.com/'),
       requestSender: (request) async {
         requests.add(request);
+        if (responseHandler != null) {
+          return responseHandler(request);
+        }
         return this.responses.removeAt(0);
       },
     );
@@ -292,6 +444,34 @@ PrivateRawResponse _authenticatedResponse({
             "seconds_total": 900,
             "chapters_total": 14,
             "rank": {"level": 3, "display": "مستكشف"}
+          }
+        }
+      }
+    ''',
+  );
+}
+
+PrivateRawResponse _profileResponse({
+  required int totalXp,
+  required int todayXp,
+  int userId = 7,
+}) {
+  return PrivateRawResponse(
+    statusCode: 200,
+    body:
+        '''
+      {
+        "user": {
+          "id": $userId,
+          "display_name": "قارئ المجرة",
+          "avatar": "https://example.com/avatar.jpg",
+          "vip": {"active": true, "tier": "gold", "label": "ذهبي"},
+          "xp": {
+            "total": $totalXp,
+            "today": $todayXp,
+            "seconds_total": 7200,
+            "chapters_total": 42,
+            "rank": {"level": 5, "display": "مستكشف"}
           }
         }
       }

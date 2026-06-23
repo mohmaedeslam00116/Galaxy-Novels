@@ -9,6 +9,7 @@ class FakeAuthRepository extends ValueNotifier<AuthSessionState>
   }) : super(initialState);
 
   LoginCredentials? lastLogin;
+  int refreshProfileCalls = 0;
 
   @override
   Future<void> restoreSession() async {
@@ -20,6 +21,11 @@ class FakeAuthRepository extends ValueNotifier<AuthSessionState>
   @override
   Future<void> login(LoginCredentials credentials) async {
     lastLogin = credentials;
+  }
+
+  @override
+  Future<void> refreshProfile() async {
+    refreshProfileCalls += 1;
   }
 
   @override

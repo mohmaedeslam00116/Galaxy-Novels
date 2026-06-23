@@ -7,6 +7,8 @@ abstract class AuthRepository implements ValueListenable<AuthSessionState> {
 
   Future<void> login(LoginCredentials credentials);
 
+  Future<void> refreshProfile();
+
   Future<void> logout();
 
   void dispose();

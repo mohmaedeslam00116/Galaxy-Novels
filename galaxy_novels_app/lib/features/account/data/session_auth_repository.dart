@@ -5,6 +5,7 @@ import '../application/auth_repository.dart';
 import '../application/auth_session_store.dart';
 import '../domain/auth_session.dart';
 import 'auth_error_messages.dart';
+import 'auth_profile_payload.dart';
 import 'auth_session_payload.dart';
 
 class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
@@ -140,6 +141,75 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
     _client.updateNonce(session.nonce);
     _persistSession = credentials.rememberSession;
     return session;
+  }
+
+  @override
+  Future<void> refreshProfile() async {
+    final owner = _activeAuthenticatedUser();
+    if (owner == null) {
+      return;
+    }
+
+    try {
+      final refreshed = await _requestProfile(owner.id);
+      _publishProfileIfCurrent(owner.id, refreshed);
+    } on PrivateApiException catch (error) {
+      if (error.statusCode == 401) {
+        if (_isCurrentAuthenticatedOwner(owner.id)) {
+          await restoreSession();
+        }
+        return;
+      }
+      if (!_isTransientProfileFailure(error)) {
+        rethrow;
+      }
+    } on FormatException {
+      return;
+    }
+  }
+
+  AuthUser? _activeAuthenticatedUser() {
+    final current = _value;
+    if (_disposed || current.status != AuthSessionStatus.authenticated) {
+      return null;
+    }
+    return current.user;
+  }
+
+  Future<AuthUser> _requestProfile(int ownerId) async {
+    final response = await _client.getAuthenticatedWithNonceRefresh('me');
+    return AuthProfilePayload.fromResponse(
+      response,
+      expectedUserId: ownerId,
+    ).user;
+  }
+
+  void _publishProfileIfCurrent(int ownerId, AuthUser refreshed) {
+    if (!_isCurrentAuthenticatedOwner(ownerId)) {
+      return;
+    }
+    final current = _value;
+    _publishState(
+      AuthSessionState.authenticated(
+        refreshed,
+        noticeMessage: current.noticeMessage,
+      ),
+    );
+  }
+
+  bool _isCurrentAuthenticatedOwner(int ownerId) {
+    final current = _value;
+    return !_disposed &&
+        current.status == AuthSessionStatus.authenticated &&
+        current.user?.id == ownerId;
+  }
+
+  bool _isTransientProfileFailure(PrivateApiException error) {
+    final statusCode = error.statusCode ?? 0;
+    return error.code == 'timeout' ||
+        error.code == 'network_unavailable' ||
+        error.code == 'secure_connection_failed' ||
+        (statusCode >= 500 && statusCode < 600);
   }
 
   @override
