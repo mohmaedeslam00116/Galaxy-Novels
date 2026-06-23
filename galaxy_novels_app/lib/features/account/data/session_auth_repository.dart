@@ -20,6 +20,7 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
 
   AuthSessionState _value = const AuthSessionState.idle();
   Future<void>? _restoreInFlight;
+  int _sessionGeneration = 0;
   bool _persistSession = false;
   bool _disposed = false;
 
@@ -34,6 +35,7 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
   }
 
   Future<void> _restore() async {
+    _sessionGeneration += 1;
     _publishState(const AuthSessionState.restoring());
     _client.clearSession();
 
@@ -87,6 +89,7 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
     if (_value.status == AuthSessionStatus.authenticating) {
       return;
     }
+    _sessionGeneration += 1;
     if (credentials.username.trim().isEmpty || credentials.password.isEmpty) {
       _publishState(
         const AuthSessionState.guest(
@@ -145,22 +148,29 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
 
   @override
   Future<void> refreshProfile() async {
-    final owner = _activeAuthenticatedUser();
-    if (owner == null) {
+    final requestSession = _activeAuthenticatedSession();
+    if (requestSession == null) {
       return;
     }
 
     try {
-      final refreshed = await _requestProfile(owner.id);
-      _publishProfileIfCurrent(owner.id, refreshed);
+      final refreshed = await _requestProfile(requestSession.user.id);
+      _publishProfileIfCurrent(
+        requestSession.user.id,
+        requestSession.generation,
+        refreshed,
+      );
     } on PrivateApiException catch (error) {
       if (error.statusCode == 401) {
-        if (_isCurrentAuthenticatedOwner(owner.id)) {
+        if (_isCurrentAuthenticatedSession(
+          requestSession.user.id,
+          requestSession.generation,
+        )) {
           await restoreSession();
         }
         return;
       }
-      if (!_isTransientProfileFailure(error)) {
+      if (!_isExpectedProfileFailure(error)) {
         rethrow;
       }
     } on FormatException {
@@ -168,12 +178,16 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
     }
   }
 
-  AuthUser? _activeAuthenticatedUser() {
+  ({AuthUser user, int generation})? _activeAuthenticatedSession() {
     final current = _value;
     if (_disposed || current.status != AuthSessionStatus.authenticated) {
       return null;
     }
-    return current.user;
+    final user = current.user;
+    if (user == null) {
+      return null;
+    }
+    return (user: user, generation: _sessionGeneration);
   }
 
   Future<AuthUser> _requestProfile(int ownerId) async {
@@ -184,8 +198,12 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
     ).user;
   }
 
-  void _publishProfileIfCurrent(int ownerId, AuthUser refreshed) {
-    if (!_isCurrentAuthenticatedOwner(ownerId)) {
+  void _publishProfileIfCurrent(
+    int ownerId,
+    int generation,
+    AuthUser refreshed,
+  ) {
+    if (!_isCurrentAuthenticatedSession(ownerId, generation)) {
       return;
     }
     final current = _value;
@@ -197,18 +215,21 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
     );
   }
 
-  bool _isCurrentAuthenticatedOwner(int ownerId) {
+  bool _isCurrentAuthenticatedSession(int ownerId, int generation) {
     final current = _value;
     return !_disposed &&
+        _sessionGeneration == generation &&
         current.status == AuthSessionStatus.authenticated &&
         current.user?.id == ownerId;
   }
 
-  bool _isTransientProfileFailure(PrivateApiException error) {
+  bool _isExpectedProfileFailure(PrivateApiException error) {
     final statusCode = error.statusCode ?? 0;
-    return error.code == 'timeout' ||
+    return error.code == 'invalid_json' ||
+        error.code == 'timeout' ||
         error.code == 'network_unavailable' ||
         error.code == 'secure_connection_failed' ||
+        statusCode == 429 ||
         (statusCode >= 500 && statusCode < 600);
   }
 
@@ -218,6 +239,7 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
     if (user == null || _value.status == AuthSessionStatus.signingOut) {
       return;
     }
+    _sessionGeneration += 1;
     _publishState(AuthSessionState.signingOut(user));
 
     try {

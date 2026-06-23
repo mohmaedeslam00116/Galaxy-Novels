@@ -89,6 +89,167 @@ void main() {
     },
   );
 
+  test('profile refresh retries with a fresh session nonce', () async {
+    final harness = _AuthHarness(
+      responses: [
+        _authenticatedResponse(nonce: 'old-nonce'),
+        const PrivateRawResponse(
+          statusCode: 403,
+          body: '{"code":"wor_reader_app_bad_nonce"}',
+        ),
+        _authenticatedResponse(nonce: 'fresh-nonce'),
+        _profileResponse(totalXp: 1840, todayXp: 35),
+      ],
+    );
+    addTearDown(harness.repository.dispose);
+    await harness.repository.login(
+      const LoginCredentials(
+        username: 'reader',
+        password: 'secret',
+        rememberSession: false,
+      ),
+    );
+
+    await harness.repository.refreshProfile();
+
+    expect(harness.requests, hasLength(4));
+    expect(harness.requests[1].uri.path, endsWith('/me'));
+    expect(harness.requests[1].headers['X-WP-Nonce'], 'old-nonce');
+    expect(harness.requests[2].uri.path, endsWith('/session'));
+    expect(harness.requests[3].uri.path, endsWith('/me'));
+    expect(harness.requests[3].headers['X-WP-Nonce'], 'fresh-nonce');
+    expect(harness.repository.value.user?.xp.total, 1840);
+    expect(harness.repository.value.user?.xp.today, 35);
+  });
+
+  test(
+    'stale profile refresh success cannot overwrite a same-user relogin',
+    () async {
+      final staleProfile = Completer<PrivateRawResponse>();
+      var loginRequests = 0;
+      final harness = _AuthHarness(
+        responses: const [],
+        responseHandler: (request) async {
+          if (request.uri.path.endsWith('/auth/login')) {
+            loginRequests += 1;
+            return _authenticatedResponse(
+              nonce: loginRequests == 1 ? 'old-nonce' : 'new-nonce',
+            );
+          }
+          if (request.uri.path.endsWith('/me')) {
+            return staleProfile.future;
+          }
+          if (request.uri.path.endsWith('/auth/logout')) {
+            return const PrivateRawResponse(
+              statusCode: 200,
+              body: '{"logged_in":false}',
+            );
+          }
+          throw StateError('Unexpected request: ${request.uri.path}');
+        },
+      );
+      addTearDown(harness.repository.dispose);
+      await harness.repository.login(
+        const LoginCredentials(
+          username: 'reader',
+          password: 'secret',
+          rememberSession: false,
+        ),
+      );
+
+      final staleRefresh = harness.repository.refreshProfile();
+      expect(harness.requests.last.uri.path, endsWith('/me'));
+      await harness.repository.logout();
+      await harness.repository.login(
+        const LoginCredentials(
+          username: 'reader',
+          password: 'new-secret',
+          rememberSession: false,
+        ),
+      );
+      final reloggedUser = harness.repository.value.user;
+
+      staleProfile.complete(_profileResponse(totalXp: 9999, todayXp: 999));
+      await staleRefresh;
+
+      expect(harness.repository.value.status, AuthSessionStatus.authenticated);
+      expect(harness.repository.value.user, same(reloggedUser));
+      expect(harness.repository.value.user?.xp.total, 320);
+    },
+  );
+
+  test(
+    'stale profile refresh 401 cannot restore a same-user relogin',
+    () async {
+      final staleProfile = Completer<PrivateRawResponse>();
+      var loginRequests = 0;
+      final harness = _AuthHarness(
+        responses: const [],
+        responseHandler: (request) async {
+          if (request.uri.path.endsWith('/auth/login')) {
+            loginRequests += 1;
+            return _authenticatedResponse(
+              nonce: loginRequests == 1 ? 'old-nonce' : 'new-nonce',
+            );
+          }
+          if (request.uri.path.endsWith('/me')) {
+            return staleProfile.future;
+          }
+          if (request.uri.path.endsWith('/auth/logout')) {
+            return const PrivateRawResponse(
+              statusCode: 200,
+              body: '{"logged_in":false}',
+            );
+          }
+          if (request.uri.path.endsWith('/session')) {
+            return const PrivateRawResponse(
+              statusCode: 200,
+              body: '{"logged_in":false}',
+            );
+          }
+          throw StateError('Unexpected request: ${request.uri.path}');
+        },
+      );
+      addTearDown(harness.repository.dispose);
+      await harness.repository.login(
+        const LoginCredentials(
+          username: 'reader',
+          password: 'secret',
+          rememberSession: false,
+        ),
+      );
+
+      final staleRefresh = harness.repository.refreshProfile();
+      expect(harness.requests.last.uri.path, endsWith('/me'));
+      await harness.repository.logout();
+      await harness.repository.login(
+        const LoginCredentials(
+          username: 'reader',
+          password: 'new-secret',
+          rememberSession: false,
+        ),
+      );
+      final reloggedUser = harness.repository.value.user;
+
+      staleProfile.complete(
+        const PrivateRawResponse(
+          statusCode: 401,
+          body: '{"code":"wor_reader_app_login_required"}',
+        ),
+      );
+      await staleRefresh;
+
+      expect(harness.repository.value.status, AuthSessionStatus.authenticated);
+      expect(harness.repository.value.user, same(reloggedUser));
+      expect(
+        harness.requests.where(
+          (request) => request.uri.path.endsWith('/session'),
+        ),
+        isEmpty,
+      );
+    },
+  );
+
   test('network failure retains the authenticated profile', () async {
     final harness = _AuthHarness(
       responses: const [],
@@ -142,6 +303,80 @@ void main() {
 
     expect(harness.repository.value.status, AuthSessionStatus.authenticated);
     expect(harness.repository.value.user, same(originalUser));
+  });
+
+  for (final scenario in {
+    'invalid raw JSON': const PrivateRawResponse(
+      statusCode: 200,
+      body: '{not-json',
+    ),
+    'rate-limited': const PrivateRawResponse(
+      statusCode: 429,
+      body: '{"code":"rate_limited"}',
+    ),
+  }.entries) {
+    test(
+      '${scenario.key} background profile refresh retains the user',
+      () async {
+        final harness = _AuthHarness(
+          responses: [
+            _authenticatedResponse(nonce: 'profile-nonce'),
+            scenario.value,
+          ],
+        );
+        addTearDown(harness.repository.dispose);
+        await harness.repository.login(
+          const LoginCredentials(
+            username: 'reader',
+            password: 'secret',
+            rememberSession: false,
+          ),
+        );
+        final originalUser = harness.repository.value.user;
+
+        await expectLater(harness.repository.refreshProfile(), completes);
+
+        expect(
+          harness.repository.value.status,
+          AuthSessionStatus.authenticated,
+        );
+        expect(harness.repository.value.user, same(originalUser));
+      },
+    );
+  }
+
+  test('unsafe endpoint background profile refresh propagates', () async {
+    final harness = _AuthHarness(
+      responses: const [],
+      responseHandler: (request) async {
+        if (request.uri.path.endsWith('/auth/login')) {
+          return _authenticatedResponse(nonce: 'profile-nonce');
+        }
+        throw const PrivateApiException(
+          code: 'unsafe_endpoint',
+          message: 'unsafe',
+        );
+      },
+    );
+    addTearDown(harness.repository.dispose);
+    await harness.repository.login(
+      const LoginCredentials(
+        username: 'reader',
+        password: 'secret',
+        rememberSession: false,
+      ),
+    );
+
+    await expectLater(
+      harness.repository.refreshProfile(),
+      throwsA(
+        isA<PrivateApiException>().having(
+          (error) => error.code,
+          'code',
+          'unsafe_endpoint',
+        ),
+      ),
+    );
   });
 
   for (final scenario in {
