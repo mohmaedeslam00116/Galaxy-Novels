@@ -32,6 +32,10 @@ import '../features/account/data/secure_auth_session_store.dart';
 import '../features/account/data/session_auth_repository.dart';
 import '../features/downloads/application/download_manager.dart';
 import '../features/downloads/presentation/download_activity_layer.dart';
+import '../features/favorites/application/favorites_repository.dart';
+import '../features/favorites/data/favorites_remote_service.dart';
+import '../features/favorites/data/shared_preferences_favorites_store.dart';
+import '../features/favorites/data/synced_favorites_repository.dart';
 import '../features/reader/application/reader_preferences_repository.dart';
 import '../features/reader/data/shared_preferences_reader_preferences_store.dart';
 import '../features/reader/data/stored_reader_preferences_repository.dart';
@@ -56,6 +60,7 @@ class GalaxyNovelsApp extends StatefulWidget {
     this.downloadsRepository,
     this.readerPreferencesRepository,
     this.authRepository,
+    this.favoritesRepository,
     super.key,
   }) : config = config ?? const AppConfig();
 
@@ -70,6 +75,7 @@ class GalaxyNovelsApp extends StatefulWidget {
   final DownloadsRepository? downloadsRepository;
   final ReaderPreferencesRepository? readerPreferencesRepository;
   final AuthRepository? authRepository;
+  final FavoritesRepository? favoritesRepository;
 
   @override
   State<GalaxyNovelsApp> createState() => _GalaxyNovelsAppState();
@@ -84,6 +90,8 @@ class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
   DownloadsRepository? _downloadManagerRepository;
   DownloadManager? _downloadManager;
   SessionAuthRepository? _defaultAuthRepository;
+  SyncedFavoritesRepository? _defaultFavoritesRepository;
+  PrivateApiClient? _privateApiClient;
 
   @override
   void didUpdateWidget(covariant GalaxyNovelsApp oldWidget) {
@@ -91,11 +99,21 @@ class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
 
     final authRepositoryChanged =
         widget.authRepository != oldWidget.authRepository;
+    final favoritesRepositoryChanged =
+        widget.favoritesRepository != oldWidget.favoritesRepository;
+    final configChanged = widget.config != oldWidget.config;
+    if (favoritesRepositoryChanged || authRepositoryChanged || configChanged) {
+      _defaultFavoritesRepository?.dispose();
+      _defaultFavoritesRepository = null;
+    }
     final defaultAuthConfigChanged =
         widget.authRepository == null && widget.config != oldWidget.config;
     if (authRepositoryChanged || defaultAuthConfigChanged) {
       _defaultAuthRepository?.dispose();
       _defaultAuthRepository = null;
+    }
+    if (configChanged) {
+      _privateApiClient = null;
     }
 
     if (widget.downloadsRepository != null) {
@@ -105,7 +123,6 @@ class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
     final switchedBackToDefault = oldWidget.downloadsRepository != null;
     final readerRepositoryChanged =
         widget.readerRepository != oldWidget.readerRepository;
-    final configChanged = widget.config != oldWidget.config;
     final defaultDownloadsUsesConfig = widget.readerRepository == null;
 
     if (switchedBackToDefault ||
@@ -165,6 +182,9 @@ class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
         _defaultReaderPreferencesRepository;
     final effectiveAuthRepository =
         widget.authRepository ?? _defaultAuthRepositoryFor();
+    final effectiveFavoritesRepository =
+        widget.favoritesRepository ??
+        _defaultFavoritesRepositoryFor(effectiveAuthRepository);
     unawaited(effectiveReaderPreferencesRepository.load());
 
     return AppDependencies(
@@ -180,6 +200,7 @@ class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
       downloadManager: effectiveDownloadManager,
       readerPreferencesRepository: effectiveReaderPreferencesRepository,
       authRepository: effectiveAuthRepository,
+      favoritesRepository: effectiveFavoritesRepository,
       child: MaterialApp(
         title: 'مجرة الروايات',
         debugShowCheckedModeBanner: false,
@@ -231,9 +252,23 @@ class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
 
   SessionAuthRepository _defaultAuthRepositoryFor() {
     return _defaultAuthRepository ??= SessionAuthRepository(
-      client: PrivateApiClient(config: widget.config),
+      client: _privateApiClientFor(),
       sessionStore: SecureAuthSessionStore(),
     );
+  }
+
+  SyncedFavoritesRepository _defaultFavoritesRepositoryFor(
+    AuthRepository authRepository,
+  ) {
+    return _defaultFavoritesRepository ??= SyncedFavoritesRepository(
+      remoteService: FavoritesRemoteService(client: _privateApiClientFor()),
+      localStore: SharedPreferencesFavoritesStore(),
+      authRepository: authRepository,
+    );
+  }
+
+  PrivateApiClient _privateApiClientFor() {
+    return _privateApiClient ??= PrivateApiClient(config: widget.config);
   }
 
   @override
@@ -242,6 +277,7 @@ class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
     if (manager != null) {
       unawaited(manager.dispose());
     }
+    _defaultFavoritesRepository?.dispose();
     _defaultAuthRepository?.dispose();
     _defaultReaderPreferencesRepository.dispose();
     super.dispose();

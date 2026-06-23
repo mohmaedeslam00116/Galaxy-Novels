@@ -139,8 +139,8 @@ void main() {
     await tester.tap(find.byIcon(Icons.menu));
     await tester.pumpAndSettle();
 
-    expect(find.byType(NavigationDrawerDestination), findsNWidgets(3));
-    expect(find.text('المفضلة'), findsNothing);
+    expect(find.byType(NavigationDrawerDestination), findsNWidgets(4));
+    expect(find.text('المفضلة'), findsOneWidget);
     expect(find.text('الاشتراك و VIP'), findsNothing);
 
     await tester.tap(find.text('حول التطبيق'));

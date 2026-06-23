@@ -11,6 +11,7 @@ import '../data/repositories/reading_history_repository.dart';
 import '../data/repositories/search_repository.dart';
 import '../features/account/application/auth_repository.dart';
 import '../features/downloads/application/download_manager.dart';
+import '../features/favorites/application/favorites_repository.dart';
 import '../features/reader/application/reader_preferences_repository.dart';
 
 class AppDependencies extends InheritedWidget {
@@ -27,6 +28,7 @@ class AppDependencies extends InheritedWidget {
     required this.downloadManager,
     required this.readerPreferencesRepository,
     required this.authRepository,
+    required this.favoritesRepository,
     required super.child,
     super.key,
   });
@@ -43,6 +45,7 @@ class AppDependencies extends InheritedWidget {
   final DownloadManager downloadManager;
   final ReaderPreferencesRepository readerPreferencesRepository;
   final AuthRepository authRepository;
+  final FavoritesRepository favoritesRepository;
 
   static AppDependencies of(BuildContext context) {
     final dependencies = context
@@ -65,6 +68,7 @@ class AppDependencies extends InheritedWidget {
         downloadsRepository != oldWidget.downloadsRepository ||
         downloadManager != oldWidget.downloadManager ||
         readerPreferencesRepository != oldWidget.readerPreferencesRepository ||
-        authRepository != oldWidget.authRepository;
+        authRepository != oldWidget.authRepository ||
+        favoritesRepository != oldWidget.favoritesRepository;
   }
 }
