@@ -52,6 +52,10 @@ class PrivateApiClient {
     return _request('GET', path, nonce: _requiredNonce());
   }
 
+  Future<Map<String, dynamic>> getAuthenticatedWithNonceRefresh(String path) {
+    return _requestAuthenticatedWithNonceRefresh('GET', path);
+  }
+
   Future<Map<String, dynamic>> postPublic(
     String path, {
     Map<String, Object?>? body,
@@ -66,6 +70,13 @@ class PrivateApiClient {
     return _request('POST', path, body: body, nonce: _requiredNonce());
   }
 
+  Future<Map<String, dynamic>> postAuthenticatedWithNonceRefresh(
+    String path, {
+    Map<String, Object?>? body,
+  }) {
+    return _requestAuthenticatedWithNonceRefresh('POST', path, body: body);
+  }
+
   void updateNonce(Object? value) {
     final next = value?.toString().trim() ?? '';
     _nonce = next.isEmpty ? null : next;
@@ -74,6 +85,39 @@ class PrivateApiClient {
   void clearSession() {
     _nonce = null;
     _cookieStore.clear();
+  }
+
+  Future<Map<String, dynamic>> _requestAuthenticatedWithNonceRefresh(
+    String method,
+    String path, {
+    Map<String, Object?>? body,
+  }) async {
+    try {
+      return await _request(method, path, body: body, nonce: _requiredNonce());
+    } on PrivateApiException catch (error) {
+      final nonceExpired =
+          error.code == 'wor_reader_app_bad_nonce' ||
+          error.code == 'missing_nonce';
+      if (!nonceExpired) {
+        rethrow;
+      }
+
+      await _refreshSessionNonce();
+      return _request(method, path, body: body, nonce: _requiredNonce());
+    }
+  }
+
+  Future<void> _refreshSessionNonce() async {
+    final session = await getPublic('session');
+    final refreshedNonce = session['nonce']?.toString().trim() ?? '';
+    if (session['logged_in'] != true || refreshedNonce.isEmpty) {
+      throw const PrivateApiException(
+        statusCode: 401,
+        code: 'wor_reader_app_login_required',
+        message: 'The private session has expired.',
+      );
+    }
+    updateNonce(refreshedNonce);
   }
 
   Future<Map<String, dynamic>> _request(

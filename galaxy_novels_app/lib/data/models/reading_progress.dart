@@ -34,6 +34,26 @@ class ReadingProgress {
   final int chapterPosition;
   final int chaptersTotal;
 
+  ReadingProgress copyWith({
+    String? novelTitle,
+    String? chapterTitle,
+    String? contentApi,
+    DateTime? updatedAt,
+    int? chapterPosition,
+    int? chaptersTotal,
+  }) {
+    return ReadingProgress(
+      novelId: novelId,
+      novelTitle: novelTitle ?? this.novelTitle,
+      chapterId: chapterId,
+      chapterTitle: chapterTitle ?? this.chapterTitle,
+      contentApi: contentApi ?? this.contentApi,
+      updatedAt: updatedAt ?? this.updatedAt,
+      chapterPosition: chapterPosition ?? this.chapterPosition,
+      chaptersTotal: chaptersTotal ?? this.chaptersTotal,
+    );
+  }
+
   double? get completionFraction {
     if (chapterPosition <= 0 || chaptersTotal <= 0) {
       return null;

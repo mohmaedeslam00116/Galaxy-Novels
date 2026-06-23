@@ -8,8 +8,8 @@ class FavoritesRemoteService {
   final PrivateApiClient _client;
 
   Future<List<FavoriteItem>> fetchFavorites() async {
-    final response = await _requestWithNonceRefresh(
-      () => _client.getAuthenticated('me/favorites'),
+    final response = await _client.getAuthenticatedWithNonceRefresh(
+      'me/favorites',
     );
     return _asList(response['items'])
         .map((item) => _favoriteFromServer(_asMap(item)))
@@ -21,44 +21,15 @@ class FavoritesRemoteService {
     if (changes.isEmpty) {
       return 0;
     }
-    final response = await _requestWithNonceRefresh(
-      () => _client.postAuthenticated(
-        'me/favorites/sync',
-        body: {
-          'changes': changes
-              .map((change) => change.toRequestJson())
-              .toList(growable: false),
-        },
-      ),
+    final response = await _client.postAuthenticatedWithNonceRefresh(
+      'me/favorites/sync',
+      body: {
+        'changes': changes
+            .map((change) => change.toRequestJson())
+            .toList(growable: false),
+      },
     );
     return _asInt(response['accepted']);
-  }
-
-  Future<Map<String, dynamic>> _requestWithNonceRefresh(
-    Future<Map<String, dynamic>> Function() request,
-  ) async {
-    try {
-      return await request();
-    } on PrivateApiException catch (error) {
-      final nonceExpired =
-          error.code == 'wor_reader_app_bad_nonce' ||
-          error.code == 'missing_nonce';
-      if (!nonceExpired) {
-        rethrow;
-      }
-
-      final session = await _client.getPublic('session');
-      final nonce = session['nonce']?.toString().trim() ?? '';
-      if (session['logged_in'] != true || nonce.isEmpty) {
-        throw const PrivateApiException(
-          statusCode: 401,
-          code: 'wor_reader_app_login_required',
-          message: 'The private session has expired.',
-        );
-      }
-      _client.updateNonce(nonce);
-      return request();
-    }
   }
 }
 
