@@ -15,6 +15,7 @@ import 'package:galaxy_novels_app/data/repositories/fake_search_repository.dart'
 import 'package:galaxy_novels_app/data/repositories/reader_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/reading_history_repository.dart';
 import 'package:galaxy_novels_app/features/downloads/application/download_manager.dart';
+import 'package:galaxy_novels_app/features/reading_activity/application/reading_activity_recorder.dart';
 import 'package:galaxy_novels_app/features/reader/presentation/reader_screen.dart';
 
 import '../../helpers/fake_reader_preferences_repository.dart';
@@ -175,6 +176,68 @@ void main() {
     expect(historyRepository.records.single.chaptersTotal, 2);
   });
 
+  testWidgets('scrolling reports chapter progress to the account session', (
+    tester,
+  ) async {
+    final recorder = _TestReadingActivityRecorder();
+    await tester.pumpWidget(
+      _ReaderTestApp(
+        readingActivityRecorder: recorder,
+        readerRepository: const _LongChapterReaderRepository(),
+        child: const ReaderScreen(contentApi: '/chapters/10'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.drag(find.byType(ListView), const Offset(0, -500));
+    await tester.pump();
+
+    expect(recorder.sessions, hasLength(1));
+    expect(recorder.sessions.single.progress, greaterThan(0));
+  });
+
+  testWidgets('opening the next chapter finishes the previous session', (
+    tester,
+  ) async {
+    final recorder = _TestReadingActivityRecorder();
+    await tester.pumpWidget(
+      _ReaderTestApp(
+        readingActivityRecorder: recorder,
+        child: const ReaderScreen(contentApi: '/chapters/10'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('reader-content-tap-area')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('التالي'));
+    await tester.pumpAndSettle();
+
+    expect(recorder.sessions, hasLength(2));
+    expect(recorder.sessions.first.finishCount, 1);
+  });
+
+  testWidgets('reader lifecycle pauses and resumes the account session', (
+    tester,
+  ) async {
+    final recorder = _TestReadingActivityRecorder();
+    await tester.pumpWidget(
+      _ReaderTestApp(
+        readingActivityRecorder: recorder,
+        child: const ReaderScreen(contentApi: '/chapters/10'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await tester.pump();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+
+    expect(recorder.sessions.single.pauseCount, 1);
+    expect(recorder.sessions.single.resumeCount, 1);
+  });
+
   testWidgets('shows an error when chapter content fails', (tester) async {
     await tester.pumpWidget(
       _ReaderTestApp(
@@ -240,12 +303,14 @@ class _ReaderTestApp extends StatelessWidget {
     this.readerRepository = const _TestReaderRepository(),
     this.readingHistoryRepository,
     this.downloadsRepository,
+    this.readingActivityRecorder = const NoopReadingActivityRecorder(),
   });
 
   final Widget child;
   final ReaderRepository readerRepository;
   final ReadingHistoryRepository? readingHistoryRepository;
   final DownloadsRepository? downloadsRepository;
+  final ReadingActivityRecorder readingActivityRecorder;
 
   @override
   Widget build(BuildContext context) {
@@ -268,6 +333,7 @@ class _ReaderTestApp extends StatelessWidget {
       readerPreferencesRepository: FakeReaderPreferencesRepository(),
       authRepository: FakeAuthRepository(),
       favoritesRepository: FakeFavoritesRepository(),
+      readingActivityRecorder: readingActivityRecorder,
       child: MaterialApp(
         locale: const Locale('ar'),
         home: Directionality(textDirection: TextDirection.rtl, child: child),
@@ -326,6 +392,72 @@ class _FailingReaderRepository implements ReaderRepository {
   Future<ReaderChapterContent> loadChapter(String contentApi) async {
     throw Exception('reader failed');
   }
+}
+
+class _LongChapterReaderRepository implements ReaderRepository {
+  const _LongChapterReaderRepository();
+
+  @override
+  Future<ReaderChapterContent> loadChapter(String contentApi) async {
+    return ReaderChapterContent(
+      id: 10,
+      novelId: 1,
+      label: 'الفصل 1',
+      title: '',
+      displayTitle: 'فصل طويل',
+      position: 1,
+      total: 2,
+      contentHtml: List.filled(80, '<p>سطر قراءة طويل للاختبار</p>').join(),
+      navigation: const ReaderChapterNavigation(
+        previousApi: '',
+        nextApi: '/wp-json/wor-reader-app/v1/chapters/11',
+        previousId: 0,
+        nextId: 11,
+      ),
+    );
+  }
+}
+
+class _TestReadingActivitySession implements ReadingActivitySession {
+  int progress = 0;
+  int finishCount = 0;
+  int pauseCount = 0;
+  int resumeCount = 0;
+
+  @override
+  void recordInteraction(int nextProgress) => progress = nextProgress;
+
+  @override
+  Future<void> checkpoint() async {}
+
+  @override
+  Future<void> pause() async => pauseCount++;
+
+  @override
+  void resume() => resumeCount++;
+
+  @override
+  Future<void> finish() async => finishCount++;
+}
+
+class _TestReadingActivityRecorder implements ReadingActivityRecorder {
+  final sessions = <_TestReadingActivitySession>[];
+
+  @override
+  ReadingActivitySession startChapter({
+    required int novelId,
+    required int chapterId,
+  }) {
+    final session = _TestReadingActivitySession();
+    sessions.add(session);
+    return session;
+  }
+
+  @override
+  Future<void> syncPending() async {}
+
+  @override
+  void dispose() {}
 }
 
 class _TestReadingHistoryRepository implements ReadingHistoryRepository {

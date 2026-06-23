@@ -10,6 +10,7 @@ class NativeReaderContent extends StatefulWidget {
     required this.preferences,
     required this.onOpenChapter,
     required this.onOpenSettings,
+    required this.onReadingActivity,
     super.key,
   });
 
@@ -17,6 +18,7 @@ class NativeReaderContent extends StatefulWidget {
   final ReaderPreferences preferences;
   final void Function(String contentApi, String title) onOpenChapter;
   final VoidCallback onOpenSettings;
+  final ValueChanged<int> onReadingActivity;
 
   @override
   State<NativeReaderContent> createState() => _NativeReaderContentState();
@@ -24,13 +26,36 @@ class NativeReaderContent extends StatefulWidget {
 
 class _NativeReaderContentState extends State<NativeReaderContent> {
   bool _controlsVisible = false;
+  late final ScrollController _scrollController;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController = ScrollController()..addListener(_emitReadingActivity);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _emitReadingActivity());
+  }
 
   @override
   void didUpdateWidget(covariant NativeReaderContent oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.content.id != widget.content.id) {
       _controlsVisible = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_scrollController.hasClients) {
+          return;
+        }
+        _scrollController.jumpTo(0);
+        _emitReadingActivity();
+      });
     }
+  }
+
+  @override
+  void dispose() {
+    _scrollController
+      ..removeListener(_emitReadingActivity)
+      ..dispose();
+    super.dispose();
   }
 
   @override
@@ -62,45 +87,49 @@ class _NativeReaderContentState extends State<NativeReaderContent> {
       color: readerScheme.surface,
       child: Stack(
         children: [
-          GestureDetector(
-            key: const ValueKey('reader-content-tap-area'),
-            behavior: HitTestBehavior.opaque,
-            onTap: _toggleControls,
-            child: ListView(
-              key: ValueKey(content.id),
-              padding: const EdgeInsets.fromLTRB(20, 18, 20, 110),
-              children: [
-                if (content.effectiveTitle.isNotEmpty) ...[
-                  Text(
-                    content.effectiveTitle,
-                    textAlign: TextAlign.center,
-                    style: _readerTextStyle(
-                      theme.textTheme.headlineSmall,
-                      fallbackSize: 24,
-                      fontScale: widget.preferences.fontScale,
-                      height: 1.45,
-                      color: readerScheme.onSurface,
-                      fontWeight: FontWeight.w900,
+          Listener(
+            onPointerDown: (_) => _emitReadingActivity(),
+            child: GestureDetector(
+              key: const ValueKey('reader-content-tap-area'),
+              behavior: HitTestBehavior.opaque,
+              onTap: _toggleControls,
+              child: ListView(
+                key: ValueKey(content.id),
+                controller: _scrollController,
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 110),
+                children: [
+                  if (content.effectiveTitle.isNotEmpty) ...[
+                    Text(
+                      content.effectiveTitle,
+                      textAlign: TextAlign.center,
+                      style: _readerTextStyle(
+                        theme.textTheme.headlineSmall,
+                        fallbackSize: 24,
+                        fontScale: widget.preferences.fontScale,
+                        height: 1.45,
+                        color: readerScheme.onSurface,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 18),
+                    const SizedBox(height: 18),
+                  ],
+                  for (final block in blocks)
+                    Padding(
+                      padding: EdgeInsets.only(
+                        bottom: block.type == ChapterTextBlockType.heading
+                            ? 14
+                            : 16,
+                      ),
+                      child: Text(
+                        block.text,
+                        textAlign: TextAlign.start,
+                        style: block.type == ChapterTextBlockType.heading
+                            ? headingStyle
+                            : paragraphStyle,
+                      ),
+                    ),
                 ],
-                for (final block in blocks)
-                  Padding(
-                    padding: EdgeInsets.only(
-                      bottom: block.type == ChapterTextBlockType.heading
-                          ? 14
-                          : 16,
-                    ),
-                    child: Text(
-                      block.text,
-                      textAlign: TextAlign.start,
-                      style: block.type == ChapterTextBlockType.heading
-                          ? headingStyle
-                          : paragraphStyle,
-                    ),
-                  ),
-              ],
+              ),
             ),
           ),
           if (hasPrevious || hasNext)
@@ -165,6 +194,20 @@ class _NativeReaderContentState extends State<NativeReaderContent> {
     setState(() {
       _controlsVisible = !_controlsVisible;
     });
+  }
+
+  void _emitReadingActivity() {
+    if (!_scrollController.hasClients) {
+      widget.onReadingActivity(0);
+      return;
+    }
+    final position = _scrollController.position;
+    final totalExtent = position.maxScrollExtent + position.viewportDimension;
+    final viewedExtent = position.pixels + position.viewportDimension;
+    final progress = totalExtent <= 0
+        ? 100
+        : ((viewedExtent / totalExtent) * 100).round().clamp(0, 100);
+    widget.onReadingActivity(progress);
   }
 }
 

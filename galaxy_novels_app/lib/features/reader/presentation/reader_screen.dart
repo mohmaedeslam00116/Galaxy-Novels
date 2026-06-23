@@ -8,6 +8,7 @@ import '../../../data/models/reading_progress.dart';
 import '../../../data/repositories/downloads_repository.dart';
 import '../../../data/repositories/reader_repository.dart';
 import '../../../data/repositories/reading_history_repository.dart';
+import '../../reading_activity/application/reading_activity_recorder.dart';
 import '../application/reader_preferences_repository.dart';
 import 'native_reader_content.dart';
 import 'reader_preferences.dart';
@@ -29,7 +30,8 @@ class ReaderScreen extends StatefulWidget {
   State<ReaderScreen> createState() => _ReaderScreenState();
 }
 
-class _ReaderScreenState extends State<ReaderScreen> {
+class _ReaderScreenState extends State<ReaderScreen>
+    with WidgetsBindingObserver {
   late String _contentApi;
   String? _chapterTitle;
   ReaderPreferences _preferences = ReaderPreferences.defaults;
@@ -38,12 +40,16 @@ class _ReaderScreenState extends State<ReaderScreen> {
   ReadingHistoryRepository? _historyRepository;
   DownloadsRepository? _downloadsRepository;
   ReaderPreferencesRepository? _preferencesRepository;
+  ReadingActivityRecorder? _activityRecorder;
+  ReadingActivitySession? _activitySession;
+  bool _activityPaused = false;
 
   @override
   void initState() {
     super.initState();
     _contentApi = widget.contentApi;
     _chapterTitle = widget.chapterTitle;
+    WidgetsBinding.instance.addObserver(this);
   }
 
   @override
@@ -54,6 +60,11 @@ class _ReaderScreenState extends State<ReaderScreen> {
     final historyRepository = dependencies.readingHistoryRepository;
     final downloadsRepository = dependencies.downloadsRepository;
     final preferencesRepository = dependencies.readerPreferencesRepository;
+    final activityRecorder = dependencies.readingActivityRecorder;
+    if (_activityRecorder != activityRecorder) {
+      _finishActivitySession();
+      _activityRecorder = activityRecorder;
+    }
     if (_repository != repository ||
         _historyRepository != historyRepository ||
         _downloadsRepository != downloadsRepository) {
@@ -79,6 +90,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
         widget.chapterTitle != oldWidget.chapterTitle) {
       _contentApi = widget.contentApi;
       _chapterTitle = widget.chapterTitle;
+      _finishActivitySession();
       _future = _loadChapter(_contentApi);
     }
   }
@@ -107,6 +119,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
             preferences: _preferences,
             onOpenChapter: _openChapter,
             onOpenSettings: _openReaderSettings,
+            onReadingActivity: _recordReadingActivity,
           );
         },
       ),
@@ -116,6 +129,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
   void _retry() {
     final repository = AppDependencies.of(context).readerRepository;
     setState(() {
+      _finishActivitySession();
       _repository = repository;
       _future = _loadChapter(_contentApi);
     });
@@ -127,6 +141,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
     }
 
     final repository = AppDependencies.of(context).readerRepository;
+    _finishActivitySession();
     setState(() {
       _repository = repository;
       _contentApi = contentApi;
@@ -147,16 +162,33 @@ class _ReaderScreenState extends State<ReaderScreen> {
     );
     if (localContent != null) {
       await downloadsRepository.markOpened(contentApi);
-      await _recordProgress(localContent);
+      await _completeChapterLoad(localContent, contentApi);
       return localContent;
     }
 
     final content = await repository.loadChapter(contentApi);
-    await _recordProgress(content);
+    await _completeChapterLoad(content, contentApi);
     return content;
   }
 
-  Future<void> _recordProgress(ReaderChapterContent content) async {
+  Future<void> _completeChapterLoad(
+    ReaderChapterContent content,
+    String contentApi,
+  ) async {
+    if (!mounted || contentApi != _contentApi) {
+      return;
+    }
+    await _recordProgress(content, contentApi);
+    if (!mounted || contentApi != _contentApi) {
+      return;
+    }
+    _startActivitySession(content);
+  }
+
+  Future<void> _recordProgress(
+    ReaderChapterContent content,
+    String contentApi,
+  ) async {
     final historyRepository = _historyRepository;
     if (historyRepository == null) {
       return;
@@ -168,12 +200,58 @@ class _ReaderScreenState extends State<ReaderScreen> {
         novelTitle: widget.novelTitle ?? '',
         chapterId: content.id,
         chapterTitle: content.effectiveTitle,
-        contentApi: _contentApi,
+        contentApi: contentApi,
         chapterPosition: content.position,
         chaptersTotal: content.total,
         updatedAt: DateTime.now().toUtc(),
       ),
     );
+  }
+
+  void _startActivitySession(ReaderChapterContent content) {
+    _finishActivitySession();
+    final session = _activityRecorder?.startChapter(
+      novelId: content.novelId,
+      chapterId: content.id,
+    );
+    _activitySession = session;
+    final lifecycleState = WidgetsBinding.instance.lifecycleState;
+    if (session != null && lifecycleState != AppLifecycleState.resumed) {
+      _activityPaused = true;
+      unawaited(session.pause());
+    }
+  }
+
+  void _recordReadingActivity(int progress) {
+    _activitySession?.recordInteraction(progress);
+  }
+
+  void _finishActivitySession() {
+    final session = _activitySession;
+    _activitySession = null;
+    _activityPaused = false;
+    if (session != null) {
+      unawaited(session.finish());
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final session = _activitySession;
+    if (session == null) {
+      return;
+    }
+    if (state == AppLifecycleState.resumed) {
+      if (_activityPaused) {
+        _activityPaused = false;
+        session.resume();
+      }
+      return;
+    }
+    if (!_activityPaused) {
+      _activityPaused = true;
+      unawaited(session.pause());
+    }
   }
 
   void _openReaderSettings() {
@@ -207,6 +285,8 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _finishActivitySession();
     _preferencesRepository?.removeListener(_syncPreferences);
     super.dispose();
   }
