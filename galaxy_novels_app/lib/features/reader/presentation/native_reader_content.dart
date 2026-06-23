@@ -32,7 +32,11 @@ class _NativeReaderContentState extends State<NativeReaderContent> {
   void initState() {
     super.initState();
     _scrollController = ScrollController()..addListener(_emitReadingActivity);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _emitReadingActivity());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _emitReadingActivity();
+      }
+    });
   }
 
   @override

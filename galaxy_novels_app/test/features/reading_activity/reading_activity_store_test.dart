@@ -31,6 +31,16 @@ void main() {
     expect(restored.first.eventId, 'event-1');
     expect(restored.last.eventId, 'event-500');
   });
+
+  test('malformed persisted queue is cleared safely', () async {
+    SharedPreferences.setMockInitialValues({
+      'reading_activity_queue.v1.7': '{broken-json',
+    });
+    final store = SharedPreferencesReadingActivityStore();
+
+    expect(await store.read(7), isEmpty);
+    expect(await store.read(7), isEmpty);
+  });
 }
 
 ReadingActivityEvent _event({int ownerUserId = 7, String eventId = 'event'}) {

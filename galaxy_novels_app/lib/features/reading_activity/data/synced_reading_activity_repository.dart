@@ -82,13 +82,7 @@ class SyncedReadingActivityRepository implements ReadingActivityRecorder {
       return;
     }
     try {
-      await _serializeMutation(() async {
-        final current = await _store.read(event.ownerUserId);
-        if (current.any((stored) => stored.eventId == event.eventId)) {
-          return;
-        }
-        await _store.write(event.ownerUserId, [...current, event]);
-      });
+      await _serializeMutation(() => _appendEvent(event));
     } on ReadingActivityStoreException {
       return;
     }
@@ -99,52 +93,91 @@ class SyncedReadingActivityRepository implements ReadingActivityRecorder {
 
   Future<void> _synchronizeUser(int userId) async {
     _syncTimers.remove(userId)?.cancel();
-    final List<ReadingActivityEvent> batch;
-    try {
-      batch = await _serializeMutation(() async {
-        final queued = await _store.read(userId);
-        return queued.take(50).toList(growable: false);
-      });
-    } on ReadingActivityStoreException {
-      return;
-    }
+    final batch = await _readBatch(userId);
     if (batch.isEmpty || _authenticatedUserId != userId) {
       return;
     }
-
-    try {
-      await _remoteService.sync(batch);
-    } on PrivateApiException catch (error) {
-      if (error.statusCode == 401 && _authenticatedUserId == userId) {
-        await _authRepository.restoreSession();
-      } else if (error.statusCode == 429 && _authenticatedUserId == userId) {
-        _scheduleSync(userId);
-      }
+    if (!await _uploadBatch(userId, batch)) {
       return;
     }
 
+    final remainingCount = await _removeSentBatch(userId, batch);
+    if (remainingCount > 0 && _authenticatedUserId == userId) {
+      _scheduleSync(userId);
+    }
+  }
+
+  Future<void> _appendEvent(ReadingActivityEvent event) async {
+    final queuedEvents = await _store.read(event.ownerUserId);
+    if (queuedEvents.any((stored) => stored.eventId == event.eventId)) {
+      return;
+    }
+    await _store.write(event.ownerUserId, [...queuedEvents, event]);
+  }
+
+  Future<List<ReadingActivityEvent>> _readBatch(int userId) async {
     try {
-      final remainingCount = await _serializeMutation(() async {
+      return await _serializeMutation(() async {
+        final queuedEvents = await _store.read(userId);
+        return queuedEvents.take(50).toList(growable: false);
+      });
+    } on ReadingActivityStoreException {
+      return const [];
+    }
+  }
+
+  Future<bool> _uploadBatch(
+    int userId,
+    List<ReadingActivityEvent> batch,
+  ) async {
+    try {
+      await _remoteService.sync(batch);
+      return true;
+    } on PrivateApiException catch (error) {
+      await _recoverFromApiFailure(userId, error);
+      return false;
+    }
+  }
+
+  Future<void> _recoverFromApiFailure(
+    int userId,
+    PrivateApiException error,
+  ) async {
+    if (_authenticatedUserId != userId) {
+      return;
+    }
+    if (error.statusCode == 401) {
+      await _authRepository.restoreSession();
+    } else if (error.statusCode == 429) {
+      _scheduleSync(userId);
+    }
+  }
+
+  Future<int> _removeSentBatch(
+    int userId,
+    List<ReadingActivityEvent> batch,
+  ) async {
+    try {
+      return await _serializeMutation(() async {
         final sentIds = batch.map((event) => event.eventId).toSet();
-        final latest = await _store.read(userId);
-        final remaining = latest
+        final latestEvents = await _store.read(userId);
+        final remainingEvents = latestEvents
             .where((event) => !sentIds.contains(event.eventId))
             .toList(growable: false);
-        await _store.write(userId, remaining);
-        return remaining.length;
+        await _store.write(userId, remainingEvents);
+        return remainingEvents.length;
       });
-      if (remainingCount > 0 && _authenticatedUserId == userId) {
-        _scheduleSync(userId);
-      }
     } on ReadingActivityStoreException {
-      return;
+      return 0;
     }
   }
 
   Future<T> _serializeMutation<T>(Future<T> Function() mutation) {
-    final result = _mutationQueue.then((_) => mutation());
-    _mutationQueue = result.then<void>((_) {}, onError: (_, _) {});
-    return result;
+    final mutationFuture = _mutationQueue.then((_) => mutation());
+    _mutationQueue = mutationFuture
+        .then<void>((_) {})
+        .onError<ReadingActivityStoreException>((_, _) {});
+    return mutationFuture;
   }
 
   void _scheduleSync(int userId) {

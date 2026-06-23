@@ -79,6 +79,16 @@ void main() {
     expect(await harness.store.read(7), hasLength(1));
   });
 
+  test('unauthorized sync keeps the queue and restores the session', () async {
+    final harness = _Harness(events: [_eventAt(1)], unauthorized: true);
+    addTearDown(harness.dispose);
+
+    await harness.repository.syncPending();
+
+    expect(await harness.store.read(7), hasLength(1));
+    expect(harness.auth.restoreCalls, 1);
+  });
+
   test('account switch never uploads the previous account queue', () async {
     final harness = _Harness(
       eventsByUser: {
@@ -105,11 +115,13 @@ class _Harness {
     List<ReadingActivityEvent> events = const [],
     Map<int, List<ReadingActivityEvent>> eventsByUser = const {},
     bool offline = false,
-  }) : auth = FakeAuthRepository(initialState: authState),
+    bool unauthorized = false,
+  }) : auth = _CountingAuthRepository(initialState: authState),
        store = _MemoryReadingActivityStore(
          eventsByUser.isEmpty ? {7: events} : eventsByUser,
        ) {
     server.offline = offline;
+    server.unauthorized = unauthorized;
     final client = PrivateApiClient(
       config: const AppConfig(siteBaseUrl: 'https://example.com/'),
       requestSender: server.send,
@@ -122,7 +134,7 @@ class _Harness {
     );
   }
 
-  final FakeAuthRepository auth;
+  final _CountingAuthRepository auth;
   final _MemoryReadingActivityStore store;
   final _FakeReadingActivityServer server = _FakeReadingActivityServer();
   late final SyncedReadingActivityRepository repository;
@@ -155,6 +167,7 @@ class _MemoryReadingActivityStore implements ReadingActivityStore {
 
 class _FakeReadingActivityServer {
   bool offline = false;
+  bool unauthorized = false;
   final List<int> batchSizes = [];
   final List<int> chapterIds = [];
 
@@ -163,6 +176,12 @@ class _FakeReadingActivityServer {
       throw const PrivateApiException(
         code: 'network_unavailable',
         message: 'offline',
+      );
+    }
+    if (unauthorized) {
+      return const PrivateRawResponse(
+        statusCode: 401,
+        body: '{"code":"wor_reader_app_login_required"}',
       );
     }
     final body = jsonDecode(request.body!) as Map<String, dynamic>;
@@ -177,6 +196,18 @@ class _FakeReadingActivityServer {
         'duplicates': 0,
       }),
     );
+  }
+}
+
+class _CountingAuthRepository extends FakeAuthRepository {
+  _CountingAuthRepository({required super.initialState});
+
+  int restoreCalls = 0;
+
+  @override
+  Future<void> restoreSession() async {
+    restoreCalls++;
+    await super.restoreSession();
   }
 }
 
