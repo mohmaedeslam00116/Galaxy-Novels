@@ -9,6 +9,8 @@ import '../../../data/repositories/downloads_repository.dart';
 import '../../../data/repositories/reader_repository.dart';
 import '../../../data/repositories/reading_history_repository.dart';
 import '../../reading_activity/application/reading_activity_recorder.dart';
+import '../../comments/domain/comment_target.dart';
+import '../../comments/presentation/chapter_comments_sheet.dart';
 import '../application/reader_preferences_repository.dart';
 import 'native_reader_content.dart';
 import 'reader_preferences.dart';
@@ -119,6 +121,7 @@ class _ReaderScreenState extends State<ReaderScreen>
             preferences: _preferences,
             onOpenChapter: _openChapter,
             onOpenSettings: _openReaderSettings,
+            onOpenComments: () => _openChapterComments(snapshot.data!),
             onReadingActivity: _recordReadingActivity,
           );
         },
@@ -259,6 +262,23 @@ class _ReaderScreenState extends State<ReaderScreen>
       context: context,
       preferences: _preferences,
       onChanged: (preferences) => unawaited(_savePreferences(preferences)),
+    );
+  }
+
+  Future<void> _openChapterComments(ReaderChapterContent content) async {
+    if (content.id <= 0) {
+      return;
+    }
+    final repository = AppDependencies.of(context).commentsRepository;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => ChapterCommentsSheet(
+        repository: repository,
+        target: CommentTarget.chapter(content.id),
+      ),
     );
   }
 

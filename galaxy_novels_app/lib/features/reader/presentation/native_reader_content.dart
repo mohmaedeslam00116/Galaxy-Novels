@@ -10,6 +10,7 @@ class NativeReaderContent extends StatefulWidget {
     required this.preferences,
     required this.onOpenChapter,
     required this.onOpenSettings,
+    required this.onOpenComments,
     required this.onReadingActivity,
     super.key,
   });
@@ -18,6 +19,7 @@ class NativeReaderContent extends StatefulWidget {
   final ReaderPreferences preferences;
   final void Function(String contentApi, String title) onOpenChapter;
   final VoidCallback onOpenSettings;
+  final VoidCallback onOpenComments;
   final ValueChanged<int> onReadingActivity;
 
   @override
@@ -136,59 +138,56 @@ class _NativeReaderContentState extends State<NativeReaderContent> {
               ),
             ),
           ),
-          if (hasPrevious || hasNext)
-            PositionedDirectional(
-              start: 16,
-              end: 16,
-              bottom: 16,
-              child: SafeArea(
-                top: false,
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 180),
-                  switchInCurve: Curves.easeOutCubic,
-                  switchOutCurve: Curves.easeInCubic,
-                  transitionBuilder: (child, animation) {
-                    final offset = Tween<Offset>(
-                      begin: const Offset(0, 0.18),
-                      end: Offset.zero,
-                    ).animate(animation);
+          PositionedDirectional(
+            start: 16,
+            end: 16,
+            bottom: 16,
+            child: SafeArea(
+              top: false,
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 180),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                transitionBuilder: (child, animation) {
+                  final offset = Tween<Offset>(
+                    begin: const Offset(0, 0.18),
+                    end: Offset.zero,
+                  ).animate(animation);
 
-                    return FadeTransition(
-                      opacity: animation,
-                      child: SlideTransition(position: offset, child: child),
-                    );
-                  },
-                  child: _controlsVisible
-                      ? _ReaderFloatingControls(
-                          key: const ValueKey('reader-controls-visible'),
-                          colorScheme: readerScheme,
-                          progressLabel: content.total > 0
-                              ? '${content.position} / ${content.total}'
-                              : '',
-                          progressValue: content.total > 0
-                              ? (content.position / content.total).clamp(
-                                  0.0,
-                                  1.0,
-                                )
-                              : 0,
-                          hasPrevious: hasPrevious,
-                          hasNext: hasNext,
-                          onPrevious: () => widget.onOpenChapter(
-                            content.navigation.previousApi,
-                            'الفصل السابق',
-                          ),
-                          onNext: () => widget.onOpenChapter(
-                            content.navigation.nextApi,
-                            'الفصل التالي',
-                          ),
-                          onSettings: widget.onOpenSettings,
-                        )
-                      : const SizedBox.shrink(
-                          key: ValueKey('reader-controls-hidden'),
+                  return FadeTransition(
+                    opacity: animation,
+                    child: SlideTransition(position: offset, child: child),
+                  );
+                },
+                child: _controlsVisible
+                    ? _ReaderFloatingControls(
+                        key: const ValueKey('reader-controls-visible'),
+                        colorScheme: readerScheme,
+                        progressLabel: content.total > 0
+                            ? '${content.position} / ${content.total}'
+                            : '',
+                        progressValue: content.total > 0
+                            ? (content.position / content.total).clamp(0.0, 1.0)
+                            : 0,
+                        hasPrevious: hasPrevious,
+                        hasNext: hasNext,
+                        onPrevious: () => widget.onOpenChapter(
+                          content.navigation.previousApi,
+                          'الفصل السابق',
                         ),
-                ),
+                        onNext: () => widget.onOpenChapter(
+                          content.navigation.nextApi,
+                          'الفصل التالي',
+                        ),
+                        onSettings: widget.onOpenSettings,
+                        onComments: widget.onOpenComments,
+                      )
+                    : const SizedBox.shrink(
+                        key: ValueKey('reader-controls-hidden'),
+                      ),
               ),
             ),
+          ),
         ],
       ),
     );
@@ -225,6 +224,7 @@ class _ReaderFloatingControls extends StatelessWidget {
     required this.onPrevious,
     required this.onNext,
     required this.onSettings,
+    required this.onComments,
     super.key,
   });
 
@@ -236,6 +236,7 @@ class _ReaderFloatingControls extends StatelessWidget {
   final VoidCallback onPrevious;
   final VoidCallback onNext;
   final VoidCallback onSettings;
+  final VoidCallback onComments;
 
   @override
   Widget build(BuildContext context) {
@@ -288,28 +289,29 @@ class _ReaderFloatingControls extends StatelessWidget {
               const SizedBox(height: 10),
             ],
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: hasPrevious ? onPrevious : null,
-                    icon: const Icon(Icons.chevron_right),
-                    label: const Text('السابق'),
-                  ),
+                IconButton(
+                  tooltip: 'الفصل السابق',
+                  onPressed: hasPrevious ? onPrevious : null,
+                  icon: const Icon(Icons.chevron_right_rounded),
                 ),
-                const SizedBox(width: 10),
+                IconButton.filledTonal(
+                  key: const ValueKey('reader-comments-button'),
+                  tooltip: 'تعليقات الفصل',
+                  onPressed: onComments,
+                  icon: const Icon(Icons.forum_outlined),
+                ),
                 IconButton.filledTonal(
                   key: const ValueKey('reader-settings-button'),
                   tooltip: 'إعدادات القراءة',
                   onPressed: onSettings,
                   icon: const Icon(Icons.tune_rounded),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: hasNext ? onNext : null,
-                    icon: const Icon(Icons.chevron_left),
-                    label: const Text('التالي'),
-                  ),
+                IconButton(
+                  tooltip: 'الفصل التالي',
+                  onPressed: hasNext ? onNext : null,
+                  icon: const Icon(Icons.chevron_left_rounded),
                 ),
               ],
             ),

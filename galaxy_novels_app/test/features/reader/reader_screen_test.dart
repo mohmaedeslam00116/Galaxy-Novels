@@ -15,6 +15,10 @@ import 'package:galaxy_novels_app/data/repositories/fake_search_repository.dart'
 import 'package:galaxy_novels_app/data/repositories/reader_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/reading_history_repository.dart';
 import 'package:galaxy_novels_app/features/downloads/application/download_manager.dart';
+import 'package:galaxy_novels_app/features/comments/application/comments_repository.dart';
+import 'package:galaxy_novels_app/features/comments/domain/comment_target.dart';
+import 'package:galaxy_novels_app/features/comments/domain/comments_page.dart';
+import 'package:galaxy_novels_app/features/comments/domain/public_comment.dart';
 import 'package:galaxy_novels_app/features/reading_activity/application/reading_activity_recorder.dart';
 import 'package:galaxy_novels_app/features/reader/presentation/reader_screen.dart';
 
@@ -40,15 +44,15 @@ void main() {
     expect(find.text('الفصل 1'), findsOneWidget);
     expect(find.text('عنوان الفصل'), findsOneWidget);
     expect(find.text('نص الفصل الأول'), findsOneWidget);
-    expect(find.text('التالي'), findsNothing);
+    expect(find.byTooltip('الفصل التالي'), findsNothing);
     expect(find.byType(CircularProgressIndicator), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('reader-content-tap-area')));
     await tester.pumpAndSettle();
 
-    expect(find.text('التالي'), findsOneWidget);
+    expect(find.byTooltip('الفصل التالي'), findsOneWidget);
 
-    await tester.tap(find.text('التالي'));
+    await tester.tap(find.byTooltip('الفصل التالي'));
     await tester.pumpAndSettle();
 
     expect(find.text('عنوان الفصل التالي'), findsOneWidget);
@@ -69,17 +73,17 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('التالي'), findsNothing);
+    expect(find.byTooltip('الفصل التالي'), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('reader-content-tap-area')));
     await tester.pumpAndSettle();
 
-    expect(find.text('التالي'), findsOneWidget);
+    expect(find.byTooltip('الفصل التالي'), findsOneWidget);
 
     await tester.tap(find.text('نص الفصل الأول'));
     await tester.pumpAndSettle();
 
-    expect(find.text('التالي'), findsNothing);
+    expect(find.byTooltip('الفصل التالي'), findsNothing);
   });
 
   testWidgets('opens reader settings and updates paragraph text size', (
@@ -212,7 +216,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('reader-content-tap-area')));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('التالي'));
+    await tester.tap(find.byTooltip('الفصل التالي'));
     await tester.pumpAndSettle();
 
     expect(recorder.sessions, hasLength(2));
@@ -297,6 +301,82 @@ void main() {
       isNotNull,
     );
   });
+
+  testWidgets('opens chapter comments and keeps the reader mounted', (
+    tester,
+  ) async {
+    final commentsRepository = FakeCommentsRepository(
+      handler: (target, sort, page) async => CommentsPage(
+        version: 2,
+        target: target,
+        sort: sort,
+        page: page,
+        perPage: 20,
+        totalComments: 1,
+        totalRoots: 1,
+        totalPages: 1,
+        generated: 1,
+        reactions: const {},
+        comments: [_readerComment()],
+      ),
+    );
+    await tester.pumpWidget(
+      _ReaderTestApp(
+        commentsRepository: commentsRepository,
+        child: const ReaderScreen(contentApi: '/chapters/10'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(commentsRepository.calls, isEmpty);
+    await tester.tap(find.byKey(const ValueKey('reader-content-tap-area')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('reader-comments-button')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('chapter-comments-sheet')),
+      findsOneWidget,
+    );
+    expect(find.text('تعليق الفصل'), findsOneWidget);
+    expect(commentsRepository.calls.single.target, CommentTarget.chapter(10));
+
+    await tester.tap(find.byTooltip('إغلاق تعليقات الفصل'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('نص الفصل الأول'), findsOneWidget);
+  });
+
+  testWidgets('comments controls fit a narrow single chapter reader', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 720);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    await tester.pumpWidget(
+      _ReaderTestApp(
+        readerRepository: const _SingleChapterReaderRepository(),
+        child: const ReaderScreen(contentApi: '/chapters/12'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('reader-content-tap-area')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('reader-comments-button')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('reader-settings-button')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
 }
 
 class _ReaderTestApp extends StatelessWidget {
@@ -305,6 +385,7 @@ class _ReaderTestApp extends StatelessWidget {
     this.readerRepository = const _TestReaderRepository(),
     this.readingHistoryRepository,
     this.downloadsRepository,
+    this.commentsRepository,
     this.readingActivityRecorder = const NoopReadingActivityRecorder(),
   });
 
@@ -312,6 +393,7 @@ class _ReaderTestApp extends StatelessWidget {
   final ReaderRepository readerRepository;
   final ReadingHistoryRepository? readingHistoryRepository;
   final DownloadsRepository? downloadsRepository;
+  final CommentsRepository? commentsRepository;
   final ReadingActivityRecorder readingActivityRecorder;
 
   @override
@@ -334,7 +416,7 @@ class _ReaderTestApp extends StatelessWidget {
       ),
       readerPreferencesRepository: FakeReaderPreferencesRepository(),
       authRepository: FakeAuthRepository(),
-      commentsRepository: FakeCommentsRepository.empty(),
+      commentsRepository: commentsRepository ?? FakeCommentsRepository.empty(),
       favoritesRepository: FakeFavoritesRepository(),
       novelEngagementRepository: FakeNovelEngagementRepository(),
       readingActivityRecorder: readingActivityRecorder,
@@ -395,6 +477,30 @@ class _FailingReaderRepository implements ReaderRepository {
   @override
   Future<ReaderChapterContent> loadChapter(String contentApi) async {
     throw Exception('reader failed');
+  }
+}
+
+class _SingleChapterReaderRepository implements ReaderRepository {
+  const _SingleChapterReaderRepository();
+
+  @override
+  Future<ReaderChapterContent> loadChapter(String contentApi) async {
+    return const ReaderChapterContent(
+      id: 12,
+      novelId: 1,
+      label: 'الفصل الوحيد',
+      title: '',
+      displayTitle: 'الفصل الوحيد',
+      position: 1,
+      total: 1,
+      contentHtml: '<p>نص فصل واحد</p>',
+      navigation: ReaderChapterNavigation(
+        previousApi: '',
+        nextApi: '',
+        previousId: 0,
+        nextId: 0,
+      ),
+    );
   }
 }
 
@@ -480,4 +586,27 @@ class _TestReadingHistoryRepository implements ReadingHistoryRepository {
 
   @override
   void removeListener(VoidCallback listener) {}
+}
+
+PublicComment _readerComment() {
+  return PublicComment(
+    id: 90,
+    parentId: 0,
+    rootId: 0,
+    depth: 0,
+    authorName: 'قارئ الفصل',
+    authorRank: '',
+    avatarUrl: '',
+    replyToName: '',
+    content: 'تعليق الفصل',
+    isSpoiler: false,
+    likeCount: 0,
+    dislikeCount: 0,
+    repliesCount: 0,
+    score: 0,
+    isPinned: false,
+    createdLabel: 'الآن',
+    createdAt: null,
+    replies: const [],
+  );
 }
