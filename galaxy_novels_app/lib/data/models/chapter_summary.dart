@@ -8,6 +8,9 @@ class ChapterSummary {
     required this.dateLabel,
     required this.url,
     this.chapters = const [],
+    this.novelUrl = '',
+    this.coverUrl = '',
+    this.contentApi = '',
   });
 
   factory ChapterSummary.fromJson(Map<String, dynamic> json) {
@@ -31,6 +34,11 @@ class ChapterSummary {
           _asString(json['date'] ?? json['latest_date']),
       url: firstChapter?.url ?? _asString(json['url']),
       chapters: chapterItems,
+      novelUrl: _asString(json['novel_url']),
+      coverUrl: _asString(json['cover_url']),
+      contentApi: firstChapter != null && firstChapter.contentApi.isNotEmpty
+          ? firstChapter.contentApi
+          : _asString(json['content_api']),
     );
   }
 
@@ -42,6 +50,19 @@ class ChapterSummary {
   final String dateLabel;
   final String url;
   final List<ChapterSummaryItem> chapters;
+  final String novelUrl;
+  final String coverUrl;
+  final String contentApi;
+
+  String get effectiveContentApi {
+    if (contentApi.isNotEmpty) {
+      return contentApi;
+    }
+    if (id <= 0) {
+      return '';
+    }
+    return '/wp-json/wor-reader-app/v1/chapters/$id';
+  }
 
   List<ChapterSummaryItem> get visibleChapters {
     if (chapters.isNotEmpty) {
@@ -55,6 +76,7 @@ class ChapterSummary {
         title: title,
         dateLabel: dateLabel,
         url: url,
+        contentApi: contentApi,
       ),
     ];
   }
@@ -67,6 +89,7 @@ class ChapterSummaryItem {
     required this.title,
     required this.dateLabel,
     required this.url,
+    this.contentApi = '',
   });
 
   factory ChapterSummaryItem.fromJson(Map<String, dynamic> json) {
@@ -76,6 +99,7 @@ class ChapterSummaryItem {
       title: _asString(json['title']),
       dateLabel: _asString(json['date']),
       url: _asString(json['url']),
+      contentApi: _asString(json['content_api']),
     );
   }
 
@@ -84,6 +108,7 @@ class ChapterSummaryItem {
   final String title;
   final String dateLabel;
   final String url;
+  final String contentApi;
 }
 
 int _asInt(Object? value) {

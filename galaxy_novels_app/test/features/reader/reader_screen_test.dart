@@ -2,14 +2,26 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:galaxy_novels_app/app/app_dependencies.dart';
 import 'package:galaxy_novels_app/core/config/app_config.dart';
+import 'package:galaxy_novels_app/data/models/downloaded_chapter.dart';
 import 'package:galaxy_novels_app/data/models/reader_content_data.dart';
 import 'package:galaxy_novels_app/data/models/reading_progress.dart';
+import 'package:galaxy_novels_app/data/repositories/downloads_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/fake_catalog_repository.dart';
+import 'package:galaxy_novels_app/data/repositories/fake_downloads_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/fake_home_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/fake_novel_repository.dart';
+import 'package:galaxy_novels_app/data/repositories/fake_rankings_repository.dart';
+import 'package:galaxy_novels_app/data/repositories/fake_search_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/reader_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/reading_history_repository.dart';
+import 'package:galaxy_novels_app/features/downloads/application/download_manager.dart';
+import 'package:galaxy_novels_app/features/reading_activity/application/reading_activity_recorder.dart';
 import 'package:galaxy_novels_app/features/reader/presentation/reader_screen.dart';
+
+import '../../helpers/fake_reader_preferences_repository.dart';
+import '../../helpers/fake_auth_repository.dart';
+import '../../helpers/fake_favorites_repository.dart';
+import '../../helpers/fake_novel_engagement_repository.dart';
 
 void main() {
   testWidgets('loads chapter content and renders it natively', (tester) async {
@@ -161,6 +173,70 @@ void main() {
     expect(historyRepository.records.single.novelTitle, 'رواية الاختبار');
     expect(historyRepository.records.single.chapterId, 10);
     expect(historyRepository.records.single.chapterTitle, 'عنوان الفصل');
+    expect(historyRepository.records.single.chapterPosition, 1);
+    expect(historyRepository.records.single.chaptersTotal, 2);
+  });
+
+  testWidgets('scrolling reports chapter progress to the account session', (
+    tester,
+  ) async {
+    final recorder = _TestReadingActivityRecorder();
+    await tester.pumpWidget(
+      _ReaderTestApp(
+        readingActivityRecorder: recorder,
+        readerRepository: const _LongChapterReaderRepository(),
+        child: const ReaderScreen(contentApi: '/chapters/10'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.drag(find.byType(ListView), const Offset(0, -500));
+    await tester.pump();
+
+    expect(recorder.sessions, hasLength(1));
+    expect(recorder.sessions.single.progress, greaterThan(0));
+  });
+
+  testWidgets('opening the next chapter finishes the previous session', (
+    tester,
+  ) async {
+    final recorder = _TestReadingActivityRecorder();
+    await tester.pumpWidget(
+      _ReaderTestApp(
+        readingActivityRecorder: recorder,
+        child: const ReaderScreen(contentApi: '/chapters/10'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('reader-content-tap-area')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('التالي'));
+    await tester.pumpAndSettle();
+
+    expect(recorder.sessions, hasLength(2));
+    expect(recorder.sessions.first.finishCount, 1);
+  });
+
+  testWidgets('reader lifecycle pauses and resumes the account session', (
+    tester,
+  ) async {
+    final recorder = _TestReadingActivityRecorder();
+    await tester.pumpWidget(
+      _ReaderTestApp(
+        readingActivityRecorder: recorder,
+        child: const ReaderScreen(contentApi: '/chapters/10'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await tester.pump();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+
+    expect(recorder.sessions.single.pauseCount, 1);
+    expect(recorder.sessions.single.resumeCount, 1);
   });
 
   testWidgets('shows an error when chapter content fails', (tester) async {
@@ -177,6 +253,49 @@ void main() {
     expect(find.text('تعذر تحميل الفصل'), findsOneWidget);
     expect(find.text('إعادة المحاولة'), findsOneWidget);
   });
+
+  testWidgets('opens a downloaded chapter without using the network', (
+    tester,
+  ) async {
+    final downloadsRepository = FakeDownloadsRepository(
+      chapters: [
+        DownloadedChapter(
+          novelId: 7,
+          novelTitle: 'رواية محلية',
+          novelCover: '',
+          chapterId: 70,
+          chapterTitle: 'عنوان الفصل المحلي',
+          chapterLabel: 'الفصل 7',
+          chapterPosition: 7,
+          chaptersTotal: 120,
+          contentApi: '/chapters/70',
+          contentHtml: '<p>هذا النص متاح دون إنترنت</p>',
+          plainTextPreview: 'هذا النص متاح دون إنترنت',
+          downloadedAt: DateTime.utc(2026, 6, 20),
+          lastOpenedAt: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      _ReaderTestApp(
+        readerRepository: const _FailingReaderRepository(),
+        downloadsRepository: downloadsRepository,
+        child: const ReaderScreen(
+          contentApi: '/chapters/70',
+          novelTitle: 'رواية محلية',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('هذا النص متاح دون إنترنت'), findsOneWidget);
+    expect(find.text('تعذر تحميل الفصل'), findsNothing);
+    expect(
+      downloadsRepository.state.value.chapters.single.lastOpenedAt,
+      isNotNull,
+    );
+  });
 }
 
 class _ReaderTestApp extends StatelessWidget {
@@ -184,22 +303,39 @@ class _ReaderTestApp extends StatelessWidget {
     required this.child,
     this.readerRepository = const _TestReaderRepository(),
     this.readingHistoryRepository,
+    this.downloadsRepository,
+    this.readingActivityRecorder = const NoopReadingActivityRecorder(),
   });
 
   final Widget child;
   final ReaderRepository readerRepository;
   final ReadingHistoryRepository? readingHistoryRepository;
+  final DownloadsRepository? downloadsRepository;
+  final ReadingActivityRecorder readingActivityRecorder;
 
   @override
   Widget build(BuildContext context) {
+    final effectiveDownloadsRepository =
+        downloadsRepository ?? FakeDownloadsRepository();
     return AppDependencies(
       config: const AppConfig(),
       homeRepository: const FakeHomeRepository(),
       catalogRepository: const FakeCatalogRepository(),
       novelRepository: const FakeNovelRepository(result: null),
       readerRepository: readerRepository,
+      rankingsRepository: const FakeRankingsRepository(),
+      searchRepository: const FakeSearchRepository(),
       readingHistoryRepository:
           readingHistoryRepository ?? _TestReadingHistoryRepository(),
+      downloadsRepository: effectiveDownloadsRepository,
+      downloadManager: DownloadManager(
+        repository: effectiveDownloadsRepository,
+      ),
+      readerPreferencesRepository: FakeReaderPreferencesRepository(),
+      authRepository: FakeAuthRepository(),
+      favoritesRepository: FakeFavoritesRepository(),
+      novelEngagementRepository: FakeNovelEngagementRepository(),
+      readingActivityRecorder: readingActivityRecorder,
       child: MaterialApp(
         locale: const Locale('ar'),
         home: Directionality(textDirection: TextDirection.rtl, child: child),
@@ -258,6 +394,72 @@ class _FailingReaderRepository implements ReaderRepository {
   Future<ReaderChapterContent> loadChapter(String contentApi) async {
     throw Exception('reader failed');
   }
+}
+
+class _LongChapterReaderRepository implements ReaderRepository {
+  const _LongChapterReaderRepository();
+
+  @override
+  Future<ReaderChapterContent> loadChapter(String contentApi) async {
+    return ReaderChapterContent(
+      id: 10,
+      novelId: 1,
+      label: 'الفصل 1',
+      title: '',
+      displayTitle: 'فصل طويل',
+      position: 1,
+      total: 2,
+      contentHtml: List.filled(80, '<p>سطر قراءة طويل للاختبار</p>').join(),
+      navigation: const ReaderChapterNavigation(
+        previousApi: '',
+        nextApi: '/wp-json/wor-reader-app/v1/chapters/11',
+        previousId: 0,
+        nextId: 11,
+      ),
+    );
+  }
+}
+
+class _TestReadingActivitySession implements ReadingActivitySession {
+  int progress = 0;
+  int finishCount = 0;
+  int pauseCount = 0;
+  int resumeCount = 0;
+
+  @override
+  void recordInteraction(int nextProgress) => progress = nextProgress;
+
+  @override
+  Future<void> checkpoint() async {}
+
+  @override
+  Future<void> pause() async => pauseCount++;
+
+  @override
+  void resume() => resumeCount++;
+
+  @override
+  Future<void> finish() async => finishCount++;
+}
+
+class _TestReadingActivityRecorder implements ReadingActivityRecorder {
+  final sessions = <_TestReadingActivitySession>[];
+
+  @override
+  ReadingActivitySession startChapter({
+    required int novelId,
+    required int chapterId,
+  }) {
+    final session = _TestReadingActivitySession();
+    sessions.add(session);
+    return session;
+  }
+
+  @override
+  Future<void> syncPending() async {}
+
+  @override
+  void dispose() {}
 }
 
 class _TestReadingHistoryRepository implements ReadingHistoryRepository {

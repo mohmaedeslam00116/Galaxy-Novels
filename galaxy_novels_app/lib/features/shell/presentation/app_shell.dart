@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../catalog/presentation/catalog_screen.dart';
+import '../../downloads/presentation/downloads_screen.dart';
 import '../../history/presentation/history_screen.dart';
 import '../../home/presentation/home_screen.dart';
 import '../../rankings/presentation/rankings_screen.dart';
@@ -16,43 +17,55 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   int _index = 0;
 
-  static const _screens = [
-    HomeScreen(),
-    CatalogScreen(),
-    HistoryScreen(),
-    RankingsScreen(),
+  static const _titles = [
+    'الرئيسية',
+    'المكتبة',
+    'التنزيلات',
+    'السجل',
+    'الترتيب',
   ];
-
-  static const _titles = ['الرئيسية', 'المكتبة', 'السجل', 'الترتيب'];
 
   @override
   Widget build(BuildContext context) {
+    final screens = [
+      const HomeScreen(),
+      const CatalogScreen(),
+      DownloadsScreen(onOpenLibrary: () => setState(() => _index = 1)),
+      const HistoryScreen(),
+      const RankingsScreen(),
+    ];
+
     return Scaffold(
       drawer: const AppDrawer(),
       appBar: AppBar(title: Text(_titles[_index])),
-      body: IndexedStack(index: _index, children: _screens),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _index,
-        onTap: (value) => setState(() => _index = value),
-        items: const [
-          BottomNavigationBarItem(
+      body: IndexedStack(index: _index, children: screens),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _index,
+        onDestinationSelected: (value) => setState(() => _index = value),
+        destinations: const [
+          NavigationDestination(
             icon: Icon(Icons.home_outlined),
-            activeIcon: Icon(Icons.home),
+            selectedIcon: Icon(Icons.home),
             label: 'الرئيسية',
           ),
-          BottomNavigationBarItem(
+          NavigationDestination(
             icon: Icon(Icons.local_library_outlined),
-            activeIcon: Icon(Icons.local_library),
+            selectedIcon: Icon(Icons.local_library),
             label: 'المكتبة',
           ),
-          BottomNavigationBarItem(
+          NavigationDestination(
+            icon: Icon(Icons.download_outlined),
+            selectedIcon: Icon(Icons.download),
+            label: 'التنزيلات',
+          ),
+          NavigationDestination(
             icon: Icon(Icons.history_outlined),
-            activeIcon: Icon(Icons.history),
+            selectedIcon: Icon(Icons.history),
             label: 'السجل',
           ),
-          BottomNavigationBarItem(
+          NavigationDestination(
             icon: Icon(Icons.leaderboard_outlined),
-            activeIcon: Icon(Icons.leaderboard),
+            selectedIcon: Icon(Icons.leaderboard),
             label: 'الترتيب',
           ),
         ],

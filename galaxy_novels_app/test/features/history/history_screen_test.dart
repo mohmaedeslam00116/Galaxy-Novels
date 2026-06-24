@@ -5,11 +5,20 @@ import 'package:galaxy_novels_app/core/config/app_config.dart';
 import 'package:galaxy_novels_app/data/models/reader_content_data.dart';
 import 'package:galaxy_novels_app/data/models/reading_progress.dart';
 import 'package:galaxy_novels_app/data/repositories/fake_catalog_repository.dart';
+import 'package:galaxy_novels_app/data/repositories/fake_downloads_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/fake_home_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/fake_novel_repository.dart';
+import 'package:galaxy_novels_app/data/repositories/fake_rankings_repository.dart';
+import 'package:galaxy_novels_app/data/repositories/fake_search_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/reader_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/reading_history_repository.dart';
+import 'package:galaxy_novels_app/features/downloads/application/download_manager.dart';
 import 'package:galaxy_novels_app/features/history/presentation/history_screen.dart';
+
+import '../../helpers/fake_reader_preferences_repository.dart';
+import '../../helpers/fake_auth_repository.dart';
+import '../../helpers/fake_favorites_repository.dart';
+import '../../helpers/fake_novel_engagement_repository.dart';
 
 void main() {
   testWidgets('renders saved reading history entries', (tester) async {
@@ -29,7 +38,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('آخر القراءات'), findsOneWidget);
+    expect(find.text('متابعة القراءة'), findsOneWidget);
     expect(find.text('رواية الاختبار'), findsOneWidget);
     expect(find.text('الفصل 10'), findsOneWidget);
     expect(find.textContaining('آخر قراءة'), findsOneWidget);
@@ -47,6 +56,29 @@ void main() {
 
     expect(find.text('لا يوجد سجل قراءة بعد'), findsOneWidget);
   });
+
+  testWidgets('does not invent a percentage when chapter totals are missing', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _HistoryTestApp(
+        readingHistoryRepository: _TestReadingHistoryRepository([
+          ReadingProgress(
+            novelId: 99,
+            novelTitle: 'رواية الاختبار',
+            chapterId: 52,
+            chapterTitle: 'الفصل 1',
+            contentApi: '/wp-json/wor-reader-app/v1/chapters/52',
+            updatedAt: DateTime.utc(2026, 6, 20, 10),
+          ),
+        ]),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('60%'), findsNothing);
+    expect(find.text('موضع محفوظ'), findsOneWidget);
+  });
 }
 
 class _HistoryTestApp extends StatelessWidget {
@@ -56,13 +88,22 @@ class _HistoryTestApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final downloadsRepository = FakeDownloadsRepository();
     return AppDependencies(
       config: const AppConfig(),
       homeRepository: const FakeHomeRepository(),
       catalogRepository: const FakeCatalogRepository(),
       novelRepository: const FakeNovelRepository(result: null),
       readerRepository: const _TestReaderRepository(),
+      rankingsRepository: const FakeRankingsRepository(),
+      searchRepository: const FakeSearchRepository(),
       readingHistoryRepository: readingHistoryRepository,
+      downloadsRepository: downloadsRepository,
+      downloadManager: DownloadManager(repository: downloadsRepository),
+      readerPreferencesRepository: FakeReaderPreferencesRepository(),
+      authRepository: FakeAuthRepository(),
+      favoritesRepository: FakeFavoritesRepository(),
+      novelEngagementRepository: FakeNovelEngagementRepository(),
       child: const MaterialApp(
         locale: Locale('ar'),
         home: Scaffold(

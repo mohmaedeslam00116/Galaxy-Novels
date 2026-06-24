@@ -6,6 +6,8 @@ class ReadingProgress {
     required this.chapterTitle,
     required this.contentApi,
     required this.updatedAt,
+    this.chapterPosition = 0,
+    this.chaptersTotal = 0,
   });
 
   factory ReadingProgress.fromJson(Map<String, dynamic> json) {
@@ -15,6 +17,8 @@ class ReadingProgress {
       chapterId: _asInt(json['chapterId']),
       chapterTitle: _asString(json['chapterTitle']),
       contentApi: _asString(json['contentApi']),
+      chapterPosition: _asInt(json['chapterPosition']),
+      chaptersTotal: _asInt(json['chaptersTotal']),
       updatedAt:
           DateTime.tryParse(_asString(json['updatedAt'])) ??
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
@@ -27,6 +31,45 @@ class ReadingProgress {
   final String chapterTitle;
   final String contentApi;
   final DateTime updatedAt;
+  final int chapterPosition;
+  final int chaptersTotal;
+
+  ReadingProgress copyWith({
+    String? novelTitle,
+    String? chapterTitle,
+    String? contentApi,
+    DateTime? updatedAt,
+    int? chapterPosition,
+    int? chaptersTotal,
+  }) {
+    return ReadingProgress(
+      novelId: novelId,
+      novelTitle: novelTitle ?? this.novelTitle,
+      chapterId: chapterId,
+      chapterTitle: chapterTitle ?? this.chapterTitle,
+      contentApi: contentApi ?? this.contentApi,
+      updatedAt: updatedAt ?? this.updatedAt,
+      chapterPosition: chapterPosition ?? this.chapterPosition,
+      chaptersTotal: chaptersTotal ?? this.chaptersTotal,
+    );
+  }
+
+  double? get completionFraction {
+    if (chapterPosition <= 0 || chaptersTotal <= 0) {
+      return null;
+    }
+    final bounded = (chapterPosition / chaptersTotal).clamp(0.0, 1.0);
+    return bounded.toDouble();
+  }
+
+  int? get completionPercent {
+    final fraction = completionFraction;
+    if (fraction == null) {
+      return null;
+    }
+    final percent = (fraction * 100).round().clamp(1, 100);
+    return percent.toInt();
+  }
 
   Map<String, dynamic> toJson() {
     return {
@@ -35,6 +78,8 @@ class ReadingProgress {
       'chapterId': chapterId,
       'chapterTitle': chapterTitle,
       'contentApi': contentApi,
+      'chapterPosition': chapterPosition,
+      'chaptersTotal': chaptersTotal,
       'updatedAt': updatedAt.toUtc().toIso8601String(),
     };
   }

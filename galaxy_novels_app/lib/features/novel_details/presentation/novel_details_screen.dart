@@ -1,11 +1,23 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../app/app_dependencies.dart';
 import '../../../data/models/novel_details_data.dart';
+import '../../../data/repositories/downloads_repository.dart';
 import '../../../data/repositories/novel_repository.dart';
+import '../../downloads/application/download_manager.dart';
+import '../../downloads/presentation/download_chapters_sheet.dart';
+import '../../account/application/auth_repository.dart';
+import '../../account/domain/auth_session.dart';
+import '../../account/presentation/account_screen.dart';
+import '../../favorites/application/favorites_repository.dart';
+import '../../favorites/domain/favorite_item.dart';
+import '../../novel_engagement/application/novel_engagement_controller.dart';
+import '../../novel_engagement/application/novel_engagement_repository.dart';
+import '../../novel_engagement/presentation/novel_rating_sheet.dart';
 import '../../reader/presentation/reader_screen.dart';
-import 'widgets/novel_chapter_tile.dart';
-import 'widgets/novel_details_header.dart';
+import 'widgets/novel_details_content.dart';
 
 class NovelDetailsScreen extends StatefulWidget {
   const NovelDetailsScreen({required this.manifestPath, super.key});
@@ -19,15 +31,55 @@ class NovelDetailsScreen extends StatefulWidget {
 class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
   Future<NovelDetailsLoadResult>? _future;
   NovelRepository? _repository;
+  DownloadsRepository? _downloadsRepository;
+  DownloadManager? _downloadManager;
+  AuthRepository? _authRepository;
+  FavoritesRepository? _favoritesRepository;
+  NovelEngagementRepository? _novelEngagementRepository;
+  NovelEngagementController? _novelEngagementController;
+  int? _loadedNovelId;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final repository = AppDependencies.of(context).novelRepository;
+    final dependencies = AppDependencies.of(context);
+    final repository = dependencies.novelRepository;
     if (_repository != repository) {
       _repository = repository;
-      _future = repository.loadNovel(widget.manifestPath);
+      _future = _loadNovel(repository);
     }
+
+    final authRepository = dependencies.authRepository;
+    final authRepositoryChanged = _authRepository != authRepository;
+    if (_authRepository != authRepository) {
+      _authRepository?.removeListener(_handleAuthChanged);
+      _authRepository = authRepository;
+      authRepository.addListener(_handleAuthChanged);
+    }
+    _favoritesRepository = dependencies.favoritesRepository;
+    _loadFavoritesIfAuthenticated();
+
+    final engagementRepository = dependencies.novelEngagementRepository;
+    if (_novelEngagementRepository != engagementRepository ||
+        authRepositoryChanged) {
+      _novelEngagementController?.dispose();
+      _novelEngagementRepository = engagementRepository;
+      _novelEngagementController = NovelEngagementController(
+        repository: engagementRepository,
+        authRepository: authRepository,
+      );
+      final novelId = _loadedNovelId;
+      if (novelId != null) {
+        unawaited(_novelEngagementController!.loadNovel(novelId));
+      }
+    }
+
+    final downloadsRepository = dependencies.downloadsRepository;
+    if (_downloadsRepository != downloadsRepository) {
+      _downloadsRepository = downloadsRepository;
+      unawaited(downloadsRepository.load());
+    }
+    _downloadManager = dependencies.downloadManager;
   }
 
   @override
@@ -38,20 +90,32 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
         future: _future,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
-            return const _NovelDetailsSkeleton();
+            return const NovelDetailsSkeleton();
           }
 
           if (snapshot.hasError || !snapshot.hasData) {
-            return _DetailsMessage(
+            return NovelDetailsMessage(
               title: 'تعذر تحميل تفاصيل الرواية الآن',
               actionLabel: 'إعادة المحاولة',
               onAction: _retry,
             );
           }
 
-          return _NovelDetailsContent(
-            result: snapshot.data!,
-            onRead: _openReader,
+          final engagementController = _novelEngagementController!;
+          return ValueListenableBuilder<NovelEngagementState>(
+            valueListenable: engagementController,
+            builder: (context, engagementState, _) {
+              return NovelDetailsContent(
+                loadResult: snapshot.data!,
+                engagementState: engagementState,
+                onRead: _openReader,
+                onDownloadChapters: () => _openDownloadSheet(snapshot.data!),
+                onToggleFavorite: () => _toggleFavorite(snapshot.data!.details),
+                onRate: _openRatingSheet,
+                onSignIn: _openAccountScreen,
+                onRetryEngagement: engagementController.retry,
+              );
+            },
           );
         },
       ),
@@ -64,8 +128,118 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
       return;
     }
     setState(() {
-      _future = repository.loadNovel(widget.manifestPath);
+      _future = _loadNovel(repository);
     });
+  }
+
+  Future<NovelDetailsLoadResult> _loadNovel(NovelRepository repository) async {
+    final novelLoad = await repository.loadNovel(widget.manifestPath);
+    if (mounted && identical(_repository, repository)) {
+      _loadedNovelId = novelLoad.details.id;
+      unawaited(_novelEngagementController?.loadNovel(novelLoad.details.id));
+    }
+    return novelLoad;
+  }
+
+  void _handleAuthChanged() => _loadFavoritesIfAuthenticated();
+
+  void _loadFavoritesIfAuthenticated() {
+    if (_authRepository?.value.status == AuthSessionStatus.authenticated) {
+      unawaited(_favoritesRepository?.load());
+    }
+  }
+
+  Future<void> _toggleFavorite(NovelDetails details) async {
+    final authRepository = _authRepository!;
+    if (authRepository.value.status == AuthSessionStatus.idle ||
+        authRepository.value.status == AuthSessionStatus.failure) {
+      await authRepository.restoreSession();
+    }
+    if (!mounted) {
+      return;
+    }
+    if (authRepository.value.status != AuthSessionStatus.authenticated) {
+      _showSignInMessage();
+      return;
+    }
+
+    await _favoritesRepository!.load();
+    final result = await _favoritesRepository!.toggle(
+      FavoriteItem(
+        id: details.id,
+        title: details.title,
+        url: details.url,
+        cover: details.bestCover,
+        manifestPath: details.manifest.isEmpty
+            ? widget.manifestPath
+            : details.manifest,
+        addedAt: DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+      ),
+    );
+    if (!mounted || result == FavoriteToggleResult.signInRequired) {
+      return;
+    }
+    if (result == FavoriteToggleResult.failed) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تعذر حفظ المفضلة على الجهاز.')),
+      );
+      return;
+    }
+    if (result == FavoriteToggleResult.limitReached) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('الحد الأقصى للمفضلة هو 300 رواية.')),
+      );
+      return;
+    }
+    final message = result == FavoriteToggleResult.added
+        ? 'أضيفت الرواية إلى المفضلة'
+        : 'أزيلت الرواية من المفضلة';
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  void _showSignInMessage() {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      SnackBar(
+        content: const Text('سجّل الدخول لإضافة الرواية إلى مفضلتك.'),
+        action: SnackBarAction(label: 'حسابي', onPressed: _openAccountScreen),
+      ),
+    );
+  }
+
+  void _openAccountScreen() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const AccountScreen()));
+  }
+
+  Future<void> _openRatingSheet() async {
+    final controller = _novelEngagementController;
+    if (controller == null) {
+      return;
+    }
+    if (_authRepository?.value.status != AuthSessionStatus.authenticated) {
+      _openAccountScreen();
+      return;
+    }
+
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (context) => NovelRatingSheet(
+        initialRating: controller.value.userState?.myRating ?? 0,
+        onSubmit: controller.submitRating,
+      ),
+    );
+    if (!mounted || saved != true) {
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('تم حفظ تقييمك')));
   }
 
   void _openReader(NovelChapter chapter, String novelTitle) {
@@ -79,308 +253,72 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
       ),
     );
   }
-}
 
-class _NovelDetailsContent extends StatelessWidget {
-  const _NovelDetailsContent({required this.result, required this.onRead});
+  Future<void> _openDownloadSheet(NovelDetailsLoadResult result) async {
+    final repository = _downloadsRepository;
+    if (repository == null || result.chapters.isEmpty) {
+      return;
+    }
+    if (_downloadManager?.state.value.isActive ?? false) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('يوجد تنزيل جار بالفعل')));
+      return;
+    }
 
-  final NovelDetailsLoadResult result;
-  final void Function(NovelChapter chapter, String novelTitle) onRead;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheetContext) {
+        return ValueListenableBuilder<DownloadsState>(
+          valueListenable: repository.state,
+          builder: (context, downloadsState, _) {
+            return DownloadChaptersSheet(
+              details: result.details,
+              chapters: result.chapters,
+              downloadsState: downloadsState,
+              onStart: (chapters) => _startBatchDownload(result, chapters),
+            );
+          },
+        );
+      },
+    );
+  }
 
-  @override
-  Widget build(BuildContext context) {
-    final details = result.details;
-    final firstReadableChapter = result.chapters.isNotEmpty
-        ? result.chapters.first
-        : null;
+  void _startBatchDownload(
+    NovelDetailsLoadResult result,
+    List<NovelChapter> chapters,
+  ) {
+    final manager = _downloadManager;
+    if (manager == null || chapters.isEmpty) {
+      return;
+    }
 
-    return ListView(
-      padding: const EdgeInsets.only(bottom: 28),
-      children: [
-        NovelDetailsHeader(details: details),
-        if (firstReadableChapter != null &&
-            firstReadableChapter.effectiveContentApi.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-            child: FilledButton.icon(
-              onPressed: () => onRead(firstReadableChapter, details.title),
-              icon: const Icon(Icons.menu_book_outlined),
-              label: const Text('ابدأ القراءة'),
-            ),
+    final requests = chapters
+        .map(
+          (chapter) => ChapterDownloadRequest(
+            novelId: result.details.id,
+            novelTitle: result.details.title,
+            novelCover: result.details.bestCover,
+            chapter: chapter,
           ),
-        if (details.summary.isNotEmpty)
-          _SummarySection(summary: details.summary),
-        if (details.genres.isNotEmpty) _GenresSection(genres: details.genres),
-        _ChaptersSection(result: result, onRead: onRead),
-      ],
-    );
+        )
+        .toList(growable: false);
+
+    try {
+      unawaited(manager.startBatch(requests).catchError((_) {}));
+    } on DownloadJobInProgressException {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('يوجد تنزيل جار بالفعل')));
+    }
   }
-}
-
-class _SummarySection extends StatefulWidget {
-  const _SummarySection({required this.summary});
-
-  final String summary;
 
   @override
-  State<_SummarySection> createState() => _SummarySectionState();
-}
-
-class _SummarySectionState extends State<_SummarySection> {
-  bool _expanded = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final isLong = widget.summary.length > 220;
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const _SectionTitle(title: 'عن الرواية'),
-          const SizedBox(height: 10),
-          Text(
-            widget.summary,
-            maxLines: isLong && !_expanded ? 5 : null,
-            overflow: isLong && !_expanded ? TextOverflow.ellipsis : null,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              height: 1.65,
-              color: Theme.of(
-                context,
-              ).colorScheme.onSurface.withValues(alpha: 0.84),
-            ),
-          ),
-          if (isLong)
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: () => setState(() => _expanded = !_expanded),
-                child: Text(_expanded ? 'عرض أقل' : 'عرض المزيد'),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _GenresSection extends StatelessWidget {
-  const _GenresSection({required this.genres});
-
-  final List<NovelGenre> genres;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 22),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: [
-          for (final genre in genres)
-            Chip(
-              label: Text(genre.name),
-              side: BorderSide(color: Theme.of(context).dividerColor),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ChaptersSection extends StatelessWidget {
-  const _ChaptersSection({required this.result, required this.onRead});
-
-  final NovelDetailsLoadResult result;
-  final void Function(NovelChapter chapter, String novelTitle) onRead;
-
-  @override
-  Widget build(BuildContext context) {
-    final chapters = result.chapters;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-          child: _SectionTitle(
-            title: chapters.isEmpty ? 'الفصول' : 'الفصول (${chapters.length})',
-          ),
-        ),
-        if (result.chaptersError != null)
-          _InlineMessage(
-            title: 'تعذر تحميل الفصول الآن',
-            subtitle: result.chaptersError,
-          )
-        else if (chapters.isEmpty)
-          _InlineMessage(
-            title: 'لا توجد فصول متاحة للعرض الآن',
-            subtitle: result.details.chaptersCount > 0
-                ? 'قد تكون الفصول غير منشورة في الفهرس العام بعد'
-                : null,
-          )
-        else
-          for (final chapter in chapters)
-            NovelChapterTile(
-              chapter: chapter,
-              onTap: () {
-                if (chapter.effectiveContentApi.isNotEmpty) {
-                  onRead(chapter, result.details.title);
-                }
-              },
-            ),
-      ],
-    );
-  }
-}
-
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle({required this.title});
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Row(
-      children: [
-        Container(
-          width: 4,
-          height: 28,
-          decoration: BoxDecoration(
-            color: theme.colorScheme.primary,
-            borderRadius: BorderRadius.circular(8),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            title,
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _InlineMessage extends StatelessWidget {
-  const _InlineMessage({required this.title, this.subtitle});
-
-  final String title;
-  final String? subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surface,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: theme.dividerColor),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            if (subtitle != null) ...[
-              const SizedBox(height: 6),
-              Text(
-                subtitle!,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.62),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _NovelDetailsSkeleton extends StatelessWidget {
-  const _NovelDetailsSkeleton();
-
-  @override
-  Widget build(BuildContext context) {
-    final color = Theme.of(context).colorScheme.primary.withValues(alpha: 0.10);
-
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
-      children: [
-        Center(
-          child: Container(
-            width: 150,
-            height: 224,
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(8),
-            ),
-          ),
-        ),
-        const SizedBox(height: 18),
-        Center(child: Container(width: 210, height: 22, color: color)),
-        const SizedBox(height: 10),
-        Center(child: Container(width: 160, height: 14, color: color)),
-        const SizedBox(height: 24),
-        Row(
-          children: [
-            Expanded(child: Container(height: 72, color: color)),
-            const SizedBox(width: 8),
-            Expanded(child: Container(height: 72, color: color)),
-            const SizedBox(width: 8),
-            Expanded(child: Container(height: 72, color: color)),
-          ],
-        ),
-        const SizedBox(height: 24),
-        Container(height: 14, color: color),
-        const SizedBox(height: 8),
-        Container(height: 14, color: color),
-        const SizedBox(height: 8),
-        Container(height: 14, width: 180, color: color),
-      ],
-    );
-  }
-}
-
-class _DetailsMessage extends StatelessWidget {
-  const _DetailsMessage({required this.title, this.actionLabel, this.onAction});
-
-  final String title;
-  final String? actionLabel;
-  final VoidCallback? onAction;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(title, textAlign: TextAlign.center),
-            if (actionLabel != null) ...[
-              const SizedBox(height: 12),
-              OutlinedButton(onPressed: onAction, child: Text(actionLabel!)),
-            ],
-          ],
-        ),
-      ),
-    );
+  void dispose() {
+    _authRepository?.removeListener(_handleAuthChanged);
+    _novelEngagementController?.dispose();
+    super.dispose();
   }
 }

@@ -44,75 +44,13 @@ class _ReaderSettingsSheetState extends State<ReaderSettingsSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-        child: Column(
+        child: ReaderSettingsControls(
           key: const ValueKey('reader-settings-sheet'),
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'إعدادات القراءة',
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            const SizedBox(height: 18),
-            _StepperRow(
-              label: 'حجم الخط',
-              value: '${(_preferences.fontScale * 100).round()}%',
-              decreaseKey: const ValueKey('reader-font-decrease'),
-              increaseKey: const ValueKey('reader-font-increase'),
-              onDecrease: () => _update(_preferences.decreaseFont()),
-              onIncrease: () => _update(_preferences.increaseFont()),
-            ),
-            const SizedBox(height: 14),
-            _StepperRow(
-              label: 'تباعد الأسطر',
-              value: _preferences.lineHeight.toStringAsFixed(2),
-              decreaseKey: const ValueKey('reader-line-decrease'),
-              increaseKey: const ValueKey('reader-line-increase'),
-              onDecrease: () => _update(_preferences.decreaseLineHeight()),
-              onIncrease: () => _update(_preferences.increaseLineHeight()),
-            ),
-            const SizedBox(height: 18),
-            Text(
-              'وضع القراءة',
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              child: SegmentedButton<ReaderPaletteMode>(
-                segments: const [
-                  ButtonSegment(
-                    value: ReaderPaletteMode.system,
-                    label: Text(
-                      'النظام',
-                      key: ValueKey('reader-palette-system'),
-                    ),
-                  ),
-                  ButtonSegment(
-                    value: ReaderPaletteMode.light,
-                    label: Text('فاتح', key: ValueKey('reader-palette-light')),
-                  ),
-                  ButtonSegment(
-                    value: ReaderPaletteMode.dark,
-                    label: Text('داكن', key: ValueKey('reader-palette-dark')),
-                  ),
-                ],
-                selected: {_preferences.paletteMode},
-                onSelectionChanged: (selection) {
-                  _update(_preferences.copyWith(paletteMode: selection.single));
-                },
-              ),
-            ),
-          ],
+          preferences: _preferences,
+          onChanged: _update,
         ),
       ),
     );
@@ -121,6 +59,88 @@ class _ReaderSettingsSheetState extends State<ReaderSettingsSheet> {
   void _update(ReaderPreferences preferences) {
     setState(() => _preferences = preferences);
     widget.onChanged(preferences);
+  }
+}
+
+class ReaderSettingsControls extends StatelessWidget {
+  const ReaderSettingsControls({
+    required this.preferences,
+    required this.onChanged,
+    this.showHeading = true,
+    super.key,
+  });
+
+  final ReaderPreferences preferences;
+  final ValueChanged<ReaderPreferences> onChanged;
+  final bool showHeading;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (showHeading) ...[
+          Text(
+            'إعدادات القراءة',
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 18),
+        ],
+        _StepperRow(
+          label: 'حجم الخط',
+          value: '${(preferences.fontScale * 100).round()}%',
+          decreaseKey: const ValueKey('reader-font-decrease'),
+          increaseKey: const ValueKey('reader-font-increase'),
+          onDecrease: () => onChanged(preferences.decreaseFont()),
+          onIncrease: () => onChanged(preferences.increaseFont()),
+        ),
+        const SizedBox(height: 14),
+        _StepperRow(
+          label: 'تباعد الأسطر',
+          value: preferences.lineHeight.toStringAsFixed(2),
+          decreaseKey: const ValueKey('reader-line-decrease'),
+          increaseKey: const ValueKey('reader-line-increase'),
+          onDecrease: () => onChanged(preferences.decreaseLineHeight()),
+          onIncrease: () => onChanged(preferences.increaseLineHeight()),
+        ),
+        const SizedBox(height: 18),
+        Text(
+          'وضع القراءة',
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: SegmentedButton<ReaderPaletteMode>(
+            segments: const [
+              ButtonSegment(
+                value: ReaderPaletteMode.system,
+                label: Text('النظام', key: ValueKey('reader-palette-system')),
+              ),
+              ButtonSegment(
+                value: ReaderPaletteMode.light,
+                label: Text('فاتح', key: ValueKey('reader-palette-light')),
+              ),
+              ButtonSegment(
+                value: ReaderPaletteMode.dark,
+                label: Text('داكن', key: ValueKey('reader-palette-dark')),
+              ),
+            ],
+            selected: {preferences.paletteMode},
+            onSelectionChanged: (selection) {
+              onChanged(preferences.copyWith(paletteMode: selection.single));
+            },
+          ),
+        ),
+      ],
+    );
   }
 }
 

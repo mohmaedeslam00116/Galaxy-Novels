@@ -37,6 +37,8 @@ void main() {
       'title': 'نداء بعيد',
       'date': 'منذ 12 دقيقة',
       'url': '/novel/star-guard/chapter-82/',
+      'novel_url': '/novel/star-guard/',
+      'cover_url': '/uploads/star-guard.jpg',
     });
 
     expect(chapter.id, 82);
@@ -46,6 +48,12 @@ void main() {
     expect(chapter.title, 'نداء بعيد');
     expect(chapter.dateLabel, 'منذ 12 دقيقة');
     expect(chapter.url, '/novel/star-guard/chapter-82/');
+    expect(chapter.novelUrl, '/novel/star-guard/');
+    expect(chapter.coverUrl, '/uploads/star-guard.jpg');
+    expect(
+      chapter.effectiveContentApi,
+      '/wp-json/wor-reader-app/v1/chapters/82',
+    );
   });
 
   test(
@@ -62,6 +70,7 @@ void main() {
             'title': 'صرخة الطائر',
             'url': 'https://galaxynovels.com/novel/fey/chapter-580/',
             'date': 'يونيو 18, 2026',
+            'content_api': '/reader/98239',
           },
           {
             'id': 98238,
@@ -82,6 +91,7 @@ void main() {
       expect(chapter.url, 'https://galaxynovels.com/novel/fey/chapter-580/');
       expect(chapter.chapters, hasLength(2));
       expect(chapter.chapters.last.label, 'الفصل 579');
+      expect(chapter.effectiveContentApi, '/reader/98239');
     },
   );
 
