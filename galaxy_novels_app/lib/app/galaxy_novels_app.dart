@@ -38,6 +38,8 @@ import '../features/favorites/data/shared_preferences_favorites_store.dart';
 import '../features/favorites/data/synced_favorites_repository.dart';
 import '../features/history/data/account_reading_history_repository.dart';
 import '../features/history/data/reading_history_remote_service.dart';
+import '../features/novel_engagement/application/novel_engagement_repository.dart';
+import '../features/novel_engagement/data/private_novel_engagement_repository.dart';
 import '../features/reading_activity/application/reading_activity_recorder.dart';
 import '../features/reading_activity/data/reading_activity_remote_service.dart';
 import '../features/reading_activity/data/shared_preferences_reading_activity_store.dart';
@@ -63,6 +65,7 @@ class GalaxyNovelsApp extends StatefulWidget {
     this.readerPreferencesRepository,
     this.authRepository,
     this.favoritesRepository,
+    this.novelEngagementRepository,
     this.readingActivityRecorder,
     super.key,
   }) : config = config ?? const AppConfig();
@@ -79,6 +82,7 @@ class GalaxyNovelsApp extends StatefulWidget {
   final ReaderPreferencesRepository? readerPreferencesRepository;
   final AuthRepository? authRepository;
   final FavoritesRepository? favoritesRepository;
+  final NovelEngagementRepository? novelEngagementRepository;
   final ReadingActivityRecorder? readingActivityRecorder;
 
   @override
@@ -95,6 +99,7 @@ class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
   DownloadManager? _downloadManager;
   SessionAuthRepository? _defaultAuthRepository;
   SyncedFavoritesRepository? _defaultFavoritesRepository;
+  PrivateNovelEngagementRepository? _defaultNovelEngagementRepository;
   late final StoredReadingHistoryRepository
   _defaultLocalReadingHistoryRepository = StoredReadingHistoryRepository(
     store: SharedPreferencesReadingHistoryStore(),
@@ -140,6 +145,7 @@ class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
     }
     if (configChanged) {
       _privateApiClient = null;
+      _defaultNovelEngagementRepository = null;
     }
 
     if (widget.downloadsRepository != null) {
@@ -212,6 +218,9 @@ class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
     final effectiveFavoritesRepository =
         widget.favoritesRepository ??
         _defaultFavoritesRepositoryFor(effectiveAuthRepository);
+    final effectiveNovelEngagementRepository =
+        widget.novelEngagementRepository ??
+        _defaultNovelEngagementRepositoryFor();
     final effectiveReadingActivityRecorder =
         widget.readingActivityRecorder ??
         _defaultReadingActivityRepositoryFor(effectiveAuthRepository);
@@ -231,6 +240,7 @@ class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
       readerPreferencesRepository: effectiveReaderPreferencesRepository,
       authRepository: effectiveAuthRepository,
       favoritesRepository: effectiveFavoritesRepository,
+      novelEngagementRepository: effectiveNovelEngagementRepository,
       readingActivityRecorder: effectiveReadingActivityRecorder,
       child: MaterialApp(
         title: 'مجرة الروايات',
@@ -296,6 +306,11 @@ class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
       localStore: SharedPreferencesFavoritesStore(),
       authRepository: authRepository,
     );
+  }
+
+  PrivateNovelEngagementRepository _defaultNovelEngagementRepositoryFor() {
+    return _defaultNovelEngagementRepository ??=
+        PrivateNovelEngagementRepository(client: _privateApiClientFor());
   }
 
   AccountReadingHistoryRepository _defaultReadingHistoryRepositoryFor(

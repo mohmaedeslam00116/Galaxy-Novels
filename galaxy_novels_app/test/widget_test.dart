@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:galaxy_novels_app/app/app_dependencies.dart';
 import 'package:galaxy_novels_app/app/galaxy_novels_app.dart';
 import 'package:galaxy_novels_app/data/models/catalog_data.dart';
 import 'package:galaxy_novels_app/data/models/chapter_summary.dart';
@@ -21,8 +22,10 @@ import 'package:galaxy_novels_app/data/repositories/rankings_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/search_repository.dart';
 import 'package:galaxy_novels_app/features/about/presentation/about_screen.dart';
 import 'package:galaxy_novels_app/features/account/domain/auth_session.dart';
+import 'package:galaxy_novels_app/features/shell/presentation/app_shell.dart';
 
 import 'helpers/fake_auth_repository.dart';
+import 'helpers/fake_novel_engagement_repository.dart';
 import 'helpers/fake_reader_preferences_repository.dart';
 
 void main() {
@@ -48,6 +51,27 @@ void main() {
         matching: find.text('حسابي'),
       ),
       findsNothing,
+    );
+  });
+
+  testWidgets('injects the configured novel engagement repository', (
+    tester,
+  ) async {
+    final engagementRepository = FakeNovelEngagementRepository();
+    await tester.pumpWidget(
+      GalaxyNovelsApp(
+        homeRepository: _TestHomeRepository(_homeData),
+        catalogRepository: const _TestCatalogRepository(),
+        novelRepository: const _TestNovelRepository(),
+        novelEngagementRepository: engagementRepository,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final shellContext = tester.element(find.byType(AppShell));
+    expect(
+      AppDependencies.of(shellContext).novelEngagementRepository,
+      same(engagementRepository),
     );
   });
 
