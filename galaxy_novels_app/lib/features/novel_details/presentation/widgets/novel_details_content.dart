@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../../app/app_dependencies.dart';
@@ -5,16 +7,21 @@ import '../../../../app/app_theme.dart';
 import '../../../../data/models/novel_details_data.dart';
 import '../../../../data/repositories/novel_repository.dart';
 import '../../../../shared/widgets/section_title.dart';
+import '../../../comments/application/comments_controller.dart';
+import '../../../comments/application/comments_repository.dart';
+import '../../../comments/domain/comment_target.dart';
+import '../../../comments/presentation/comments_sliver_section.dart';
 import '../../../novel_engagement/application/novel_engagement_controller.dart';
 import '../../../novel_engagement/presentation/novel_personal_state_section.dart';
 import 'favorite_toggle_button.dart';
 import 'novel_chapters_section.dart';
 import 'novel_details_header.dart';
 
-class NovelDetailsContent extends StatelessWidget {
+class NovelDetailsContent extends StatefulWidget {
   const NovelDetailsContent({
     required this.loadResult,
     required this.engagementState,
+    required this.commentsRepository,
     required this.onRead,
     required this.onDownloadChapters,
     required this.onToggleFavorite,
@@ -26,6 +33,7 @@ class NovelDetailsContent extends StatelessWidget {
 
   final NovelDetailsLoadResult loadResult;
   final NovelEngagementState engagementState;
+  final CommentsRepository commentsRepository;
   final void Function(NovelChapter chapter, String novelTitle) onRead;
   final VoidCallback onDownloadChapters;
   final Future<void> Function() onToggleFavorite;
@@ -34,12 +42,34 @@ class NovelDetailsContent extends StatelessWidget {
   final VoidCallback onRetryEngagement;
 
   @override
+  State<NovelDetailsContent> createState() => _NovelDetailsContentState();
+}
+
+enum _NovelDetailsSection { chapters, comments }
+
+class _NovelDetailsContentState extends State<NovelDetailsContent> {
+  _NovelDetailsSection _section = _NovelDetailsSection.chapters;
+  CommentsController? _commentsController;
+
+  @override
+  void didUpdateWidget(covariant NovelDetailsContent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.loadResult.details.id != widget.loadResult.details.id ||
+        oldWidget.commentsRepository != widget.commentsRepository) {
+      _commentsController?.dispose();
+      _commentsController = null;
+      _section = _NovelDetailsSection.chapters;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final loadResult = widget.loadResult;
     final details = loadResult.details;
     final firstReadableChapter = _firstReadableChapter(loadResult.chapters);
     final continuationChapter = _continuationChapter(
       loadResult.chapters,
-      engagementState.userState?.lastRead.chapterId ?? 0,
+      widget.engagementState.userState?.lastRead.chapterId ?? 0,
     );
     final readChapter = continuationChapter ?? firstReadableChapter;
 
@@ -50,21 +80,30 @@ class NovelDetailsContent extends StatelessWidget {
             SliverToBoxAdapter(child: NovelDetailsHeader(details: details)),
             SliverToBoxAdapter(
               child: NovelPersonalStateSection(
-                state: engagementState,
-                onRate: onRate,
-                onSignIn: onSignIn,
-                onRetry: onRetryEngagement,
+                state: widget.engagementState,
+                onRate: widget.onRate,
+                onSignIn: widget.onSignIn,
+                onRetry: widget.onRetryEngagement,
               ),
             ),
             if (details.summary.isNotEmpty)
               SliverToBoxAdapter(
                 child: _SummarySection(summary: details.summary),
               ),
-            NovelChaptersSection(
-              result: loadResult,
-              onRead: onRead,
-              onDownloadChapters: onDownloadChapters,
+            SliverToBoxAdapter(
+              child: _DetailsSectionTabs(
+                selected: _section,
+                onSelected: _selectSection,
+              ),
             ),
+            if (_section == _NovelDetailsSection.chapters)
+              NovelChaptersSection(
+                result: loadResult,
+                onRead: widget.onRead,
+                onDownloadChapters: widget.onDownloadChapters,
+              )
+            else
+              CommentsSliverSection(controller: _commentsController!),
             const SliverToBoxAdapter(child: SizedBox(height: 118)),
           ],
         ),
@@ -74,16 +113,147 @@ class NovelDetailsContent extends StatelessWidget {
           bottom: 0,
           child: _DetailsBottomBar(
             novelId: details.id,
-            onToggleFavorite: onToggleFavorite,
+            onToggleFavorite: widget.onToggleFavorite,
             readLabel: continuationChapter == null
                 ? 'ابدأ القراءة'
                 : 'متابعة ${continuationChapter.label}',
             onRead: readChapter == null
                 ? null
-                : () => onRead(readChapter, details.title),
+                : () => widget.onRead(readChapter, details.title),
           ),
         ),
       ],
+    );
+  }
+
+  void _selectSection(_NovelDetailsSection section) {
+    if (_section == section) {
+      return;
+    }
+    if (section == _NovelDetailsSection.comments) {
+      final controller = _commentsController ??= CommentsController(
+        repository: widget.commentsRepository,
+        target: CommentTarget.novel(widget.loadResult.details.id),
+      );
+      setState(() => _section = section);
+      unawaited(controller.loadInitial());
+      return;
+    }
+    setState(() => _section = section);
+  }
+
+  @override
+  void dispose() {
+    _commentsController?.dispose();
+    super.dispose();
+  }
+}
+
+class _DetailsSectionTabs extends StatelessWidget {
+  const _DetailsSectionTabs({required this.selected, required this.onSelected});
+
+  final _NovelDetailsSection selected;
+  final ValueChanged<_NovelDetailsSection> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens =
+        Theme.of(context).extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: tokens.surfaceSoft,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: tokens.border),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(4),
+          child: Row(
+            children: [
+              Expanded(
+                child: _DetailsTabButton(
+                  key: const ValueKey('novel-section-chapters'),
+                  label: 'الفصول',
+                  icon: Icons.menu_book_outlined,
+                  selected: selected == _NovelDetailsSection.chapters,
+                  onTap: () => onSelected(_NovelDetailsSection.chapters),
+                ),
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: _DetailsTabButton(
+                  key: const ValueKey('novel-section-comments'),
+                  label: 'التعليقات',
+                  icon: Icons.forum_outlined,
+                  selected: selected == _NovelDetailsSection.comments,
+                  onTap: () => onSelected(_NovelDetailsSection.comments),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DetailsTabButton extends StatelessWidget {
+  const _DetailsTabButton({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+    super.key,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tokens = theme.extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
+    final foreground = selected ? tokens.primary : tokens.textSecondary;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(6),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
+          decoration: BoxDecoration(
+            color: selected
+                ? tokens.primary.withValues(alpha: 0.13)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 19, color: foreground),
+              const SizedBox(width: 7),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: foreground,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

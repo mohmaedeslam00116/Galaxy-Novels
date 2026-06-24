@@ -14,6 +14,9 @@ import 'package:galaxy_novels_app/data/repositories/novel_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/reader_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/reading_history_repository.dart';
 import 'package:galaxy_novels_app/features/downloads/application/download_manager.dart';
+import 'package:galaxy_novels_app/features/comments/application/comments_repository.dart';
+import 'package:galaxy_novels_app/features/comments/domain/comments_page.dart';
+import 'package:galaxy_novels_app/features/comments/domain/public_comment.dart';
 import 'package:galaxy_novels_app/features/novel_details/presentation/novel_details_screen.dart';
 import 'package:galaxy_novels_app/features/novel_details/presentation/widgets/novel_chapter_tile.dart';
 
@@ -66,6 +69,78 @@ void main() {
     expect(find.text('300 فصل'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('loads novel comments only when their tab is opened', (
+    tester,
+  ) async {
+    final commentsRepository = FakeCommentsRepository(
+      handler: (target, sort, page) async => CommentsPage(
+        version: 2,
+        target: target,
+        sort: sort,
+        page: page,
+        perPage: 20,
+        totalComments: 1,
+        totalRoots: 1,
+        totalPages: 1,
+        generated: 1,
+        reactions: const {},
+        comments: [_comment('تعليق الرواية')],
+      ),
+    );
+    await tester.pumpWidget(
+      _TestApp(
+        repository: _LongNovelRepository(),
+        commentsRepository: commentsRepository,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(commentsRepository.calls, isEmpty);
+    final commentsTab = find.byKey(const ValueKey('novel-section-comments'));
+    await tester.scrollUntilVisible(
+      commentsTab,
+      300,
+      scrollable: _verticalScrollable(),
+    );
+    await tester.tap(commentsTab);
+    await tester.pumpAndSettle();
+
+    expect(find.text('تعليق الرواية'), findsOneWidget);
+    expect(commentsRepository.calls, hasLength(1));
+
+    await tester.tap(find.byKey(const ValueKey('novel-section-chapters')));
+    await tester.pump();
+    await tester.tap(commentsTab);
+    await tester.pump();
+
+    expect(commentsRepository.calls, hasLength(1));
+  });
+
+  testWidgets('comment failure does not hide the read action', (tester) async {
+    final commentsRepository = FakeCommentsRepository(
+      handler: (_, _, _) => Future.error(Exception('offline')),
+    );
+    await tester.pumpWidget(
+      _TestApp(
+        repository: _LongNovelRepository(),
+        commentsRepository: commentsRepository,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final commentsTab = find.byKey(const ValueKey('novel-section-comments'));
+    await tester.scrollUntilVisible(
+      commentsTab,
+      300,
+      scrollable: _verticalScrollable(),
+    );
+    await tester.tap(commentsTab);
+    await tester.pumpAndSettle();
+
+    expect(find.text('تعذر تحميل التعليقات الآن.'), findsOneWidget);
+    expect(find.text('ابدأ القراءة'), findsOneWidget);
+  });
 }
 
 Finder _verticalScrollable() {
@@ -76,9 +151,10 @@ Finder _verticalScrollable() {
 }
 
 class _TestApp extends StatelessWidget {
-  const _TestApp({required this.repository});
+  const _TestApp({required this.repository, this.commentsRepository});
 
   final NovelRepository repository;
+  final CommentsRepository? commentsRepository;
 
   @override
   Widget build(BuildContext context) {
@@ -96,7 +172,7 @@ class _TestApp extends StatelessWidget {
       downloadManager: DownloadManager(repository: downloadsRepository),
       readerPreferencesRepository: FakeReaderPreferencesRepository(),
       authRepository: FakeAuthRepository(),
-      commentsRepository: FakeCommentsRepository.empty(),
+      commentsRepository: commentsRepository ?? FakeCommentsRepository.empty(),
       favoritesRepository: FakeFavoritesRepository(),
       novelEngagementRepository: FakeNovelEngagementRepository(),
       child: const MaterialApp(
@@ -108,6 +184,29 @@ class _TestApp extends StatelessWidget {
       ),
     );
   }
+}
+
+PublicComment _comment(String content) {
+  return PublicComment(
+    id: 71,
+    parentId: 0,
+    rootId: 0,
+    depth: 0,
+    authorName: 'قارئ تجريبي',
+    authorRank: '',
+    avatarUrl: '',
+    replyToName: '',
+    content: content,
+    isSpoiler: false,
+    likeCount: 0,
+    dislikeCount: 0,
+    repliesCount: 0,
+    score: 0,
+    isPinned: false,
+    createdLabel: 'الآن',
+    createdAt: null,
+    replies: const [],
+  );
 }
 
 class _LongNovelRepository implements NovelRepository {

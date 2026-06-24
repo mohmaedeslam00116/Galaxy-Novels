@@ -11,6 +11,7 @@ import '../../downloads/presentation/download_chapters_sheet.dart';
 import '../../account/application/auth_repository.dart';
 import '../../account/domain/auth_session.dart';
 import '../../account/presentation/account_screen.dart';
+import '../../comments/application/comments_repository.dart';
 import '../../favorites/application/favorites_repository.dart';
 import '../../favorites/domain/favorite_item.dart';
 import '../../novel_engagement/application/novel_engagement_controller.dart';
@@ -36,6 +37,7 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
   AuthRepository? _authRepository;
   FavoritesRepository? _favoritesRepository;
   NovelEngagementRepository? _novelEngagementRepository;
+  CommentsRepository? _commentsRepository;
   NovelEngagementController? _novelEngagementController;
   int? _loadedNovelId;
 
@@ -57,6 +59,7 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
       authRepository.addListener(_handleAuthChanged);
     }
     _favoritesRepository = dependencies.favoritesRepository;
+    _commentsRepository = dependencies.commentsRepository;
     _loadFavoritesIfAuthenticated();
 
     final engagementRepository = dependencies.novelEngagementRepository;
@@ -108,6 +111,7 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
               return NovelDetailsContent(
                 loadResult: snapshot.data!,
                 engagementState: engagementState,
+                commentsRepository: _commentsRepository!,
                 onRead: _openReader,
                 onDownloadChapters: () => _openDownloadSheet(snapshot.data!),
                 onToggleFavorite: () => _toggleFavorite(snapshot.data!.details),
