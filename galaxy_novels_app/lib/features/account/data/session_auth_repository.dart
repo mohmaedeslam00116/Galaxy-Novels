@@ -17,11 +17,21 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
     Duration profileRefreshCooldown = const Duration(seconds: 60),
   }) : _client = client,
        _sessionStore = sessionStore,
-       _profileRefreshCooldown = profileRefreshCooldown;
+       _profileRefreshCooldown = profileRefreshCooldown,
+       _profileRefreshClock = Stopwatch()..start() {
+    if (profileRefreshCooldown.isNegative) {
+      throw ArgumentError.value(
+        profileRefreshCooldown,
+        'profileRefreshCooldown',
+        'must not be negative',
+      );
+    }
+  }
 
   final PrivateApiClient _client;
   final AuthSessionStore _sessionStore;
   final Duration _profileRefreshCooldown;
+  final Stopwatch _profileRefreshClock;
 
   AuthSessionState _value = const AuthSessionState.idle();
   Future<void>? _restoreInFlight;
@@ -31,7 +41,7 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
   Timer? _profileRefreshTimer;
   int? _profileRefreshTimerUserId;
   int? _profileRefreshTimerGeneration;
-  DateTime? _lastProfileRefreshAttemptAt;
+  Duration? _lastProfileRefreshAttemptElapsed;
   int _sessionGeneration = 0;
   bool _persistSession = false;
   bool _disposed = false;
@@ -174,10 +184,11 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
       return inFlight;
     }
 
-    final lastAttemptAt = _lastProfileRefreshAttemptAt;
-    if (lastAttemptAt != null) {
+    final lastAttemptElapsed = _lastProfileRefreshAttemptElapsed;
+    if (lastAttemptElapsed != null) {
       final cooldownRemaining =
-          _profileRefreshCooldown - DateTime.now().difference(lastAttemptAt);
+          _profileRefreshCooldown -
+          (_profileRefreshClock.elapsed - lastAttemptElapsed);
       if (cooldownRemaining > Duration.zero) {
         _scheduleProfileRefresh(requestSession, cooldownRemaining);
         return Future.value();
@@ -192,7 +203,7 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
   ) {
     late final Future<void> refresh;
     _cancelDeferredProfileRefresh();
-    _lastProfileRefreshAttemptAt = DateTime.now();
+    _lastProfileRefreshAttemptElapsed = _profileRefreshClock.elapsed;
     refresh = _refreshProfileNow(requestSession).whenComplete(() {
       if (identical(_profileRefreshInFlight, refresh)) {
         _profileRefreshInFlight = null;
@@ -229,8 +240,27 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
       )) {
         return;
       }
-      unawaited(_startProfileRefresh(requestSession));
+      unawaited(_refreshProfileInBackground(requestSession));
     });
+  }
+
+  Future<void> _refreshProfileInBackground(
+    ({AuthUser user, int generation}) requestSession,
+  ) async {
+    try {
+      await _startProfileRefresh(requestSession);
+    } on Object catch (error, stackTrace) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          library: 'account session',
+          context: ErrorDescription(
+            'while refreshing the account profile in the background',
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _refreshProfileNow(
@@ -447,7 +477,7 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
 
   void _resetProfileRefreshRequests() {
     _cancelDeferredProfileRefresh();
-    _lastProfileRefreshAttemptAt = null;
+    _lastProfileRefreshAttemptElapsed = null;
     _profileRefreshInFlight = null;
     _profileRefreshInFlightUserId = null;
     _profileRefreshInFlightGeneration = null;

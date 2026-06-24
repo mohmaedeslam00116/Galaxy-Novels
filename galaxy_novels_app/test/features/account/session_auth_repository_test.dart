@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:galaxy_novels_app/core/config/app_config.dart';
 import 'package:galaxy_novels_app/core/network/private_api_client.dart';
@@ -10,6 +11,22 @@ import 'package:galaxy_novels_app/features/account/domain/auth_session.dart';
 import '../../helpers/fake_auth_session_store.dart';
 
 void main() {
+  test('rejects a negative profile refresh cooldown', () {
+    expect(
+      () => _AuthHarness(
+        responses: const [],
+        profileRefreshCooldown: const Duration(microseconds: -1),
+      ),
+      throwsA(
+        isA<ArgumentError>().having(
+          (error) => error.name,
+          'name',
+          'profileRefreshCooldown',
+        ),
+      ),
+    );
+  });
+
   test('restores a guest and clears an obsolete saved session', () async {
     final sessionStore = FakeAuthSessionStore()
       ..session = const PrivateSessionSnapshot(
@@ -114,9 +131,19 @@ void main() {
 
     final firstRefresh = harness.repository.refreshProfile();
     final secondRefresh = harness.repository.refreshProfile();
+    var firstCompleted = false;
+    var secondCompleted = false;
+    firstRefresh.then((_) => firstCompleted = true);
+    secondRefresh.then((_) => secondCompleted = true);
+
+    await Future<void>.delayed(Duration.zero);
+    expect(secondCompleted, isFalse);
+
     profileResponse.complete(_profileResponse(totalXp: 1840, todayXp: 35));
     await Future.wait([firstRefresh, secondRefresh]);
 
+    expect(firstCompleted, isTrue);
+    expect(secondCompleted, isTrue);
     expect(
       harness.requests.where((request) => request.uri.path.endsWith('/me')),
       hasLength(1),
@@ -198,6 +225,80 @@ void main() {
     expect(_profileRequestCount(harness), 2);
   });
 
+  test('deferred unexpected profile failure is reported once', () async {
+    _ControlledTimer? deferredTimer;
+    final reportedErrors = <FlutterErrorDetails>[];
+    final uncaughtErrors = <Object>[];
+    final previousErrorHandler = FlutterError.onError;
+    var profileRequests = 0;
+    final harness = _AuthHarness(
+      responses: const [],
+      responseHandler: (request) async {
+        if (request.uri.path.endsWith('/auth/login')) {
+          return _authenticatedResponse(nonce: 'profile-nonce');
+        }
+        if (request.uri.path.endsWith('/me')) {
+          profileRequests += 1;
+          if (profileRequests == 1) {
+            return _profileResponse(totalXp: 1840, todayXp: 35);
+          }
+          throw const PrivateApiException(
+            code: 'unsafe_endpoint',
+            message: 'unsafe',
+          );
+        }
+        throw StateError('Unexpected request: ${request.uri.path}');
+      },
+      profileRefreshCooldown: const Duration(seconds: 1),
+    );
+    addTearDown(harness.repository.dispose);
+    await harness.repository.login(
+      const LoginCredentials(
+        username: 'reader',
+        password: 'secret',
+        rememberSession: false,
+      ),
+    );
+    await harness.repository.refreshProfile();
+
+    FlutterError.onError = reportedErrors.add;
+    try {
+      await runZonedGuarded(
+        () async {
+          await harness.repository.refreshProfile();
+          deferredTimer!.fire();
+          await Future<void>.delayed(Duration.zero);
+        },
+        (error, stackTrace) {
+          uncaughtErrors.add(error);
+        },
+        zoneSpecification: ZoneSpecification(
+          createTimer: (self, parent, zone, duration, callback) {
+            if (deferredTimer == null && duration > Duration.zero) {
+              deferredTimer = _ControlledTimer(callback);
+              return deferredTimer!;
+            }
+            return parent.createTimer(zone, duration, callback);
+          },
+        ),
+      );
+    } finally {
+      FlutterError.onError = previousErrorHandler;
+      deferredTimer?.cancel();
+    }
+
+    expect(uncaughtErrors, isEmpty);
+    expect(reportedErrors, hasLength(1));
+    expect(
+      reportedErrors.single.exception,
+      isA<PrivateApiException>().having(
+        (error) => error.code,
+        'code',
+        'unsafe_endpoint',
+      ),
+    );
+  });
+
   test('same-user relogin cancels a deferred profile refresh', () async {
     var profileRequests = 0;
     final harness = _AuthHarness(
@@ -244,6 +345,88 @@ void main() {
     expect(_profileRequestCount(harness), 2);
     await Future<void>.delayed(const Duration(milliseconds: 180));
     expect(_profileRequestCount(harness), 2);
+  });
+
+  test('logout immediately cancels a deferred profile refresh', () async {
+    final logoutResponse = Completer<PrivateRawResponse>();
+    final harness = _AuthHarness(
+      responses: const [],
+      responseHandler: (request) async {
+        if (request.uri.path.endsWith('/auth/login')) {
+          return _authenticatedResponse(nonce: 'profile-nonce');
+        }
+        if (request.uri.path.endsWith('/auth/logout')) {
+          return logoutResponse.future;
+        }
+        if (request.uri.path.endsWith('/me')) {
+          return _profileResponse(totalXp: 1840, todayXp: 35);
+        }
+        throw StateError('Unexpected request: ${request.uri.path}');
+      },
+      profileRefreshCooldown: const Duration(seconds: 1),
+    );
+    addTearDown(harness.repository.dispose);
+    await harness.repository.login(
+      const LoginCredentials(
+        username: 'reader',
+        password: 'secret',
+        rememberSession: false,
+      ),
+    );
+    await harness.repository.refreshProfile();
+    final deferredTimer = await _scheduleControlledDeferredRefresh(harness);
+
+    final logout = harness.repository.logout();
+
+    expect(deferredTimer.isActive, isFalse);
+    logoutResponse.complete(
+      const PrivateRawResponse(statusCode: 200, body: '{"logged_in":false}'),
+    );
+    await logout;
+  });
+
+  test('login immediately cancels a deferred profile refresh', () async {
+    final nextLoginResponse = Completer<PrivateRawResponse>();
+    var loginRequests = 0;
+    final harness = _AuthHarness(
+      responses: const [],
+      responseHandler: (request) async {
+        if (request.uri.path.endsWith('/auth/login')) {
+          loginRequests += 1;
+          if (loginRequests == 1) {
+            return _authenticatedResponse(nonce: 'profile-nonce');
+          }
+          return nextLoginResponse.future;
+        }
+        if (request.uri.path.endsWith('/me')) {
+          return _profileResponse(totalXp: 1840, todayXp: 35);
+        }
+        throw StateError('Unexpected request: ${request.uri.path}');
+      },
+      profileRefreshCooldown: const Duration(seconds: 1),
+    );
+    addTearDown(harness.repository.dispose);
+    await harness.repository.login(
+      const LoginCredentials(
+        username: 'reader',
+        password: 'secret',
+        rememberSession: false,
+      ),
+    );
+    await harness.repository.refreshProfile();
+    final deferredTimer = await _scheduleControlledDeferredRefresh(harness);
+
+    final login = harness.repository.login(
+      const LoginCredentials(
+        username: 'reader',
+        password: 'new-secret',
+        rememberSession: false,
+      ),
+    );
+
+    expect(deferredTimer.isActive, isFalse);
+    nextLoginResponse.complete(_authenticatedResponse(nonce: 'new-nonce'));
+    await login;
   });
 
   test('dispose cancels a deferred profile refresh', () async {
@@ -966,6 +1149,22 @@ class _ControlledTimer implements Timer {
 
   @override
   int get tick => _tick;
+}
+
+Future<_ControlledTimer> _scheduleControlledDeferredRefresh(
+  _AuthHarness harness,
+) async {
+  late _ControlledTimer deferredTimer;
+  await runZoned(
+    harness.repository.refreshProfile,
+    zoneSpecification: ZoneSpecification(
+      createTimer: (self, parent, zone, duration, callback) {
+        deferredTimer = _ControlledTimer(callback);
+        return deferredTimer;
+      },
+    ),
+  );
+  return deferredTimer;
 }
 
 class _AuthHarness {
