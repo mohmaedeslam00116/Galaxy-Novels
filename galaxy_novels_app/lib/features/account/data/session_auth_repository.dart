@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../../../core/network/private_api_client.dart';
@@ -12,14 +14,24 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
   SessionAuthRepository({
     required PrivateApiClient client,
     required AuthSessionStore sessionStore,
+    Duration profileRefreshCooldown = const Duration(seconds: 60),
   }) : _client = client,
-       _sessionStore = sessionStore;
+       _sessionStore = sessionStore,
+       _profileRefreshCooldown = profileRefreshCooldown;
 
   final PrivateApiClient _client;
   final AuthSessionStore _sessionStore;
+  final Duration _profileRefreshCooldown;
 
   AuthSessionState _value = const AuthSessionState.idle();
   Future<void>? _restoreInFlight;
+  Future<void>? _profileRefreshInFlight;
+  int? _profileRefreshInFlightUserId;
+  int? _profileRefreshInFlightGeneration;
+  Timer? _profileRefreshTimer;
+  int? _profileRefreshTimerUserId;
+  int? _profileRefreshTimerGeneration;
+  DateTime? _lastProfileRefreshAttemptAt;
   int _sessionGeneration = 0;
   bool _persistSession = false;
   bool _disposed = false;
@@ -35,6 +47,7 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
   }
 
   Future<void> _restore() async {
+    _resetProfileRefreshRequests();
     _sessionGeneration += 1;
     _publishState(const AuthSessionState.restoring());
     _client.clearSession();
@@ -89,6 +102,7 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
     if (_value.status == AuthSessionStatus.authenticating) {
       return;
     }
+    _resetProfileRefreshRequests();
     _sessionGeneration += 1;
     if (credentials.username.trim().isEmpty || credentials.password.isEmpty) {
       _publishState(
@@ -147,12 +161,81 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
   }
 
   @override
-  Future<void> refreshProfile() async {
+  Future<void> refreshProfile() {
     final requestSession = _activeAuthenticatedSession();
     if (requestSession == null) {
-      return;
+      return Future.value();
     }
 
+    final inFlight = _profileRefreshInFlight;
+    if (inFlight != null &&
+        _profileRefreshInFlightUserId == requestSession.user.id &&
+        _profileRefreshInFlightGeneration == requestSession.generation) {
+      return inFlight;
+    }
+
+    final lastAttemptAt = _lastProfileRefreshAttemptAt;
+    if (lastAttemptAt != null) {
+      final cooldownRemaining =
+          _profileRefreshCooldown - DateTime.now().difference(lastAttemptAt);
+      if (cooldownRemaining > Duration.zero) {
+        _scheduleProfileRefresh(requestSession, cooldownRemaining);
+        return Future.value();
+      }
+    }
+
+    return _startProfileRefresh(requestSession);
+  }
+
+  Future<void> _startProfileRefresh(
+    ({AuthUser user, int generation}) requestSession,
+  ) {
+    late final Future<void> refresh;
+    _cancelDeferredProfileRefresh();
+    _lastProfileRefreshAttemptAt = DateTime.now();
+    refresh = _refreshProfileNow(requestSession).whenComplete(() {
+      if (identical(_profileRefreshInFlight, refresh)) {
+        _profileRefreshInFlight = null;
+        _profileRefreshInFlightUserId = null;
+        _profileRefreshInFlightGeneration = null;
+      }
+    });
+    _profileRefreshInFlight = refresh;
+    _profileRefreshInFlightUserId = requestSession.user.id;
+    _profileRefreshInFlightGeneration = requestSession.generation;
+    return refresh;
+  }
+
+  void _scheduleProfileRefresh(
+    ({AuthUser user, int generation}) requestSession,
+    Duration delay,
+  ) {
+    final timer = _profileRefreshTimer;
+    if (timer != null &&
+        _profileRefreshTimerUserId == requestSession.user.id &&
+        _profileRefreshTimerGeneration == requestSession.generation) {
+      return;
+    }
+    timer?.cancel();
+    _profileRefreshTimerUserId = requestSession.user.id;
+    _profileRefreshTimerGeneration = requestSession.generation;
+    _profileRefreshTimer = Timer(delay, () {
+      _profileRefreshTimer = null;
+      _profileRefreshTimerUserId = null;
+      _profileRefreshTimerGeneration = null;
+      if (!_isCurrentAuthenticatedSession(
+        requestSession.user.id,
+        requestSession.generation,
+      )) {
+        return;
+      }
+      unawaited(_startProfileRefresh(requestSession));
+    });
+  }
+
+  Future<void> _refreshProfileNow(
+    ({AuthUser user, int generation}) requestSession,
+  ) async {
     try {
       final refreshed = await _requestProfile(requestSession.user.id);
       _publishProfileIfCurrent(
@@ -239,6 +322,7 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
     if (user == null || _value.status == AuthSessionStatus.signingOut) {
       return;
     }
+    _resetProfileRefreshRequests();
     _sessionGeneration += 1;
     _publishState(AuthSessionState.signingOut(user));
 
@@ -354,8 +438,24 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
     notifyListeners();
   }
 
+  void _cancelDeferredProfileRefresh() {
+    _profileRefreshTimer?.cancel();
+    _profileRefreshTimer = null;
+    _profileRefreshTimerUserId = null;
+    _profileRefreshTimerGeneration = null;
+  }
+
+  void _resetProfileRefreshRequests() {
+    _cancelDeferredProfileRefresh();
+    _lastProfileRefreshAttemptAt = null;
+    _profileRefreshInFlight = null;
+    _profileRefreshInFlightUserId = null;
+    _profileRefreshInFlightGeneration = null;
+  }
+
   @override
   void dispose() {
+    _resetProfileRefreshRequests();
     _disposed = true;
     super.dispose();
   }

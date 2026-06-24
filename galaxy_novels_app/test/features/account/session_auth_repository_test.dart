@@ -89,6 +89,323 @@ void main() {
     },
   );
 
+  test('deduplicates concurrent profile refreshes', () async {
+    final profileResponse = Completer<PrivateRawResponse>();
+    final harness = _AuthHarness(
+      responses: const [],
+      responseHandler: (request) {
+        if (request.uri.path.endsWith('/auth/login')) {
+          return Future.value(_authenticatedResponse(nonce: 'profile-nonce'));
+        }
+        if (request.uri.path.endsWith('/me')) {
+          return profileResponse.future;
+        }
+        throw StateError('Unexpected request: ${request.uri.path}');
+      },
+    );
+    addTearDown(harness.repository.dispose);
+    await harness.repository.login(
+      const LoginCredentials(
+        username: 'reader',
+        password: 'secret',
+        rememberSession: false,
+      ),
+    );
+
+    final firstRefresh = harness.repository.refreshProfile();
+    final secondRefresh = harness.repository.refreshProfile();
+    profileResponse.complete(_profileResponse(totalXp: 1840, todayXp: 35));
+    await Future.wait([firstRefresh, secondRefresh]);
+
+    expect(
+      harness.requests.where((request) => request.uri.path.endsWith('/me')),
+      hasLength(1),
+    );
+  });
+
+  test('coalesces profile refreshes during the cooldown', () async {
+    final harness = _AuthHarness(
+      responses: [
+        _authenticatedResponse(nonce: 'profile-nonce'),
+        _profileResponse(totalXp: 1840, todayXp: 35),
+        _profileResponse(totalXp: 1900, todayXp: 40),
+      ],
+      profileRefreshCooldown: const Duration(milliseconds: 30),
+    );
+    addTearDown(harness.repository.dispose);
+    await harness.repository.login(
+      const LoginCredentials(
+        username: 'reader',
+        password: 'secret',
+        rememberSession: false,
+      ),
+    );
+    await harness.repository.refreshProfile();
+
+    await Future.wait([
+      harness.repository.refreshProfile(),
+      harness.repository.refreshProfile(),
+      harness.repository.refreshProfile(),
+    ]);
+
+    expect(_profileRequestCount(harness), 1);
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+    expect(_profileRequestCount(harness), 2);
+  });
+
+  test('immediate refresh cancels the expired deferred timer', () async {
+    late _ControlledTimer deferredTimer;
+    var profileRequests = 0;
+    final harness = _AuthHarness(
+      responses: const [],
+      responseHandler: (request) async {
+        if (request.uri.path.endsWith('/auth/login')) {
+          return _authenticatedResponse(nonce: 'profile-nonce');
+        }
+        if (request.uri.path.endsWith('/me')) {
+          profileRequests += 1;
+          return _profileResponse(totalXp: 1800 + profileRequests, todayXp: 35);
+        }
+        throw StateError('Unexpected request: ${request.uri.path}');
+      },
+      profileRefreshCooldown: const Duration(milliseconds: 20),
+    );
+    addTearDown(harness.repository.dispose);
+    await harness.repository.login(
+      const LoginCredentials(
+        username: 'reader',
+        password: 'secret',
+        rememberSession: false,
+      ),
+    );
+    await harness.repository.refreshProfile();
+    await runZoned(
+      harness.repository.refreshProfile,
+      zoneSpecification: ZoneSpecification(
+        createTimer: (self, parent, zone, duration, callback) {
+          deferredTimer = _ControlledTimer(callback);
+          return deferredTimer;
+        },
+      ),
+    );
+
+    await Future<void>.delayed(const Duration(milliseconds: 40));
+    await harness.repository.refreshProfile();
+    deferredTimer.fire();
+    await Future<void>.delayed(Duration.zero);
+
+    expect(deferredTimer.isActive, isFalse);
+    expect(_profileRequestCount(harness), 2);
+  });
+
+  test('same-user relogin cancels a deferred profile refresh', () async {
+    var profileRequests = 0;
+    final harness = _AuthHarness(
+      responses: const [],
+      responseHandler: (request) async {
+        if (request.uri.path.endsWith('/auth/login')) {
+          return _authenticatedResponse(nonce: 'profile-nonce');
+        }
+        if (request.uri.path.endsWith('/auth/logout')) {
+          return const PrivateRawResponse(
+            statusCode: 200,
+            body: '{"logged_in":false}',
+          );
+        }
+        if (request.uri.path.endsWith('/me')) {
+          profileRequests += 1;
+          return _profileResponse(totalXp: 1800 + profileRequests, todayXp: 35);
+        }
+        throw StateError('Unexpected request: ${request.uri.path}');
+      },
+      profileRefreshCooldown: const Duration(milliseconds: 100),
+    );
+    addTearDown(harness.repository.dispose);
+    await harness.repository.login(
+      const LoginCredentials(
+        username: 'reader',
+        password: 'secret',
+        rememberSession: false,
+      ),
+    );
+    await harness.repository.refreshProfile();
+    await harness.repository.refreshProfile();
+
+    await harness.repository.logout();
+    await harness.repository.login(
+      const LoginCredentials(
+        username: 'reader',
+        password: 'new-secret',
+        rememberSession: false,
+      ),
+    );
+    await harness.repository.refreshProfile();
+
+    expect(_profileRequestCount(harness), 2);
+    await Future<void>.delayed(const Duration(milliseconds: 180));
+    expect(_profileRequestCount(harness), 2);
+  });
+
+  test('dispose cancels a deferred profile refresh', () async {
+    Timer? deferredTimer;
+    var repositoryDisposed = false;
+    late bool timerWasActiveAfterDispose;
+    final harness = _AuthHarness(
+      responses: [
+        _authenticatedResponse(nonce: 'profile-nonce'),
+        _profileResponse(totalXp: 1840, todayXp: 35),
+      ],
+      profileRefreshCooldown: const Duration(seconds: 1),
+    );
+
+    try {
+      await runZoned(
+        () async {
+          await harness.repository.login(
+            const LoginCredentials(
+              username: 'reader',
+              password: 'secret',
+              rememberSession: false,
+            ),
+          );
+          await harness.repository.refreshProfile();
+          await harness.repository.refreshProfile();
+        },
+        zoneSpecification: ZoneSpecification(
+          createTimer: (self, parent, zone, duration, callback) {
+            final timer = parent.createTimer(zone, duration, callback);
+            deferredTimer = timer;
+            return timer;
+          },
+        ),
+      );
+
+      harness.repository.dispose();
+      repositoryDisposed = true;
+      timerWasActiveAfterDispose = deferredTimer!.isActive;
+    } finally {
+      deferredTimer?.cancel();
+      if (!repositoryDisposed) {
+        harness.repository.dispose();
+      }
+    }
+
+    expect(timerWasActiveAfterDispose, isFalse);
+    expect(_profileRequestCount(harness), 1);
+  });
+
+  test('new session refresh remains in flight after old completion', () async {
+    final oldProfileResponse = Completer<PrivateRawResponse>();
+    final newProfileResponse = Completer<PrivateRawResponse>();
+    var profileRequests = 0;
+    final harness = _AuthHarness(
+      responses: const [],
+      responseHandler: (request) async {
+        if (request.uri.path.endsWith('/auth/login')) {
+          return _authenticatedResponse(nonce: 'profile-nonce');
+        }
+        if (request.uri.path.endsWith('/auth/logout')) {
+          return const PrivateRawResponse(
+            statusCode: 200,
+            body: '{"logged_in":false}',
+          );
+        }
+        if (request.uri.path.endsWith('/me')) {
+          profileRequests += 1;
+          return profileRequests == 1
+              ? oldProfileResponse.future
+              : newProfileResponse.future;
+        }
+        throw StateError('Unexpected request: ${request.uri.path}');
+      },
+      profileRefreshCooldown: Duration.zero,
+    );
+    addTearDown(harness.repository.dispose);
+    await harness.repository.login(
+      const LoginCredentials(
+        username: 'reader',
+        password: 'secret',
+        rememberSession: false,
+      ),
+    );
+
+    final oldRefresh = harness.repository.refreshProfile();
+    await harness.repository.logout();
+    await harness.repository.login(
+      const LoginCredentials(
+        username: 'reader',
+        password: 'new-secret',
+        rememberSession: false,
+      ),
+    );
+    final newRefresh = harness.repository.refreshProfile();
+    final requestCountAfterNewRefresh = _profileRequestCount(harness);
+
+    oldProfileResponse.complete(_profileResponse(totalXp: 9999, todayXp: 999));
+    await oldRefresh;
+    final sharedNewRefresh = harness.repository.refreshProfile();
+    final requestCountAfterOldCompletion = _profileRequestCount(harness);
+
+    newProfileResponse.complete(_profileResponse(totalXp: 1900, todayXp: 40));
+    await Future.wait([newRefresh, sharedNewRefresh]);
+
+    expect(requestCountAfterNewRefresh, 2);
+    expect(requestCountAfterOldCompletion, 2);
+    expect(harness.repository.value.user?.xp.total, 1900);
+  });
+
+  test('restore cancels a deferred profile refresh', () async {
+    late _ControlledTimer deferredTimer;
+    var profileRequests = 0;
+    final harness = _AuthHarness(
+      responses: const [],
+      responseHandler: (request) async {
+        if (request.uri.path.endsWith('/auth/login')) {
+          return _authenticatedResponse(nonce: 'login-nonce');
+        }
+        if (request.uri.path.endsWith('/session')) {
+          return _authenticatedResponse(nonce: 'restored-nonce');
+        }
+        if (request.uri.path.endsWith('/me')) {
+          profileRequests += 1;
+          return _profileResponse(totalXp: 1800 + profileRequests, todayXp: 35);
+        }
+        throw StateError('Unexpected request: ${request.uri.path}');
+      },
+      profileRefreshCooldown: const Duration(seconds: 1),
+    );
+    addTearDown(harness.repository.dispose);
+    await harness.repository.login(
+      const LoginCredentials(
+        username: 'reader',
+        password: 'secret',
+        rememberSession: false,
+      ),
+    );
+    await harness.repository.refreshProfile();
+    await runZoned(
+      harness.repository.refreshProfile,
+      zoneSpecification: ZoneSpecification(
+        createTimer: (self, parent, zone, duration, callback) {
+          deferredTimer = _ControlledTimer(callback);
+          return deferredTimer;
+        },
+      ),
+    );
+
+    expect(deferredTimer.isActive, isTrue);
+
+    await harness.repository.restoreSession();
+    final oldTimerWasActiveAfterRestore = deferredTimer.isActive;
+    await harness.repository.refreshProfile();
+
+    expect(oldTimerWasActiveAfterRestore, isFalse);
+    expect(_profileRequestCount(harness), 2);
+    deferredTimer.fire();
+    await Future<void>.delayed(Duration.zero);
+    expect(_profileRequestCount(harness), 2);
+  });
+
   test('profile refresh retries with a fresh session nonce', () async {
     final harness = _AuthHarness(
       responses: [
@@ -623,11 +940,40 @@ void main() {
   });
 }
 
+class _ControlledTimer implements Timer {
+  _ControlledTimer(this._callback);
+
+  final void Function() _callback;
+  bool _isActive = true;
+  int _tick = 0;
+
+  void fire() {
+    if (!_isActive) {
+      return;
+    }
+    _isActive = false;
+    _tick = 1;
+    _callback();
+  }
+
+  @override
+  void cancel() {
+    _isActive = false;
+  }
+
+  @override
+  bool get isActive => _isActive;
+
+  @override
+  int get tick => _tick;
+}
+
 class _AuthHarness {
   _AuthHarness({
     required List<PrivateRawResponse> responses,
     FakeAuthSessionStore? sessionStore,
     PrivateRequestSender? responseHandler,
+    Duration profileRefreshCooldown = const Duration(seconds: 60),
   }) : responses = [...responses],
        sessionStore = sessionStore ?? FakeAuthSessionStore() {
     final client = PrivateApiClient(
@@ -643,6 +989,7 @@ class _AuthHarness {
     repository = SessionAuthRepository(
       client: client,
       sessionStore: this.sessionStore,
+      profileRefreshCooldown: profileRefreshCooldown,
     );
   }
 
@@ -650,6 +997,12 @@ class _AuthHarness {
   final FakeAuthSessionStore sessionStore;
   final List<PrivateRawRequest> requests = [];
   late final SessionAuthRepository repository;
+}
+
+int _profileRequestCount(_AuthHarness harness) {
+  return harness.requests
+      .where((request) => request.uri.path.endsWith('/me'))
+      .length;
 }
 
 PrivateRawResponse _authenticatedResponse({
