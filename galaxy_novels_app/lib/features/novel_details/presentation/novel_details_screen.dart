@@ -13,6 +13,9 @@ import '../../account/domain/auth_session.dart';
 import '../../account/presentation/account_screen.dart';
 import '../../favorites/application/favorites_repository.dart';
 import '../../favorites/domain/favorite_item.dart';
+import '../../novel_engagement/application/novel_engagement_controller.dart';
+import '../../novel_engagement/application/novel_engagement_repository.dart';
+import '../../novel_engagement/presentation/novel_rating_sheet.dart';
 import '../../reader/presentation/reader_screen.dart';
 import 'widgets/novel_details_content.dart';
 
@@ -32,18 +35,22 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
   DownloadManager? _downloadManager;
   AuthRepository? _authRepository;
   FavoritesRepository? _favoritesRepository;
+  NovelEngagementRepository? _novelEngagementRepository;
+  NovelEngagementController? _novelEngagementController;
+  int? _loadedNovelId;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final repository = AppDependencies.of(context).novelRepository;
+    final dependencies = AppDependencies.of(context);
+    final repository = dependencies.novelRepository;
     if (_repository != repository) {
       _repository = repository;
-      _future = repository.loadNovel(widget.manifestPath);
+      _future = _loadNovel(repository);
     }
 
-    final dependencies = AppDependencies.of(context);
     final authRepository = dependencies.authRepository;
+    final authRepositoryChanged = _authRepository != authRepository;
     if (_authRepository != authRepository) {
       _authRepository?.removeListener(_handleAuthChanged);
       _authRepository = authRepository;
@@ -51,6 +58,21 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
     }
     _favoritesRepository = dependencies.favoritesRepository;
     _loadFavoritesIfAuthenticated();
+
+    final engagementRepository = dependencies.novelEngagementRepository;
+    if (_novelEngagementRepository != engagementRepository ||
+        authRepositoryChanged) {
+      _novelEngagementController?.dispose();
+      _novelEngagementRepository = engagementRepository;
+      _novelEngagementController = NovelEngagementController(
+        repository: engagementRepository,
+        authRepository: authRepository,
+      );
+      final novelId = _loadedNovelId;
+      if (novelId != null) {
+        unawaited(_novelEngagementController!.loadNovel(novelId));
+      }
+    }
 
     final downloadsRepository = dependencies.downloadsRepository;
     if (_downloadsRepository != downloadsRepository) {
@@ -79,11 +101,21 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
             );
           }
 
-          return NovelDetailsContent(
-            loadResult: snapshot.data!,
-            onRead: _openReader,
-            onDownloadChapters: () => _openDownloadSheet(snapshot.data!),
-            onToggleFavorite: () => _toggleFavorite(snapshot.data!.details),
+          final engagementController = _novelEngagementController!;
+          return ValueListenableBuilder<NovelEngagementState>(
+            valueListenable: engagementController,
+            builder: (context, engagementState, _) {
+              return NovelDetailsContent(
+                loadResult: snapshot.data!,
+                engagementState: engagementState,
+                onRead: _openReader,
+                onDownloadChapters: () => _openDownloadSheet(snapshot.data!),
+                onToggleFavorite: () => _toggleFavorite(snapshot.data!.details),
+                onRate: _openRatingSheet,
+                onSignIn: _openAccountScreen,
+                onRetryEngagement: engagementController.retry,
+              );
+            },
           );
         },
       ),
@@ -96,8 +128,17 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
       return;
     }
     setState(() {
-      _future = repository.loadNovel(widget.manifestPath);
+      _future = _loadNovel(repository);
     });
+  }
+
+  Future<NovelDetailsLoadResult> _loadNovel(NovelRepository repository) async {
+    final result = await repository.loadNovel(widget.manifestPath);
+    if (mounted && identical(_repository, repository)) {
+      _loadedNovelId = result.details.id;
+      unawaited(_novelEngagementController?.loadNovel(result.details.id));
+    }
+    return result;
   }
 
   void _handleAuthChanged() => _loadFavoritesIfAuthenticated();
@@ -163,16 +204,42 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
     messenger.showSnackBar(
       SnackBar(
         content: const Text('سجّل الدخول لإضافة الرواية إلى مفضلتك.'),
-        action: SnackBarAction(
-          label: 'حسابي',
-          onPressed: () {
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(builder: (_) => const AccountScreen()),
-            );
-          },
-        ),
+        action: SnackBarAction(label: 'حسابي', onPressed: _openAccountScreen),
       ),
     );
+  }
+
+  void _openAccountScreen() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const AccountScreen()));
+  }
+
+  Future<void> _openRatingSheet() async {
+    final controller = _novelEngagementController;
+    if (controller == null) {
+      return;
+    }
+    if (_authRepository?.value.status != AuthSessionStatus.authenticated) {
+      _openAccountScreen();
+      return;
+    }
+
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (context) => NovelRatingSheet(
+        initialRating: controller.value.data?.myRating ?? 0,
+        onSubmit: controller.submitRating,
+      ),
+    );
+    if (!mounted || saved != true) {
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('تم حفظ تقييمك')));
   }
 
   void _openReader(NovelChapter chapter, String novelTitle) {
@@ -251,6 +318,7 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
   @override
   void dispose() {
     _authRepository?.removeListener(_handleAuthChanged);
+    _novelEngagementController?.dispose();
     super.dispose();
   }
 }

@@ -5,6 +5,8 @@ import '../../../../app/app_theme.dart';
 import '../../../../data/models/novel_details_data.dart';
 import '../../../../data/repositories/novel_repository.dart';
 import '../../../../shared/widgets/section_title.dart';
+import '../../../novel_engagement/application/novel_engagement_controller.dart';
+import '../../../novel_engagement/presentation/novel_personal_state_section.dart';
 import 'favorite_toggle_button.dart';
 import 'novel_chapters_section.dart';
 import 'novel_details_header.dart';
@@ -12,32 +14,48 @@ import 'novel_details_header.dart';
 class NovelDetailsContent extends StatelessWidget {
   const NovelDetailsContent({
     required this.loadResult,
+    required this.engagementState,
     required this.onRead,
     required this.onDownloadChapters,
     required this.onToggleFavorite,
+    required this.onRate,
+    required this.onSignIn,
+    required this.onRetryEngagement,
     super.key,
   });
 
   final NovelDetailsLoadResult loadResult;
+  final NovelEngagementState engagementState;
   final void Function(NovelChapter chapter, String novelTitle) onRead;
   final VoidCallback onDownloadChapters;
   final Future<void> Function() onToggleFavorite;
+  final VoidCallback onRate;
+  final VoidCallback onSignIn;
+  final VoidCallback onRetryEngagement;
 
   @override
   Widget build(BuildContext context) {
     final details = loadResult.details;
-    final firstReadableChapter = loadResult.chapters.isNotEmpty
-        ? loadResult.chapters.first
-        : null;
-    final canRead =
-        firstReadableChapter != null &&
-        firstReadableChapter.effectiveContentApi.isNotEmpty;
+    final firstReadableChapter = _firstReadableChapter(loadResult.chapters);
+    final continuationChapter = _continuationChapter(
+      loadResult.chapters,
+      engagementState.data?.lastRead.chapterId ?? 0,
+    );
+    final readChapter = continuationChapter ?? firstReadableChapter;
 
     return Stack(
       children: [
         CustomScrollView(
           slivers: [
             SliverToBoxAdapter(child: NovelDetailsHeader(details: details)),
+            SliverToBoxAdapter(
+              child: NovelPersonalStateSection(
+                state: engagementState,
+                onRate: onRate,
+                onSignIn: onSignIn,
+                onRetry: onRetryEngagement,
+              ),
+            ),
             if (details.summary.isNotEmpty)
               SliverToBoxAdapter(
                 child: _SummarySection(summary: details.summary),
@@ -57,9 +75,12 @@ class NovelDetailsContent extends StatelessWidget {
           child: _DetailsBottomBar(
             novelId: details.id,
             onToggleFavorite: onToggleFavorite,
-            onRead: canRead
-                ? () => onRead(firstReadableChapter, details.title)
-                : null,
+            readLabel: continuationChapter == null
+                ? 'ابدأ القراءة'
+                : 'متابعة ${continuationChapter.label}',
+            onRead: readChapter == null
+                ? null
+                : () => onRead(readChapter, details.title),
           ),
         ),
       ],
@@ -135,11 +156,13 @@ class _DetailsBottomBar extends StatelessWidget {
   const _DetailsBottomBar({
     required this.novelId,
     required this.onToggleFavorite,
+    required this.readLabel,
     required this.onRead,
   });
 
   final int novelId;
   final Future<void> Function() onToggleFavorite;
+  final String readLabel;
   final VoidCallback? onRead;
 
   @override
@@ -178,7 +201,11 @@ class _DetailsBottomBar extends StatelessWidget {
                   child: FilledButton.icon(
                     onPressed: onRead,
                     icon: const Icon(Icons.menu_book_outlined),
-                    label: const Text('ابدأ القراءة'),
+                    label: Text(
+                      readLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     style: FilledButton.styleFrom(
                       minimumSize: const Size.fromHeight(56),
                       textStyle: theme.textTheme.titleMedium?.copyWith(
@@ -194,6 +221,27 @@ class _DetailsBottomBar extends StatelessWidget {
       ),
     );
   }
+}
+
+NovelChapter? _firstReadableChapter(List<NovelChapter> chapters) {
+  for (final chapter in chapters) {
+    if (chapter.effectiveContentApi.isNotEmpty) {
+      return chapter;
+    }
+  }
+  return null;
+}
+
+NovelChapter? _continuationChapter(List<NovelChapter> chapters, int chapterId) {
+  if (chapterId <= 0) {
+    return null;
+  }
+  for (final chapter in chapters) {
+    if (chapter.id == chapterId && chapter.effectiveContentApi.isNotEmpty) {
+      return chapter;
+    }
+  }
+  return null;
 }
 
 class NovelDetailsSkeleton extends StatelessWidget {

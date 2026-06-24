@@ -22,6 +22,8 @@ import 'package:galaxy_novels_app/data/repositories/rankings_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/search_repository.dart';
 import 'package:galaxy_novels_app/features/about/presentation/about_screen.dart';
 import 'package:galaxy_novels_app/features/account/domain/auth_session.dart';
+import 'package:galaxy_novels_app/features/novel_engagement/application/novel_engagement_repository.dart';
+import 'package:galaxy_novels_app/features/novel_engagement/domain/novel_user_state.dart';
 import 'package:galaxy_novels_app/features/shell/presentation/app_shell.dart';
 
 import 'helpers/fake_auth_repository.dart';
@@ -542,6 +544,96 @@ void main() {
     expect(find.text('إعادة المحاولة'), findsOneWidget);
   });
 
+  testWidgets('loads personal state for the opened novel', (tester) async {
+    final engagementRepository = FakeNovelEngagementRepository(
+      state: _personalState(novelId: 99),
+    );
+
+    await _pumpOpenedDetails(
+      tester,
+      authRepository: FakeAuthRepository(
+        initialState: const AuthSessionState.authenticated(_testAuthUser),
+      ),
+      engagementRepository: engagementRepository,
+    );
+    await _revealPersonalState(tester);
+
+    expect(engagementRepository.loadedNovelIds, [99]);
+    expect(find.text('تقييمك'), findsOneWidget);
+  });
+
+  testWidgets('matching last read chapter becomes the native continue action', (
+    tester,
+  ) async {
+    String? openedApi;
+    final engagementRepository = FakeNovelEngagementRepository(
+      state: _personalState(
+        novelId: 99,
+        lastRead: const NovelLastRead(
+          chapterId: 2,
+          chapterUrl: '/chapter-2/',
+          progress: 45,
+          updatedAt: null,
+        ),
+      ),
+    );
+
+    await _pumpOpenedDetails(
+      tester,
+      authRepository: FakeAuthRepository(
+        initialState: const AuthSessionState.authenticated(_testAuthUser),
+      ),
+      engagementRepository: engagementRepository,
+      readerRepository: _TestReaderRepository(onLoad: (api) => openedApi = api),
+    );
+
+    expect(find.text('متابعة الفصل 2'), findsOneWidget);
+    await tester.tap(find.text('متابعة الفصل 2'));
+    await tester.pumpAndSettle();
+
+    expect(openedApi, '/wp-json/wor-reader-app/v1/chapters/2');
+  });
+
+  testWidgets('authenticated reader edits the personal rating', (tester) async {
+    final engagementRepository = FakeNovelEngagementRepository(
+      state: _personalState(novelId: 99),
+      submitHandler: (_, _) async => 5,
+    );
+
+    await _pumpOpenedDetails(
+      tester,
+      authRepository: FakeAuthRepository(
+        initialState: const AuthSessionState.authenticated(_testAuthUser),
+      ),
+      engagementRepository: engagementRepository,
+    );
+    await _revealPersonalState(tester);
+
+    await tester.tap(find.text('تقييمك'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('personal-rating-5')));
+    await tester.tap(find.text('حفظ التقييم'));
+    await tester.pumpAndSettle();
+
+    expect(engagementRepository.submittedRatings, [(99, 5)]);
+    expect(find.text('تم حفظ تقييمك'), findsOneWidget);
+  });
+
+  testWidgets('guest rating action opens the account screen', (tester) async {
+    await _pumpOpenedDetails(
+      tester,
+      authRepository: FakeAuthRepository(),
+      engagementRepository: FakeNovelEngagementRepository(),
+    );
+    await _revealPersonalState(tester);
+
+    await tester.tap(find.text('سجّل الدخول للتقييم'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('حسابي'), findsOneWidget);
+    expect(find.byKey(const ValueKey('login-submit')), findsOneWidget);
+  });
+
   testWidgets('opens novel details from the catalog', (tester) async {
     await tester.pumpWidget(
       GalaxyNovelsApp(
@@ -766,6 +858,54 @@ void main() {
     expect(find.textContaining('150 فصل'), findsOneWidget);
     expect(find.text('حارس النجوم'), findsNothing);
   });
+}
+
+Future<void> _pumpOpenedDetails(
+  WidgetTester tester, {
+  required FakeAuthRepository authRepository,
+  required NovelEngagementRepository engagementRepository,
+  ReaderRepository readerRepository = const _TestReaderRepository(),
+}) async {
+  await tester.pumpWidget(
+    GalaxyNovelsApp(
+      homeRepository: _TestHomeRepository(_homeData),
+      catalogRepository: const _TestCatalogRepository(),
+      novelRepository: const _TestNovelRepository(includeSecondChapter: true),
+      readerRepository: readerRepository,
+      downloadsRepository: FakeDownloadsRepository(),
+      authRepository: authRepository,
+      novelEngagementRepository: engagementRepository,
+    ),
+  );
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('المكتبة'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('مكتبة الاختبار'));
+  await tester.pumpAndSettle();
+}
+
+Future<void> _revealPersonalState(WidgetTester tester) async {
+  await tester.drag(find.byType(CustomScrollView), const Offset(0, -440));
+  await tester.pumpAndSettle();
+}
+
+NovelUserState _personalState({
+  required int novelId,
+  int rating = 4,
+  NovelLastRead lastRead = const NovelLastRead(
+    chapterId: 0,
+    chapterUrl: '',
+    progress: 0,
+    updatedAt: null,
+  ),
+}) {
+  return NovelUserState(
+    novelId: novelId,
+    favorite: false,
+    myRating: rating,
+    lastRead: lastRead,
+    vip: const NovelVipAccess(active: false, canReadPrivate: false),
+  );
 }
 
 Future<void> _scrollHomeDown(WidgetTester tester) async {
@@ -1028,12 +1168,14 @@ class _EmptyNovelRepository implements NovelRepository {
 }
 
 class _TestNovelRepository implements NovelRepository {
-  const _TestNovelRepository();
+  const _TestNovelRepository({this.includeSecondChapter = false});
+
+  final bool includeSecondChapter;
 
   @override
   Future<NovelDetailsLoadResult> loadNovel(String manifestPath) async {
-    return const NovelDetailsLoadResult(
-      details: NovelDetails(
+    return NovelDetailsLoadResult(
+      details: const NovelDetails(
         id: 99,
         title: 'تفاصيل الاختبار',
         originalTitle: 'Test Details',
@@ -1060,7 +1202,7 @@ class _TestNovelRepository implements NovelRepository {
         manifest: '/novel-test.json',
       ),
       chapters: [
-        NovelChapter(
+        const NovelChapter(
           id: 1,
           position: 1,
           number: '1',
@@ -1074,6 +1216,21 @@ class _TestNovelRepository implements NovelRepository {
           comments: 0,
           search: '',
         ),
+        if (includeSecondChapter)
+          const NovelChapter(
+            id: 2,
+            position: 2,
+            number: '2',
+            label: 'الفصل 2',
+            title: 'المتابعة',
+            url: '/chapter-2/',
+            contentApi: '/wp-json/wor-reader-app/v1/chapters/2',
+            dateLabel: 'اليوم',
+            dateIso: null,
+            views: 0,
+            comments: 0,
+            search: '',
+          ),
       ],
     );
   }
