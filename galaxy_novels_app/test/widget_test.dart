@@ -27,6 +27,7 @@ import 'package:galaxy_novels_app/features/novel_engagement/domain/novel_user_st
 import 'package:galaxy_novels_app/features/shell/presentation/app_shell.dart';
 
 import 'helpers/fake_auth_repository.dart';
+import 'helpers/fake_comments_repository.dart';
 import 'helpers/fake_novel_engagement_repository.dart';
 import 'helpers/fake_reader_preferences_repository.dart';
 
@@ -74,6 +75,25 @@ void main() {
     expect(
       AppDependencies.of(shellContext).novelEngagementRepository,
       same(engagementRepository),
+    );
+  });
+
+  testWidgets('injects the configured comments repository', (tester) async {
+    final commentsRepository = FakeCommentsRepository.empty();
+    await tester.pumpWidget(
+      GalaxyNovelsApp(
+        homeRepository: _TestHomeRepository(_homeData),
+        catalogRepository: const _TestCatalogRepository(),
+        novelRepository: const _TestNovelRepository(),
+        commentsRepository: commentsRepository,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final shellContext = tester.element(find.byType(AppShell));
+    expect(
+      AppDependencies.of(shellContext).commentsRepository,
+      same(commentsRepository),
     );
   });
 

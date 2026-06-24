@@ -10,6 +10,7 @@ import '../data/repositories/rankings_repository.dart';
 import '../data/repositories/reading_history_repository.dart';
 import '../data/repositories/search_repository.dart';
 import '../features/account/application/auth_repository.dart';
+import '../features/comments/application/comments_repository.dart';
 import '../features/downloads/application/download_manager.dart';
 import '../features/favorites/application/favorites_repository.dart';
 import '../features/novel_engagement/application/novel_engagement_repository.dart';
@@ -30,6 +31,7 @@ class AppDependencies extends InheritedWidget {
     required this.downloadManager,
     required this.readerPreferencesRepository,
     required this.authRepository,
+    required this.commentsRepository,
     required this.favoritesRepository,
     required this.novelEngagementRepository,
     this.readingActivityRecorder = const NoopReadingActivityRecorder(),
@@ -49,6 +51,7 @@ class AppDependencies extends InheritedWidget {
   final DownloadManager downloadManager;
   final ReaderPreferencesRepository readerPreferencesRepository;
   final AuthRepository authRepository;
+  final CommentsRepository commentsRepository;
   final FavoritesRepository favoritesRepository;
   final NovelEngagementRepository novelEngagementRepository;
   final ReadingActivityRecorder readingActivityRecorder;
@@ -75,6 +78,7 @@ class AppDependencies extends InheritedWidget {
         downloadManager != oldWidget.downloadManager ||
         readerPreferencesRepository != oldWidget.readerPreferencesRepository ||
         authRepository != oldWidget.authRepository ||
+        commentsRepository != oldWidget.commentsRepository ||
         favoritesRepository != oldWidget.favoritesRepository ||
         novelEngagementRepository != oldWidget.novelEngagementRepository ||
         readingActivityRecorder != oldWidget.readingActivityRecorder;

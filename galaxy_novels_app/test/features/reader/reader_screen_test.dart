@@ -20,6 +20,7 @@ import 'package:galaxy_novels_app/features/reader/presentation/reader_screen.dar
 
 import '../../helpers/fake_reader_preferences_repository.dart';
 import '../../helpers/fake_auth_repository.dart';
+import '../../helpers/fake_comments_repository.dart';
 import '../../helpers/fake_favorites_repository.dart';
 import '../../helpers/fake_novel_engagement_repository.dart';
 
@@ -333,6 +334,7 @@ class _ReaderTestApp extends StatelessWidget {
       ),
       readerPreferencesRepository: FakeReaderPreferencesRepository(),
       authRepository: FakeAuthRepository(),
+      commentsRepository: FakeCommentsRepository.empty(),
       favoritesRepository: FakeFavoritesRepository(),
       novelEngagementRepository: FakeNovelEngagementRepository(),
       readingActivityRecorder: readingActivityRecorder,

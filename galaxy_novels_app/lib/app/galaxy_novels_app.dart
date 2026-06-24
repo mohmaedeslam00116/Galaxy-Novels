@@ -30,6 +30,8 @@ import '../data/repositories/stored_reading_history_repository.dart';
 import '../features/account/application/auth_repository.dart';
 import '../features/account/data/secure_auth_session_store.dart';
 import '../features/account/data/session_auth_repository.dart';
+import '../features/comments/application/comments_repository.dart';
+import '../features/comments/data/public_comments_repository.dart';
 import '../features/downloads/application/download_manager.dart';
 import '../features/downloads/presentation/download_activity_layer.dart';
 import '../features/favorites/application/favorites_repository.dart';
@@ -64,6 +66,7 @@ class GalaxyNovelsApp extends StatefulWidget {
     this.downloadsRepository,
     this.readerPreferencesRepository,
     this.authRepository,
+    this.commentsRepository,
     this.favoritesRepository,
     this.novelEngagementRepository,
     this.readingActivityRecorder,
@@ -81,6 +84,7 @@ class GalaxyNovelsApp extends StatefulWidget {
   final DownloadsRepository? downloadsRepository;
   final ReaderPreferencesRepository? readerPreferencesRepository;
   final AuthRepository? authRepository;
+  final CommentsRepository? commentsRepository;
   final FavoritesRepository? favoritesRepository;
   final NovelEngagementRepository? novelEngagementRepository;
   final ReadingActivityRecorder? readingActivityRecorder;
@@ -100,6 +104,7 @@ class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
   SessionAuthRepository? _defaultAuthRepository;
   SyncedFavoritesRepository? _defaultFavoritesRepository;
   PrivateNovelEngagementRepository? _defaultNovelEngagementRepository;
+  PublicCommentsRepository? _defaultCommentsRepository;
   late final StoredReadingHistoryRepository
   _defaultLocalReadingHistoryRepository = StoredReadingHistoryRepository(
     store: SharedPreferencesReadingHistoryStore(),
@@ -146,6 +151,7 @@ class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
     if (configChanged) {
       _privateApiClient = null;
       _defaultNovelEngagementRepository = null;
+      _defaultCommentsRepository = null;
     }
 
     if (widget.downloadsRepository != null) {
@@ -218,6 +224,8 @@ class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
     final effectiveFavoritesRepository =
         widget.favoritesRepository ??
         _defaultFavoritesRepositoryFor(effectiveAuthRepository);
+    final effectiveCommentsRepository =
+        widget.commentsRepository ?? _defaultCommentsRepositoryFor();
     final effectiveNovelEngagementRepository =
         widget.novelEngagementRepository ??
         _defaultNovelEngagementRepositoryFor();
@@ -239,6 +247,7 @@ class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
       downloadManager: effectiveDownloadManager,
       readerPreferencesRepository: effectiveReaderPreferencesRepository,
       authRepository: effectiveAuthRepository,
+      commentsRepository: effectiveCommentsRepository,
       favoritesRepository: effectiveFavoritesRepository,
       novelEngagementRepository: effectiveNovelEngagementRepository,
       readingActivityRecorder: effectiveReadingActivityRecorder,
@@ -311,6 +320,12 @@ class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
   PrivateNovelEngagementRepository _defaultNovelEngagementRepositoryFor() {
     return _defaultNovelEngagementRepository ??=
         PrivateNovelEngagementRepository(client: _privateApiClientFor());
+  }
+
+  PublicCommentsRepository _defaultCommentsRepositoryFor() {
+    return _defaultCommentsRepository ??= PublicCommentsRepository(
+      client: _privateApiClientFor(),
+    );
   }
 
   AccountReadingHistoryRepository _defaultReadingHistoryRepositoryFor(

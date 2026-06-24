@@ -19,6 +19,7 @@ import 'package:galaxy_novels_app/features/novel_details/presentation/widgets/no
 
 import '../../helpers/fake_reader_preferences_repository.dart';
 import '../../helpers/fake_auth_repository.dart';
+import '../../helpers/fake_comments_repository.dart';
 import '../../helpers/fake_favorites_repository.dart';
 import '../../helpers/fake_novel_engagement_repository.dart';
 
@@ -95,6 +96,7 @@ class _TestApp extends StatelessWidget {
       downloadManager: DownloadManager(repository: downloadsRepository),
       readerPreferencesRepository: FakeReaderPreferencesRepository(),
       authRepository: FakeAuthRepository(),
+      commentsRepository: FakeCommentsRepository.empty(),
       favoritesRepository: FakeFavoritesRepository(),
       novelEngagementRepository: FakeNovelEngagementRepository(),
       child: const MaterialApp(
