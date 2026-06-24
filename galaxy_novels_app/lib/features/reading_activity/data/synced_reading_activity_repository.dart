@@ -102,9 +102,14 @@ class SyncedReadingActivityRepository implements ReadingActivityRecorder {
     }
 
     final remainingCount = await _removeSentBatch(userId, batch);
-    if (remainingCount > 0 && _authenticatedUserId == userId) {
-      _scheduleSync(userId);
+    if (remainingCount == null || _authenticatedUserId != userId) {
+      return;
     }
+    if (remainingCount > 0) {
+      _scheduleSync(userId);
+      return;
+    }
+    await _authRepository.refreshProfile();
   }
 
   Future<void> _appendEvent(ReadingActivityEvent event) async {
@@ -153,7 +158,7 @@ class SyncedReadingActivityRepository implements ReadingActivityRecorder {
     }
   }
 
-  Future<int> _removeSentBatch(
+  Future<int?> _removeSentBatch(
     int userId,
     List<ReadingActivityEvent> batch,
   ) async {
@@ -168,7 +173,7 @@ class SyncedReadingActivityRepository implements ReadingActivityRecorder {
         return remainingEvents.length;
       });
     } on ReadingActivityStoreException {
-      return 0;
+      return null;
     }
   }
 

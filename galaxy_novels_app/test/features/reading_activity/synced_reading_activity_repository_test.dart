@@ -68,6 +68,32 @@ void main() {
 
     expect(harness.server.batchSizes, [50]);
     expect(await harness.store.read(7), hasLength(5));
+    expect(harness.auth.refreshProfileCalls, 0);
+  });
+
+  test('refreshes the account after the queue is fully synchronized', () async {
+    final harness = _Harness(events: [_eventAt(1)]);
+    addTearDown(harness.dispose);
+
+    await harness.repository.syncPending();
+
+    expect(await harness.store.read(7), isEmpty);
+    expect(harness.auth.refreshProfileCalls, 1);
+  });
+
+  test('waits for the final batch before refreshing the account', () async {
+    final harness = _Harness(events: List.generate(51, _eventAt));
+    addTearDown(harness.dispose);
+
+    await harness.repository.syncPending();
+
+    expect(await harness.store.read(7), hasLength(1));
+    expect(harness.auth.refreshProfileCalls, 0);
+
+    await harness.repository.syncPending();
+
+    expect(await harness.store.read(7), isEmpty);
+    expect(harness.auth.refreshProfileCalls, 1);
   });
 
   test('network failure keeps the complete batch for retry', () async {
@@ -77,6 +103,7 @@ void main() {
     await harness.repository.syncPending();
 
     expect(await harness.store.read(7), hasLength(1));
+    expect(harness.auth.refreshProfileCalls, 0);
   });
 
   test('unauthorized sync keeps the queue and restores the session', () async {
@@ -87,6 +114,17 @@ void main() {
 
     expect(await harness.store.read(7), hasLength(1));
     expect(harness.auth.restoreCalls, 1);
+    expect(harness.auth.refreshProfileCalls, 0);
+  });
+
+  test('does not refresh when sent events cannot be removed locally', () async {
+    final harness = _Harness(events: [_eventAt(1)], failStoreWrites: true);
+    addTearDown(harness.dispose);
+
+    await harness.repository.syncPending();
+
+    expect(await harness.store.read(7), hasLength(1));
+    expect(harness.auth.refreshProfileCalls, 0);
   });
 
   test('account switch never uploads the previous account queue', () async {
@@ -116,9 +154,11 @@ class _Harness {
     Map<int, List<ReadingActivityEvent>> eventsByUser = const {},
     bool offline = false,
     bool unauthorized = false,
+    bool failStoreWrites = false,
   }) : auth = _CountingAuthRepository(initialState: authState),
        store = _MemoryReadingActivityStore(
          eventsByUser.isEmpty ? {7: events} : eventsByUser,
+         failWrites: failStoreWrites,
        ) {
     server.offline = offline;
     server.unauthorized = unauthorized;
@@ -146,13 +186,15 @@ class _Harness {
 }
 
 class _MemoryReadingActivityStore implements ReadingActivityStore {
-  _MemoryReadingActivityStore([
-    Map<int, List<ReadingActivityEvent>> initial = const {},
-  ]) : queues = {
+  _MemoryReadingActivityStore(
+    Map<int, List<ReadingActivityEvent>> initial, {
+    this.failWrites = false,
+  }) : queues = {
          for (final entry in initial.entries) entry.key: [...entry.value],
        };
 
   final Map<int, List<ReadingActivityEvent>> queues;
+  final bool failWrites;
 
   @override
   Future<List<ReadingActivityEvent>> read(int userId) async {
@@ -161,6 +203,9 @@ class _MemoryReadingActivityStore implements ReadingActivityStore {
 
   @override
   Future<void> write(int userId, List<ReadingActivityEvent> events) async {
+    if (failWrites) {
+      throw const ReadingActivityStoreException();
+    }
     queues[userId] = [...events];
   }
 }
