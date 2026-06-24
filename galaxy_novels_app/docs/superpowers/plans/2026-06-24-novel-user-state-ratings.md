@@ -13,7 +13,7 @@
 ## File Map
 
 - Create `lib/features/novel_engagement/domain/novel_user_state.dart`: نماذج حالة الرواية وبيانات آخر قراءة وVIP.
-- Create `lib/features/novel_engagement/application/novel_engagement_repository.dart`: عقد الشبكة ونسخة no-op للاختبارات القديمة التي تبني `AppDependencies` مباشرة.
+- Create `lib/features/novel_engagement/application/novel_engagement_repository.dart`: عقد الشبكة الذي يستهلكه Controller.
 - Create `lib/features/novel_engagement/data/private_novel_engagement_repository.dart`: GET حالة الرواية وPOST التقييم عبر `PrivateApiClient`.
 - Create `lib/features/novel_engagement/application/novel_engagement_controller.dart`: دورة تحميل محلية، حماية تبديل الجلسة، وحالة إرسال التقييم.
 - Create `lib/features/novel_engagement/presentation/novel_personal_state_section.dart`: band خفيف لحالة التقييم وVIP.
@@ -84,6 +84,21 @@ test('rejects a response for another novel', () {
     ),
     throwsFormatException,
   );
+});
+
+test('copyWith changes only the requested personal field', () {
+  final state = NovelUserState.fromResponse({
+    'novel_id': 123,
+    'favorite': true,
+    'my_rating': 2,
+  }, expectedNovelId: 123);
+
+  final updated = state.copyWith(myRating: 5);
+
+  expect(updated.myRating, 5);
+  expect(updated.favorite, isTrue);
+  expect(updated.lastRead, same(state.lastRead));
+  expect(updated.vip, same(state.vip));
 });
 ```
 
@@ -201,7 +216,7 @@ int _asInt(Object? value) {
 
 Run: `flutter test test/features/novel_engagement/novel_user_state_test.dart`
 
-Expected: PASS, 3 tests.
+Expected: PASS, 4 tests.
 
 - [ ] **Step 5: Commit the parser slice**
 
@@ -299,18 +314,6 @@ abstract class NovelEngagementRepository {
   Future<NovelUserState> loadState(int novelId);
 
   Future<int> submitRating({required int novelId, required int rating});
-}
-
-class NoopNovelEngagementRepository implements NovelEngagementRepository {
-  const NoopNovelEngagementRepository();
-
-  @override
-  Future<NovelUserState> loadState(int novelId) =>
-      Future.error(UnsupportedError('Novel engagement is not configured.'));
-
-  @override
-  Future<int> submitRating({required int novelId, required int rating}) =>
-      Future.error(UnsupportedError('Novel engagement is not configured.'));
 }
 
 class PrivateNovelEngagementRepository implements NovelEngagementRepository {
@@ -438,7 +441,7 @@ test('authenticated load publishes the matching novel state', () async {
 
   expect(controller.value.status, NovelEngagementStatus.ready);
   expect(controller.value.userId, 7);
-  expect(controller.value.data?.myRating, 4);
+  expect(controller.value.userState?.myRating, 4);
 });
 
 test('logout clears personal state immediately', () async {
@@ -456,7 +459,7 @@ test('logout clears personal state immediately', () async {
   await Future<void>.delayed(Duration.zero);
 
   expect(controller.value.status, NovelEngagementStatus.guest);
-  expect(controller.value.data, isNull);
+  expect(controller.value.userState, isNull);
 });
 
 test('late response cannot overwrite a different account', () async {
@@ -484,7 +487,7 @@ test('late response cannot overwrite a different account', () async {
   await oldLoad;
 
   expect(controller.value.userId, 8);
-  expect(controller.value.data?.myRating, 5);
+  expect(controller.value.userState?.myRating, 5);
 });
 
 test('successful submit publishes only the server rating', () async {
@@ -506,7 +509,7 @@ test('successful submit publishes only the server rating', () async {
 
   expect(outcome.status, RatingSubmitStatus.saved);
   expect(repository.submittedRatings, [(123, 4)]);
-  expect(controller.value.data?.myRating, 5);
+  expect(controller.value.userState?.myRating, 5);
 });
 
 test('rate limit keeps the previous rating and exposes an Arabic message', () async {
@@ -533,7 +536,7 @@ test('rate limit keeps the previous rating and exposes an Arabic message', () as
 
   expect(outcome.status, RatingSubmitStatus.failed);
   expect(outcome.errorMessage, 'محاولات كثيرة. حاول لاحقًا.');
-  expect(controller.value.data?.myRating, 2);
+  expect(controller.value.userState?.myRating, 2);
 });
 
 test('unauthorized submit asks auth repository to restore the session', () async {
@@ -629,7 +632,7 @@ class NovelEngagementState {
     required this.status,
     required this.novelId,
     this.userId,
-    this.data,
+    this.userState,
     this.isSubmitting = false,
     this.errorMessage,
   });
@@ -637,17 +640,17 @@ class NovelEngagementState {
   final NovelEngagementStatus status;
   final int novelId;
   final int? userId;
-  final NovelUserState? data;
+  final NovelUserState? userState;
   final bool isSubmitting;
   final String? errorMessage;
 
-  NovelEngagementState copyWith({
-    NovelEngagementStatus? status,
-    NovelUserState? data,
-    bool? isSubmitting,
-    String? errorMessage,
-    bool clearError = false,
-  });
+  NovelEngagementState startRatingSubmission();
+
+  NovelEngagementState completeRatingSubmission(
+    NovelUserState updatedUserState,
+  );
+
+  NovelEngagementState failRatingSubmission(String message);
 }
 
 class NovelEngagementController extends ChangeNotifier
@@ -706,50 +709,28 @@ git commit -m "feat(novel): coordinate personal state safely"
 
 - [ ] **Step 1: Write a failing app wiring test**
 
-Add this widget test using the existing `_TestHomeRepository`, `_TestCatalogRepository`, `_TestNovelRepository`, and `_testAuthUser` fixtures in `test/widget_test.dart`:
+Add this widget test using the existing app fixtures in `test/widget_test.dart`:
 
 ```dart
-final engagement = FakeNovelEngagementRepository(
-  state: _personalState(novelId: 99),
-);
+final engagement = FakeNovelEngagementRepository();
 await tester.pumpWidget(GalaxyNovelsApp(
   homeRepository: _TestHomeRepository(_homeData),
   catalogRepository: const _TestCatalogRepository(),
   novelRepository: const _TestNovelRepository(),
-  authRepository: FakeAuthRepository(
-    initialState: const AuthSessionState.authenticated(_testAuthUser),
-  ),
   novelEngagementRepository: engagement,
 ));
 await tester.pumpAndSettle();
-await tester.tap(find.text('المكتبة'));
-await tester.pumpAndSettle();
-await tester.tap(find.text('مكتبة الاختبار'));
-await tester.pumpAndSettle();
 
-expect(engagement.loadedNovelIds, [99]);
-```
-
-Add this fixture beside the existing test constants:
-
-```dart
-NovelUserState _personalState({required int novelId}) => NovelUserState(
-  novelId: novelId,
-  favorite: false,
-  myRating: 4,
-  lastRead: const NovelLastRead(
-    chapterId: 0,
-    chapterUrl: '',
-    progress: 0,
-    updatedAt: null,
-  ),
-  vip: const NovelVipAccess(active: false, canReadPrivate: false),
+final shellContext = tester.element(find.byType(AppShell));
+expect(
+  AppDependencies.of(shellContext).novelEngagementRepository,
+  same(engagement),
 );
 ```
 
 - [ ] **Step 2: Run the targeted widget test and verify RED**
 
-Run: `flutter test test/widget_test.dart --plain-name "loads personal state for the opened novel"`
+Run: `flutter test test/widget_test.dart --plain-name "injects the configured novel engagement repository"`
 
 Expected: FAIL because the constructor/dependency field does not exist.
 
@@ -758,12 +739,12 @@ Expected: FAIL because the constructor/dependency field does not exist.
 In `AppDependencies`:
 
 ```dart
-this.novelEngagementRepository = const NoopNovelEngagementRepository(),
+required this.novelEngagementRepository,
 
 final NovelEngagementRepository novelEngagementRepository;
 ```
 
-Include the field in `updateShouldNotify`.
+Include the field in `updateShouldNotify`. Pass `FakeNovelEngagementRepository()` explicitly from direct `AppDependencies` test harnesses; no fallback that refuses the repository contract belongs in production code.
 
 In `GalaxyNovelsApp`:
 
@@ -976,7 +957,7 @@ testWidgets('personal state section fits a 320 pixel phone', (tester) async {
           status: NovelEngagementStatus.ready,
           novelId: 99,
           userId: 7,
-          data: _widgetPersonalState(),
+          userState: _widgetPersonalState(),
         ),
         onRate: () {},
         onSignIn: () {},
@@ -1005,13 +986,13 @@ NovelUserState _widgetPersonalState() => const NovelUserState(
 
 - [ ] **Step 2: Run UI tests and verify RED**
 
-Run: `flutter test test/features/novel_engagement/novel_engagement_widgets_test.dart test/widget_test.dart --plain-name "personal|rating|continue"`
+Run: `flutter test test/features/novel_engagement/novel_engagement_widgets_test.dart test/widget_test.dart`
 
 Expected: FAIL because the widgets and screen integration are missing.
 
 - [ ] **Step 3: Build the personal state band**
 
-`NovelPersonalStateSection` must accept only render data and callbacks:
+`NovelPersonalStateSection` must accept only render state and callbacks:
 
 ```dart
 class NovelPersonalStateSection extends StatelessWidget {
@@ -1060,7 +1041,7 @@ On rating success, show `تم حفظ تقييمك`. On guest action, push `Accou
 In `NovelDetailsContent`, select a continuation only when:
 
 ```dart
-chapter.id == engagementState.data?.lastRead.chapterId &&
+chapter.id == engagementState.userState?.lastRead.chapterId &&
 chapter.effectiveContentApi.isNotEmpty
 ```
 
