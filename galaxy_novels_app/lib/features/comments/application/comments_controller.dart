@@ -1,5 +1,3 @@
-import 'dart:collection';
-
 import 'package:flutter/foundation.dart';
 
 import '../data/comments_error_messages.dart';
@@ -130,7 +128,7 @@ class CommentsController extends ChangeNotifier
           totalComments: page.totalComments,
         ),
       );
-    } on Object catch (error) {
+    } on Exception catch (error) {
       if (!_isCurrent(sort, generation)) {
         return;
       }
@@ -200,25 +198,18 @@ class CommentsController extends ChangeNotifier
         return;
       }
 
-      final merged = LinkedHashMap<int, PublicComment>();
-      for (final comment in _value.comments) {
-        merged.putIfAbsent(comment.id, () => comment);
-      }
-      for (final comment in page.comments) {
-        merged.putIfAbsent(comment.id, () => comment);
-      }
       _publish(
         CommentsState(
           target: _target,
           sort: sort,
           status: CommentsStatus.ready,
-          comments: merged.values.toList(growable: false),
+          comments: _mergeComments(_value.comments, page.comments),
           page: page.page,
           totalPages: page.totalPages,
           totalComments: page.totalComments,
         ),
       );
-    } on Object catch (error) {
+    } on Exception catch (error) {
       if (!_isCurrent(sort, generation)) {
         return;
       }
@@ -236,6 +227,20 @@ class CommentsController extends ChangeNotifier
         ),
       );
     }
+  }
+
+  List<PublicComment> _mergeComments(
+    List<PublicComment> currentComments,
+    List<PublicComment> nextComments,
+  ) {
+    final commentsById = <int, PublicComment>{};
+    for (final comment in currentComments) {
+      commentsById.putIfAbsent(comment.id, () => comment);
+    }
+    for (final comment in nextComments) {
+      commentsById.putIfAbsent(comment.id, () => comment);
+    }
+    return commentsById.values.toList(growable: false);
   }
 
   bool _isCurrent(CommentsSort sort, int generation) {

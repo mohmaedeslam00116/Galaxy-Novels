@@ -93,6 +93,18 @@ void main() {
     expect(controller.value.errorMessage, 'تعذر قراءة بيانات التعليقات.');
   });
 
+  test('programming errors propagate instead of becoming loading failures', () {
+    final controller = CommentsController(
+      repository: FakeCommentsRepository(
+        handler: (_, _, _) => Future.error(StateError('invalid state')),
+      ),
+      target: CommentTarget.chapter(9),
+    );
+    addTearDown(controller.dispose);
+
+    expect(controller.loadInitial(), throwsStateError);
+  });
+
   test('load more failure preserves the loaded page', () async {
     final target = CommentTarget.chapter(9);
     final repository = FakeCommentsRepository(

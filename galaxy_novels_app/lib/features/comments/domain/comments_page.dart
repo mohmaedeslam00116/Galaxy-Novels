@@ -63,7 +63,7 @@ class CommentsPage {
       reactions[entry.key] = _asInt(entry.value).clamp(0, 1 << 31).toInt();
     }
     final comments = _asList(json['comments'])
-        .map((item) => PublicComment.fromJson(_asMap(item)))
+        .map((commentJson) => PublicComment.fromJson(_asMap(commentJson)))
         .toList(growable: false);
 
     return CommentsPage(

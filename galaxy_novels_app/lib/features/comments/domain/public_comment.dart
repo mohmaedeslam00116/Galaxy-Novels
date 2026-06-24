@@ -45,7 +45,7 @@ class PublicComment {
       createdLabel: _asString(json['created_at']),
       createdAt: DateTime.tryParse(_asString(json['created_iso'])),
       replies: _asList(json['replies'])
-          .map((item) => PublicComment.fromJson(_asMap(item)))
+          .map((replyJson) => PublicComment.fromJson(_asMap(replyJson)))
           .toList(growable: false),
     );
   }
