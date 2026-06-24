@@ -31,7 +31,7 @@ class AppDependencies extends InheritedWidget {
     required this.readerPreferencesRepository,
     required this.authRepository,
     required this.favoritesRepository,
-    this.novelEngagementRepository = const NoopNovelEngagementRepository(),
+    required this.novelEngagementRepository,
     this.readingActivityRecorder = const NoopReadingActivityRecorder(),
     required super.child,
     super.key,

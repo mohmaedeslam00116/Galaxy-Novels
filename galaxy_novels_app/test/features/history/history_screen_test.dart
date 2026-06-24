@@ -18,6 +18,7 @@ import 'package:galaxy_novels_app/features/history/presentation/history_screen.d
 import '../../helpers/fake_reader_preferences_repository.dart';
 import '../../helpers/fake_auth_repository.dart';
 import '../../helpers/fake_favorites_repository.dart';
+import '../../helpers/fake_novel_engagement_repository.dart';
 
 void main() {
   testWidgets('renders saved reading history entries', (tester) async {
@@ -102,6 +103,7 @@ class _HistoryTestApp extends StatelessWidget {
       readerPreferencesRepository: FakeReaderPreferencesRepository(),
       authRepository: FakeAuthRepository(),
       favoritesRepository: FakeFavoritesRepository(),
+      novelEngagementRepository: FakeNovelEngagementRepository(),
       child: const MaterialApp(
         locale: Locale('ar'),
         home: Scaffold(

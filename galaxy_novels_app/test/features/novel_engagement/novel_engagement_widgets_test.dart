@@ -78,7 +78,7 @@ void main() {
             status: NovelEngagementStatus.ready,
             novelId: 99,
             userId: 7,
-            data: NovelUserState(
+            userState: NovelUserState(
               novelId: 99,
               favorite: false,
               myRating: 4,

@@ -147,14 +147,14 @@ class _ReadyPersonalState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final vipActive = state.data?.vip.active ?? false;
+    final vipActive = state.userState?.vip.active ?? false;
 
     return LayoutBuilder(
       key: const ValueKey('novel-personal-state-ready'),
       builder: (context, constraints) {
         final rating = Expanded(
           child: _RatingAction(
-            rating: state.data?.myRating ?? 0,
+            rating: state.userState?.myRating ?? 0,
             onPressed: onRate,
           ),
         );

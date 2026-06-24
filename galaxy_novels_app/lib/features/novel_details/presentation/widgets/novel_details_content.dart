@@ -39,7 +39,7 @@ class NovelDetailsContent extends StatelessWidget {
     final firstReadableChapter = _firstReadableChapter(loadResult.chapters);
     final continuationChapter = _continuationChapter(
       loadResult.chapters,
-      engagementState.data?.lastRead.chapterId ?? 0,
+      engagementState.userState?.lastRead.chapterId ?? 0,
     );
     final readChapter = continuationChapter ?? firstReadableChapter;
 

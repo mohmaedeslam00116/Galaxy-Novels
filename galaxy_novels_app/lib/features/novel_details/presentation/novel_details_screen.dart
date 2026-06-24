@@ -133,12 +133,12 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
   }
 
   Future<NovelDetailsLoadResult> _loadNovel(NovelRepository repository) async {
-    final result = await repository.loadNovel(widget.manifestPath);
+    final novelLoad = await repository.loadNovel(widget.manifestPath);
     if (mounted && identical(_repository, repository)) {
-      _loadedNovelId = result.details.id;
-      unawaited(_novelEngagementController?.loadNovel(result.details.id));
+      _loadedNovelId = novelLoad.details.id;
+      unawaited(_novelEngagementController?.loadNovel(novelLoad.details.id));
     }
-    return result;
+    return novelLoad;
   }
 
   void _handleAuthChanged() => _loadFavoritesIfAuthenticated();
@@ -230,7 +230,7 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
       isScrollControlled: true,
       useSafeArea: true,
       builder: (context) => NovelRatingSheet(
-        initialRating: controller.value.data?.myRating ?? 0,
+        initialRating: controller.value.userState?.myRating ?? 0,
         onSubmit: controller.submitRating,
       ),
     );

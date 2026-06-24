@@ -25,7 +25,7 @@ class NovelEngagementState {
     required this.status,
     required this.novelId,
     this.userId,
-    this.data,
+    this.userState,
     this.isSubmitting = false,
     this.errorMessage,
   });
@@ -33,25 +33,38 @@ class NovelEngagementState {
   final NovelEngagementStatus status;
   final int novelId;
   final int? userId;
-  final NovelUserState? data;
+  final NovelUserState? userState;
   final bool isSubmitting;
   final String? errorMessage;
 
-  NovelEngagementState copyWith({
-    NovelEngagementStatus? status,
-    NovelUserState? data,
-    bool clearData = false,
-    bool? isSubmitting,
-    String? errorMessage,
-    bool clearError = false,
-  }) {
+  NovelEngagementState startRatingSubmission() {
     return NovelEngagementState(
-      status: status ?? this.status,
+      status: status,
       novelId: novelId,
       userId: userId,
-      data: clearData ? null : data ?? this.data,
-      isSubmitting: isSubmitting ?? this.isSubmitting,
-      errorMessage: clearError ? null : errorMessage ?? this.errorMessage,
+      userState: userState,
+      isSubmitting: true,
+    );
+  }
+
+  NovelEngagementState completeRatingSubmission(
+    NovelUserState updatedUserState,
+  ) {
+    return NovelEngagementState(
+      status: status,
+      novelId: novelId,
+      userId: userId,
+      userState: updatedUserState,
+    );
+  }
+
+  NovelEngagementState failRatingSubmission(String message) {
+    return NovelEngagementState(
+      status: status,
+      novelId: novelId,
+      userId: userId,
+      userState: userState,
+      errorMessage: message,
     );
   }
 }
@@ -109,7 +122,9 @@ class NovelEngagementController extends ChangeNotifier
   Future<RatingSubmitOutcome> submitRating(int rating) async {
     final userId = _authenticatedUserId;
     final current = _value;
-    if (userId == null || current.userId != userId || current.data == null) {
+    if (userId == null ||
+        current.userId != userId ||
+        current.userState == null) {
       return const RatingSubmitOutcome(RatingSubmitStatus.signInRequired);
     }
     if (current.isSubmitting) {
@@ -124,7 +139,7 @@ class NovelEngagementController extends ChangeNotifier
 
     final novelId = current.novelId;
     final generation = _generation;
-    _publish(current.copyWith(isSubmitting: true, clearError: true));
+    _publish(current.startRatingSubmission());
 
     try {
       final savedRating = await _repository.submitRating(
@@ -134,15 +149,13 @@ class NovelEngagementController extends ChangeNotifier
       if (!_isCurrent(novelId, userId, generation)) {
         return const RatingSubmitOutcome(RatingSubmitStatus.failed);
       }
-      final data = _value.data;
-      if (data == null) {
+      final userState = _value.userState;
+      if (userState == null) {
         return const RatingSubmitOutcome(RatingSubmitStatus.failed);
       }
       _publish(
-        _value.copyWith(
-          data: data.copyWith(myRating: savedRating),
-          isSubmitting: false,
-          clearError: true,
+        _value.completeRatingSubmission(
+          userState.copyWith(myRating: savedRating),
         ),
       );
       return const RatingSubmitOutcome(RatingSubmitStatus.saved);
@@ -222,7 +235,7 @@ class NovelEngagementController extends ChangeNotifier
 
   Future<void> _performLoad(int novelId, int userId, int generation) async {
     try {
-      final data = await _repository.loadState(novelId);
+      final userState = await _repository.loadState(novelId);
       if (!_isCurrent(novelId, userId, generation)) {
         return;
       }
@@ -231,7 +244,7 @@ class NovelEngagementController extends ChangeNotifier
           status: NovelEngagementStatus.ready,
           novelId: novelId,
           userId: userId,
-          data: data,
+          userState: userState,
         ),
       );
     } on PrivateApiException catch (error) {
@@ -273,7 +286,7 @@ class NovelEngagementController extends ChangeNotifier
     if (!_isCurrent(novelId, userId, generation)) {
       return;
     }
-    _publish(_value.copyWith(isSubmitting: false, errorMessage: message));
+    _publish(_value.failRatingSubmission(message));
   }
 
   int? get _authenticatedUserId {

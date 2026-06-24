@@ -42,7 +42,7 @@ void main() {
 
     expect(controller.value.status, NovelEngagementStatus.ready);
     expect(controller.value.userId, 7);
-    expect(controller.value.data?.myRating, 4);
+    expect(controller.value.userState?.myRating, 4);
     expect(repository.loadedNovelIds, [123]);
   });
 
@@ -61,7 +61,7 @@ void main() {
     await Future<void>.delayed(Duration.zero);
 
     expect(controller.value.status, NovelEngagementStatus.guest);
-    expect(controller.value.data, isNull);
+    expect(controller.value.userState, isNull);
   });
 
   test('late response cannot overwrite a different account', () async {
@@ -91,7 +91,7 @@ void main() {
     await oldLoad;
 
     expect(controller.value.userId, 8);
-    expect(controller.value.data?.myRating, 5);
+    expect(controller.value.userState?.myRating, 5);
   });
 
   test('successful submit publishes only the server rating', () async {
@@ -113,7 +113,7 @@ void main() {
 
     expect(outcome.status, RatingSubmitStatus.saved);
     expect(repository.submittedRatings, [(123, 4)]);
-    expect(controller.value.data?.myRating, 5);
+    expect(controller.value.userState?.myRating, 5);
   });
 
   test(
@@ -167,7 +167,7 @@ void main() {
 
       expect(outcome.status, RatingSubmitStatus.failed);
       expect(outcome.errorMessage, 'محاولات كثيرة. حاول لاحقًا.');
-      expect(controller.value.data?.myRating, 2);
+      expect(controller.value.userState?.myRating, 2);
       expect(controller.value.isSubmitting, isFalse);
     },
   );

@@ -20,6 +20,7 @@ import 'package:galaxy_novels_app/features/novel_details/presentation/widgets/no
 import '../../helpers/fake_reader_preferences_repository.dart';
 import '../../helpers/fake_auth_repository.dart';
 import '../../helpers/fake_favorites_repository.dart';
+import '../../helpers/fake_novel_engagement_repository.dart';
 
 void main() {
   testWidgets('builds long chapter lists lazily and searches locally', (
@@ -95,6 +96,7 @@ class _TestApp extends StatelessWidget {
       readerPreferencesRepository: FakeReaderPreferencesRepository(),
       authRepository: FakeAuthRepository(),
       favoritesRepository: FakeFavoritesRepository(),
+      novelEngagementRepository: FakeNovelEngagementRepository(),
       child: const MaterialApp(
         locale: Locale('ar'),
         home: Directionality(
