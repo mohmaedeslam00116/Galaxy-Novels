@@ -117,6 +117,40 @@ void main() {
     expect(find.byKey(const ValueKey('login-submit')), findsOneWidget);
   });
 
+  testWidgets('signed in account refreshes and shows server XP statistics', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 720);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final authRepository = FakeAuthRepository(
+      initialState: const AuthSessionState.authenticated(_testAuthUser),
+    );
+    await tester.pumpWidget(
+      GalaxyNovelsApp(
+        homeRepository: _TestHomeRepository(_homeData),
+        catalogRepository: const _TestCatalogRepository(),
+        novelRepository: const _TestNovelRepository(),
+        authRepository: authRepository,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.menu));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('حسابي'));
+    await tester.pumpAndSettle();
+
+    expect(authRepository.refreshProfileCalls, 1);
+    expect(find.text('نقاط XP'), findsOneWidget);
+    expect(find.text('XP اليوم'), findsOneWidget);
+    expect(find.text('فصول مقروءة'), findsOneWidget);
+    expect(find.text('مستكشف'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('drawer exposes only working destinations and opens about', (
     tester,
   ) async {

@@ -62,19 +62,41 @@ class SignedInAccountView extends StatelessWidget {
           ),
         ],
         const SizedBox(height: 28),
-        Row(
-          children: [
-            Expanded(
-              child: _AccountStat(label: 'نقاط XP', value: '${user.xp.total}'),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _AccountStat(
-                label: 'فصول مقروءة',
-                value: '${user.xp.chaptersTotal}',
-              ),
-            ),
-          ],
+        LayoutBuilder(
+          builder: (context, constraints) {
+            const spacing = 8.0;
+            final itemWidth = (constraints.maxWidth - spacing * 2) / 3;
+            return Wrap(
+              spacing: spacing,
+              runSpacing: spacing,
+              children: [
+                SizedBox(
+                  width: itemWidth,
+                  height: 96,
+                  child: _AccountStat(
+                    label: 'نقاط XP',
+                    value: user.xp.total.toString(),
+                  ),
+                ),
+                SizedBox(
+                  width: itemWidth,
+                  height: 96,
+                  child: _AccountStat(
+                    label: 'XP اليوم',
+                    value: user.xp.today.toString(),
+                  ),
+                ),
+                SizedBox(
+                  width: itemWidth,
+                  height: 96,
+                  child: _AccountStat(
+                    label: 'فصول مقروءة',
+                    value: user.xp.chaptersTotal.toString(),
+                  ),
+                ),
+              ],
+            );
+          },
         ),
         if (noticeMessage case final message?) ...[
           const SizedBox(height: 20),
@@ -117,19 +139,28 @@ class _AccountStat extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
         child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(
-              value,
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w900,
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  value,
+                  maxLines: 1,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 4),
             Text(
               label,
               textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
