@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:galaxy_novels_app/app/app_theme.dart';
+import 'package:galaxy_novels_app/features/account/domain/auth_session.dart';
 import 'package:galaxy_novels_app/features/comments/application/comments_controller.dart';
 import 'package:galaxy_novels_app/features/comments/domain/comment_target.dart';
 import 'package:galaxy_novels_app/features/comments/domain/comments_page.dart';
@@ -10,6 +11,7 @@ import 'package:galaxy_novels_app/features/comments/domain/public_comment.dart';
 import 'package:galaxy_novels_app/features/comments/presentation/chapter_comments_sheet.dart';
 import 'package:galaxy_novels_app/features/comments/presentation/comments_sliver_section.dart';
 
+import '../../helpers/fake_auth_repository.dart';
 import '../../helpers/fake_comments_repository.dart';
 
 void main() {
@@ -89,6 +91,44 @@ void main() {
     expect(find.text('إعادة المحاولة'), findsOneWidget);
   });
 
+  testWidgets('authenticated reader writes a new root comment', (tester) async {
+    final target = CommentTarget.novel(42);
+    final repository = FakeCommentsRepository(
+      handler: (_, sort, _) async =>
+          _page(target: target, sort: sort, page: 1, totalPages: 1),
+      submitHandler: (_, content, parentId, isSpoiler) async =>
+          _comment(77, content, isSpoiler: isSpoiler),
+    );
+    final controller = CommentsController(
+      repository: repository,
+      target: target,
+      authRepository: FakeAuthRepository(
+        initialState: const AuthSessionState.authenticated(_user),
+      ),
+    );
+    addTearDown(controller.dispose);
+    await controller.loadInitial();
+    await tester.pumpWidget(_surface(controller));
+
+    await tester.enterText(
+      find.byKey(const ValueKey('comments-content-field')),
+      'تعليق من التطبيق',
+    );
+    await tester.tap(find.byKey(const ValueKey('comments-spoiler-toggle')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('comments-submit-button')));
+    await tester.pumpAndSettle();
+
+    expect(repository.submitCalls.single.content, 'تعليق من التطبيق');
+    expect(repository.submitCalls.single.isSpoiler, isTrue);
+    expect(find.text('إظهار المحتوى المحروق'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('comment-spoiler-77')));
+    await tester.pump();
+
+    expect(find.text('تعليق من التطبيق'), findsOneWidget);
+  });
+
   testWidgets('chapter sheet owns a draggable comments surface', (
     tester,
   ) async {
@@ -131,6 +171,20 @@ void main() {
   });
 }
 
+const _user = AuthUser(
+  id: 7,
+  displayName: 'قارئ مسجل',
+  avatar: null,
+  vip: AuthVip(active: false, tier: '', label: '', expiresAt: null),
+  xp: AuthXp(
+    total: 0,
+    today: 0,
+    secondsTotal: 0,
+    chaptersTotal: 0,
+    rank: AuthRank(level: 0, display: ''),
+  ),
+);
+
 Widget _surface(CommentsController controller) {
   return MaterialApp(
     theme: AppTheme.dark(),
@@ -145,7 +199,7 @@ Widget _surface(CommentsController controller) {
   );
 }
 
-PublicComment _comment(int id, String content) {
+PublicComment _comment(int id, String content, {bool isSpoiler = false}) {
   return PublicComment(
     id: id,
     parentId: 0,
@@ -156,7 +210,7 @@ PublicComment _comment(int id, String content) {
     avatarUrl: '',
     replyToName: '',
     content: content,
-    isSpoiler: false,
+    isSpoiler: isSpoiler,
     likeCount: 0,
     dislikeCount: 0,
     repliesCount: 0,
@@ -173,7 +227,7 @@ CommentsPage _page({
   required CommentsSort sort,
   required int page,
   required int totalPages,
-  required List<PublicComment> comments,
+  List<PublicComment> comments = const [],
 }) {
   return CommentsPage(
     version: 2,

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../app/app_theme.dart';
+import '../../account/application/auth_repository.dart';
 import '../application/comments_controller.dart';
 import '../application/comments_repository.dart';
 import '../domain/comment_target.dart';
@@ -12,11 +13,13 @@ class ChapterCommentsSheet extends StatefulWidget {
   const ChapterCommentsSheet({
     required this.repository,
     required this.target,
+    this.authRepository,
     super.key,
   });
 
   final CommentsRepository repository;
   final CommentTarget target;
+  final AuthRepository? authRepository;
 
   @override
   State<ChapterCommentsSheet> createState() => _ChapterCommentsSheetState();
@@ -31,6 +34,7 @@ class _ChapterCommentsSheetState extends State<ChapterCommentsSheet> {
     _controller = CommentsController(
       repository: widget.repository,
       target: widget.target,
+      authRepository: widget.authRepository,
     );
     unawaited(_controller.loadInitial());
   }
@@ -68,6 +72,7 @@ class _ChapterCommentsSheetState extends State<ChapterCommentsSheet> {
                     slivers: [
                       CommentsSliverSection(
                         controller: _controller,
+                        authRepository: widget.authRepository,
                         showTitle: false,
                       ),
                     ],

@@ -14,3 +14,21 @@ String commentsMessageFor(Object error) {
   }
   return 'تعذر تحميل التعليقات الآن.';
 }
+
+String commentSubmitMessageFor(Object error) {
+  if (error is PrivateApiException) {
+    if (error.statusCode == 401 || error.statusCode == 403) {
+      return 'سجل الدخول لكتابة تعليق.';
+    }
+    if (error.statusCode == 404) {
+      return 'لم تعد هذه التعليقات متاحة.';
+    }
+    if (error.statusCode == 429) {
+      return 'طلبات كثيرة. حاول بعد قليل.';
+    }
+  }
+  if (error is FormatException) {
+    return 'تعذر قراءة التعليق المحفوظ.';
+  }
+  return 'تعذر إرسال التعليق الآن.';
+}

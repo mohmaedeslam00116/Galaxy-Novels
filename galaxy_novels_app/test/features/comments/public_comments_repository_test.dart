@@ -46,6 +46,85 @@ void main() {
     expect(page.page, 2);
   });
 
+  test(
+    'submits an authenticated comment and parses the saved payload',
+    () async {
+      late PrivateRawRequest sent;
+      final client = PrivateApiClient(
+        config: const AppConfig(),
+        requestSender: (request) async {
+          sent = request;
+          return const PrivateRawResponse(
+            statusCode: 201,
+            body: '''{
+            "comment": {
+              "id": 88,
+              "parent_id": 0,
+              "root_id": 88,
+              "depth": 0,
+              "author_name": "قارئ مسجل",
+              "author_rank": "قارئ ذهبي",
+              "avatar_url": "",
+              "reply_to_name": "",
+              "content": "تعليق جديد",
+              "is_spoiler": true,
+              "like_count": 0,
+              "dislike_count": 0,
+              "replies_count": 0,
+              "score": 0,
+              "is_pinned": false,
+              "created_at": "الآن",
+              "created_iso": "2026-06-25T10:00:00Z",
+              "replies": []
+            }
+          }''',
+          );
+        },
+      )..updateNonce('nonce-1');
+      final repository = PublicCommentsRepository(client: client);
+
+      final comment = await repository.submitComment(
+        target: CommentTarget.novel(42),
+        content: ' تعليق جديد ',
+        parentId: 0,
+        isSpoiler: true,
+      );
+
+      expect(sent.method, 'POST');
+      expect(sent.uri.path, endsWith('/comments/novel/42'));
+      expect(sent.headers['X-WP-Nonce'], 'nonce-1');
+      expect(
+        sent.body,
+        '{"content":"تعليق جديد","parent_id":0,"is_spoiler":true}',
+      );
+      expect(comment.id, 88);
+      expect(comment.content, 'تعليق جديد');
+      expect(comment.isSpoiler, isTrue);
+    },
+  );
+
+  test('rejects an empty submitted comment before the network', () async {
+    var requests = 0;
+    final repository = PublicCommentsRepository(
+      client: PrivateApiClient(
+        config: const AppConfig(),
+        requestSender: (_) async {
+          requests++;
+          throw StateError('The request must not run.');
+        },
+      )..updateNonce('nonce-1'),
+    );
+
+    await expectLater(
+      repository.submitComment(
+        target: CommentTarget.chapter(7),
+        content: '   ',
+      ),
+      throwsArgumentError,
+    );
+    expect(requests, 0);
+  });
+
   test('rejects a non-positive page before the network', () async {
     var requests = 0;
     final repository = PublicCommentsRepository(

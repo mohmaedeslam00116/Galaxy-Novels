@@ -112,6 +112,7 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
                 loadResult: snapshot.data!,
                 engagementState: engagementState,
                 commentsRepository: _commentsRepository!,
+                authRepository: _authRepository!,
                 onRead: _openReader,
                 onDownloadChapters: () => _openDownloadSheet(snapshot.data!),
                 onToggleFavorite: () => _toggleFavorite(snapshot.data!.details),

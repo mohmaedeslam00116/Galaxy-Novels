@@ -11,6 +11,7 @@ import '../../../comments/application/comments_controller.dart';
 import '../../../comments/application/comments_repository.dart';
 import '../../../comments/domain/comment_target.dart';
 import '../../../comments/presentation/comments_sliver_section.dart';
+import '../../../account/application/auth_repository.dart';
 import '../../../novel_engagement/application/novel_engagement_controller.dart';
 import '../../../novel_engagement/presentation/novel_personal_state_section.dart';
 import 'favorite_toggle_button.dart';
@@ -22,6 +23,7 @@ class NovelDetailsContent extends StatefulWidget {
     required this.loadResult,
     required this.engagementState,
     required this.commentsRepository,
+    required this.authRepository,
     required this.onRead,
     required this.onDownloadChapters,
     required this.onToggleFavorite,
@@ -34,6 +36,7 @@ class NovelDetailsContent extends StatefulWidget {
   final NovelDetailsLoadResult loadResult;
   final NovelEngagementState engagementState;
   final CommentsRepository commentsRepository;
+  final AuthRepository authRepository;
   final void Function(NovelChapter chapter, String novelTitle) onRead;
   final VoidCallback onDownloadChapters;
   final Future<void> Function() onToggleFavorite;
@@ -103,7 +106,10 @@ class _NovelDetailsContentState extends State<NovelDetailsContent> {
                 onDownloadChapters: widget.onDownloadChapters,
               )
             else
-              CommentsSliverSection(controller: _commentsController!),
+              CommentsSliverSection(
+                controller: _commentsController!,
+                authRepository: widget.authRepository,
+              ),
             const SliverToBoxAdapter(child: SizedBox(height: 118)),
           ],
         ),
@@ -134,6 +140,7 @@ class _NovelDetailsContentState extends State<NovelDetailsContent> {
       final controller = _commentsController ??= CommentsController(
         repository: widget.commentsRepository,
         target: CommentTarget.novel(widget.loadResult.details.id),
+        authRepository: widget.authRepository,
       );
       setState(() => _section = section);
       unawaited(controller.loadInitial());

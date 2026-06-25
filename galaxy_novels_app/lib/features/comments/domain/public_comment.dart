@@ -68,6 +68,29 @@ class PublicComment {
   final String createdLabel;
   final DateTime? createdAt;
   final List<PublicComment> replies;
+
+  PublicComment copyWith({int? repliesCount, List<PublicComment>? replies}) {
+    return PublicComment(
+      id: id,
+      parentId: parentId,
+      rootId: rootId,
+      depth: depth,
+      authorName: authorName,
+      authorRank: authorRank,
+      avatarUrl: avatarUrl,
+      replyToName: replyToName,
+      content: content,
+      isSpoiler: isSpoiler,
+      likeCount: likeCount,
+      dislikeCount: dislikeCount,
+      repliesCount: repliesCount ?? this.repliesCount,
+      score: score,
+      isPinned: isPinned,
+      createdLabel: createdLabel,
+      createdAt: createdAt,
+      replies: replies ?? this.replies,
+    );
+  }
 }
 
 Map<String, dynamic> _asMap(Object? value) {

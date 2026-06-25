@@ -1,12 +1,14 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:galaxy_novels_app/features/account/domain/auth_session.dart';
 import 'package:galaxy_novels_app/features/comments/application/comments_controller.dart';
 import 'package:galaxy_novels_app/features/comments/domain/comment_target.dart';
 import 'package:galaxy_novels_app/features/comments/domain/comments_page.dart';
 import 'package:galaxy_novels_app/features/comments/domain/public_comment.dart';
 
 import '../../helpers/fake_comments_repository.dart';
+import '../../helpers/fake_auth_repository.dart';
 
 void main() {
   test('loads once and merges the next page without duplicate ids', () async {
@@ -136,28 +138,108 @@ void main() {
     expect(controller.value.page, 1);
     expect(controller.value.loadMoreErrorMessage, 'تعذر تحميل التعليقات الآن.');
   });
+
+  test('guest cannot submit a comment', () async {
+    final repository = FakeCommentsRepository.empty();
+    final controller = CommentsController(
+      repository: repository,
+      target: CommentTarget.novel(42),
+      authRepository: FakeAuthRepository(),
+    );
+    addTearDown(controller.dispose);
+
+    final outcome = await controller.submitComment(content: 'تعليق جديد');
+
+    expect(outcome.status, CommentSubmitStatus.signInRequired);
+    expect(repository.submitCalls, isEmpty);
+    expect(controller.value.submitErrorMessage, 'سجل الدخول لكتابة تعليق.');
+  });
+
+  test('authenticated submit inserts a reply under its root comment', () async {
+    final target = CommentTarget.novel(42);
+    final repository = FakeCommentsRepository(
+      handler: (_, sort, _) => Future.value(
+        _page(target: target, sort: sort, comments: [_comment(1)]),
+      ),
+      submitHandler: (_, content, parentId, isSpoiler) async {
+        return _comment(
+          2,
+          parentId: parentId,
+          rootId: 1,
+          content: content,
+          isSpoiler: isSpoiler,
+        );
+      },
+    );
+    final controller = CommentsController(
+      repository: repository,
+      target: target,
+      authRepository: FakeAuthRepository(
+        initialState: const AuthSessionState.authenticated(_user),
+      ),
+    );
+    addTearDown(controller.dispose);
+    await controller.loadInitial();
+
+    final outcome = await controller.submitComment(
+      content: ' رد جديد ',
+      parentId: 1,
+      isSpoiler: true,
+    );
+
+    expect(outcome.status, CommentSubmitStatus.saved);
+    expect(repository.submitCalls.single.parentId, 1);
+    expect(repository.submitCalls.single.content, 'رد جديد');
+    expect(repository.submitCalls.single.isSpoiler, isTrue);
+    final root = controller.value.comments.single;
+    expect(root.replies, hasLength(1));
+    expect(root.replies.single.content, 'رد جديد');
+    expect(root.replies.single.isSpoiler, isTrue);
+    expect(controller.value.isSubmitting, isFalse);
+  });
 }
 
-PublicComment _comment(int id) {
+const _user = AuthUser(
+  id: 7,
+  displayName: 'قارئ مسجل',
+  avatar: null,
+  vip: AuthVip(active: false, tier: '', label: '', expiresAt: null),
+  xp: AuthXp(
+    total: 0,
+    today: 0,
+    secondsTotal: 0,
+    chaptersTotal: 0,
+    rank: AuthRank(level: 0, display: ''),
+  ),
+);
+
+PublicComment _comment(
+  int id, {
+  int parentId = 0,
+  int rootId = 0,
+  String? content,
+  bool isSpoiler = false,
+  List<PublicComment> replies = const [],
+}) {
   return PublicComment(
     id: id,
-    parentId: 0,
-    rootId: 0,
+    parentId: parentId,
+    rootId: rootId,
     depth: 0,
     authorName: 'قارئ $id',
     authorRank: '',
     avatarUrl: '',
     replyToName: '',
-    content: 'تعليق $id',
-    isSpoiler: false,
+    content: content ?? 'تعليق $id',
+    isSpoiler: isSpoiler,
     likeCount: 0,
     dislikeCount: 0,
-    repliesCount: 0,
+    repliesCount: replies.length,
     score: 0,
     isPinned: false,
     createdLabel: '',
     createdAt: null,
-    replies: const [],
+    replies: replies,
   );
 }
 

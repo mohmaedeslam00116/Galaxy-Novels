@@ -1,11 +1,23 @@
 import 'package:flutter/foundation.dart';
 
+import '../../../core/network/private_api_client.dart';
+import '../../account/application/auth_repository.dart';
+import '../../account/domain/auth_session.dart';
 import '../data/comments_error_messages.dart';
 import '../domain/comment_target.dart';
 import '../domain/public_comment.dart';
 import 'comments_repository.dart';
 
 enum CommentsStatus { idle, loading, ready, failure }
+
+enum CommentSubmitStatus { saved, signInRequired, busy, failed }
+
+class CommentSubmitOutcome {
+  const CommentSubmitOutcome(this.status, {this.errorMessage});
+
+  final CommentSubmitStatus status;
+  final String? errorMessage;
+}
 
 class CommentsState {
   CommentsState({
@@ -17,8 +29,10 @@ class CommentsState {
     this.totalPages = 0,
     this.totalComments = 0,
     this.isLoadingMore = false,
+    this.isSubmitting = false,
     this.errorMessage,
     this.loadMoreErrorMessage,
+    this.submitErrorMessage,
   }) : comments = List<PublicComment>.unmodifiable(comments);
 
   final CommentTarget target;
@@ -29,8 +43,10 @@ class CommentsState {
   final int totalPages;
   final int totalComments;
   final bool isLoadingMore;
+  final bool isSubmitting;
   final String? errorMessage;
   final String? loadMoreErrorMessage;
+  final String? submitErrorMessage;
 
   bool get hasNextPage => status == CommentsStatus.ready && page < totalPages;
 }
@@ -40,7 +56,9 @@ class CommentsController extends ChangeNotifier
   CommentsController({
     required CommentsRepository repository,
     required CommentTarget target,
+    AuthRepository? authRepository,
   }) : _repository = repository,
+       _authRepository = authRepository,
        _target = target,
        _value = CommentsState(
          target: target,
@@ -49,6 +67,7 @@ class CommentsController extends ChangeNotifier
        );
 
   final CommentsRepository _repository;
+  final AuthRepository? _authRepository;
   final CommentTarget _target;
   CommentsState _value;
   Future<void>? _initialFuture;
@@ -183,6 +202,89 @@ class CommentsController extends ChangeNotifier
     return request;
   }
 
+  Future<CommentSubmitOutcome> submitComment({
+    required String content,
+    int parentId = 0,
+    bool isSpoiler = false,
+  }) async {
+    if (_disposed) {
+      return const CommentSubmitOutcome(CommentSubmitStatus.failed);
+    }
+    final trimmed = content.trim();
+    if (trimmed.isEmpty) {
+      const message = 'اكتب تعليقًا أولًا.';
+      _publishSubmitFailure(message);
+      return const CommentSubmitOutcome(
+        CommentSubmitStatus.failed,
+        errorMessage: message,
+      );
+    }
+    if (parentId < 0) {
+      const message = 'تعذر تحديد التعليق الذي تريد الرد عليه.';
+      _publishSubmitFailure(message);
+      return const CommentSubmitOutcome(
+        CommentSubmitStatus.failed,
+        errorMessage: message,
+      );
+    }
+    if (_value.isSubmitting) {
+      return const CommentSubmitOutcome(CommentSubmitStatus.busy);
+    }
+
+    final authRepository = _authRepository;
+    final userId = _authenticatedUserId;
+    if (authRepository != null && userId == null) {
+      const message = 'سجل الدخول لكتابة تعليق.';
+      _publishSubmitFailure(message);
+      return const CommentSubmitOutcome(
+        CommentSubmitStatus.signInRequired,
+        errorMessage: message,
+      );
+    }
+
+    final sort = _value.sort;
+    final generation = _generation;
+    _publishSubmitting();
+
+    try {
+      final comment = await _repository.submitComment(
+        target: _target,
+        content: trimmed,
+        parentId: parentId,
+        isSpoiler: isSpoiler,
+      );
+      if (!_isCurrent(sort, generation)) {
+        return const CommentSubmitOutcome(CommentSubmitStatus.failed);
+      }
+      _publishSubmittedComment(comment);
+      return const CommentSubmitOutcome(CommentSubmitStatus.saved);
+    } on PrivateApiException catch (error) {
+      if (error.statusCode == 401 || error.statusCode == 403) {
+        await authRepository?.restoreSession();
+      }
+      final message = commentSubmitMessageFor(error);
+      _finishFailedSubmit(sort, generation, message);
+      return CommentSubmitOutcome(
+        CommentSubmitStatus.failed,
+        errorMessage: message,
+      );
+    } on FormatException {
+      const message = 'أرسل الموقع تعليقًا غير صالح. حاول مجددًا.';
+      _finishFailedSubmit(sort, generation, message);
+      return const CommentSubmitOutcome(
+        CommentSubmitStatus.failed,
+        errorMessage: message,
+      );
+    } on ArgumentError {
+      const message = 'اكتب تعليقًا أولًا.';
+      _finishFailedSubmit(sort, generation, message);
+      return const CommentSubmitOutcome(
+        CommentSubmitStatus.failed,
+        errorMessage: message,
+      );
+    }
+  }
+
   Future<void> _performLoadMore(
     CommentsSort sort,
     int nextPage,
@@ -243,11 +345,105 @@ class CommentsController extends ChangeNotifier
     return commentsById.values.toList(growable: false);
   }
 
+  List<PublicComment> _insertSubmittedComment(
+    List<PublicComment> currentComments,
+    PublicComment submitted,
+  ) {
+    if (submitted.parentId <= 0) {
+      return [
+        submitted,
+        for (final comment in currentComments)
+          if (comment.id != submitted.id) comment,
+      ];
+    }
+
+    final rootId = submitted.rootId > 0 ? submitted.rootId : submitted.parentId;
+    return [
+      for (final comment in currentComments)
+        if (comment.id == rootId) _appendReply(comment, submitted) else comment,
+    ];
+  }
+
+  PublicComment _appendReply(PublicComment root, PublicComment reply) {
+    final replies = [
+      for (final current in root.replies)
+        if (current.id != reply.id) current,
+      reply,
+    ];
+    final count = root.repliesCount >= replies.length
+        ? root.repliesCount + 1
+        : replies.length;
+    return root.copyWith(replies: replies, repliesCount: count);
+  }
+
+  void _publishSubmitting() {
+    final current = _value;
+    _publish(
+      CommentsState(
+        target: current.target,
+        sort: current.sort,
+        status: current.status,
+        comments: current.comments,
+        page: current.page,
+        totalPages: current.totalPages,
+        totalComments: current.totalComments,
+        isLoadingMore: current.isLoadingMore,
+        isSubmitting: true,
+      ),
+    );
+  }
+
+  void _publishSubmittedComment(PublicComment comment) {
+    final current = _value;
+    _publish(
+      CommentsState(
+        target: current.target,
+        sort: current.sort,
+        status: CommentsStatus.ready,
+        comments: _insertSubmittedComment(current.comments, comment),
+        page: current.page <= 0 ? 1 : current.page,
+        totalPages: current.totalPages,
+        totalComments: current.totalComments + 1,
+      ),
+    );
+  }
+
+  void _publishSubmitFailure(String message) {
+    final current = _value;
+    _publish(
+      CommentsState(
+        target: current.target,
+        sort: current.sort,
+        status: current.status,
+        comments: current.comments,
+        page: current.page,
+        totalPages: current.totalPages,
+        totalComments: current.totalComments,
+        isLoadingMore: current.isLoadingMore,
+        submitErrorMessage: message,
+      ),
+    );
+  }
+
+  void _finishFailedSubmit(CommentsSort sort, int generation, String message) {
+    if (!_isCurrent(sort, generation)) {
+      return;
+    }
+    _publishSubmitFailure(message);
+  }
+
   bool _isCurrent(CommentsSort sort, int generation) {
     return !_disposed &&
         generation == _generation &&
         _value.target == _target &&
         _value.sort == sort;
+  }
+
+  int? get _authenticatedUserId {
+    final session = _authRepository?.value;
+    return session?.status == AuthSessionStatus.authenticated
+        ? session?.user?.id
+        : null;
   }
 
   void _publish(CommentsState state) {

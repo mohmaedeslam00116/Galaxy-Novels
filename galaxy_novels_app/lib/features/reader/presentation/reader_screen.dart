@@ -269,7 +269,8 @@ class _ReaderScreenState extends State<ReaderScreen>
     if (content.id <= 0) {
       return;
     }
-    final repository = AppDependencies.of(context).commentsRepository;
+    final dependencies = AppDependencies.of(context);
+    final repository = dependencies.commentsRepository;
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -278,6 +279,7 @@ class _ReaderScreenState extends State<ReaderScreen>
       builder: (_) => ChapterCommentsSheet(
         repository: repository,
         target: CommentTarget.chapter(content.id),
+        authRepository: dependencies.authRepository,
       ),
     );
   }

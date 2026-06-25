@@ -4,30 +4,42 @@ import 'package:flutter/material.dart';
 
 import '../../../app/app_theme.dart';
 import '../../../shared/widgets/section_title.dart';
+import '../../account/application/auth_repository.dart';
 import '../application/comments_controller.dart';
 import '../domain/comment_target.dart';
+import '../domain/public_comment.dart';
+import 'widgets/comment_composer.dart';
 import 'widgets/comment_item.dart';
 import 'widgets/comments_sort_menu.dart';
 import 'widgets/comments_states.dart';
 
-class CommentsSliverSection extends StatelessWidget {
+class CommentsSliverSection extends StatefulWidget {
   const CommentsSliverSection({
     required this.controller,
+    this.authRepository,
     this.showTitle = true,
     super.key,
   });
 
   final CommentsController controller;
+  final AuthRepository? authRepository;
   final bool showTitle;
+
+  @override
+  State<CommentsSliverSection> createState() => _CommentsSliverSectionState();
+}
+
+class _CommentsSliverSectionState extends State<CommentsSliverSection> {
+  PublicComment? _replyTarget;
 
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<CommentsState>(
-      valueListenable: controller,
+      valueListenable: widget.controller,
       builder: (context, state, _) {
         return SliverMainAxisGroup(
           slivers: [
-            if (showTitle)
+            if (widget.showTitle)
               const SliverToBoxAdapter(
                 child: SectionTitle(
                   title: 'التعليقات',
@@ -37,7 +49,17 @@ class CommentsSliverSection extends StatelessWidget {
             SliverToBoxAdapter(
               child: _CommentsToolbar(
                 state: state,
-                onSortChanged: (sort) => unawaited(controller.changeSort(sort)),
+                onSortChanged: (sort) =>
+                    unawaited(widget.controller.changeSort(sort)),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: CommentComposer(
+                controller: widget.controller,
+                authRepository: widget.authRepository,
+                replyTarget: _replyTarget,
+                onCancelReply: () => setState(() => _replyTarget = null),
+                onSubmitted: () => setState(() => _replyTarget = null),
               ),
             ),
             ..._contentSlivers(state),
@@ -57,7 +79,7 @@ class CommentsSliverSection extends StatelessWidget {
         SliverToBoxAdapter(
           child: CommentsErrorState(
             message: state.errorMessage ?? 'تعذر تحميل التعليقات الآن.',
-            onRetry: () => unawaited(controller.retry()),
+            onRetry: () => unawaited(widget.controller.retry()),
           ),
         ),
       ];
@@ -69,13 +91,16 @@ class CommentsSliverSection extends StatelessWidget {
     return [
       SliverList(
         delegate: SliverChildBuilderDelegate(
-          (context, index) => CommentItem(comment: state.comments[index]),
+          (context, index) => CommentItem(
+            comment: state.comments[index],
+            onReply: (comment) => setState(() => _replyTarget = comment),
+          ),
           childCount: state.comments.length,
           addAutomaticKeepAlives: false,
         ),
       ),
       SliverToBoxAdapter(
-        child: _CommentsFooter(state: state, controller: controller),
+        child: _CommentsFooter(state: state, controller: widget.controller),
       ),
     ];
   }

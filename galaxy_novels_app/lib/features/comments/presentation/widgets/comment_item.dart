@@ -4,9 +4,10 @@ import '../../../../app/app_theme.dart';
 import '../../domain/public_comment.dart';
 
 class CommentItem extends StatelessWidget {
-  const CommentItem({required this.comment, super.key});
+  const CommentItem({required this.comment, this.onReply, super.key});
 
   final PublicComment comment;
+  final ValueChanged<PublicComment>? onReply;
 
   @override
   Widget build(BuildContext context) {
@@ -24,7 +25,7 @@ class CommentItem extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _CommentBody(comment: comment),
+              _CommentBody(comment: comment, onReply: onReply),
               if (comment.replies.isNotEmpty) ...[
                 const SizedBox(height: 14),
                 Padding(
@@ -47,6 +48,7 @@ class CommentItem extends StatelessWidget {
                             _CommentBody(
                               comment: comment.replies[index],
                               compact: true,
+                              onReply: onReply,
                             ),
                             if (index < comment.replies.length - 1)
                               Padding(
@@ -71,10 +73,15 @@ class CommentItem extends StatelessWidget {
 }
 
 class _CommentBody extends StatefulWidget {
-  const _CommentBody({required this.comment, this.compact = false});
+  const _CommentBody({
+    required this.comment,
+    this.compact = false,
+    this.onReply,
+  });
 
   final PublicComment comment;
   final bool compact;
+  final ValueChanged<PublicComment>? onReply;
 
   @override
   State<_CommentBody> createState() => _CommentBodyState();
@@ -221,6 +228,13 @@ class _CommentBodyState extends State<_CommentBody> {
                 icon: Icons.forum_outlined,
                 value: comment.repliesCount,
                 semanticLabel: 'رد',
+              ),
+            if (!widget.compact && widget.onReply != null)
+              TextButton.icon(
+                key: ValueKey('comment-reply-${comment.id}'),
+                onPressed: () => widget.onReply?.call(comment),
+                icon: const Icon(Icons.reply_rounded, size: 16),
+                label: const Text('رد'),
               ),
           ],
         ),
