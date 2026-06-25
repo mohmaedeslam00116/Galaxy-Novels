@@ -6,7 +6,12 @@ class FakeAuthRepository extends ValueNotifier<AuthSessionState>
     implements AuthRepository {
   FakeAuthRepository({
     AuthSessionState initialState = const AuthSessionState.guest(),
+    this.authenticatedUser,
+    this.expireOnRefresh = false,
   }) : super(initialState);
+
+  final AuthUser? authenticatedUser;
+  final bool expireOnRefresh;
 
   LoginCredentials? lastLogin;
   int refreshProfileCalls = 0;
@@ -21,11 +26,18 @@ class FakeAuthRepository extends ValueNotifier<AuthSessionState>
   @override
   Future<void> login(LoginCredentials credentials) async {
     lastLogin = credentials;
+    final user = authenticatedUser;
+    if (user != null) {
+      value = AuthSessionState.authenticated(user);
+    }
   }
 
   @override
   Future<void> refreshProfile() async {
     refreshProfileCalls += 1;
+    if (expireOnRefresh) {
+      value = const AuthSessionState.guest();
+    }
   }
 
   @override

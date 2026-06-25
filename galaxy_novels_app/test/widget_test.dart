@@ -138,6 +138,53 @@ void main() {
     expect(authRepository.lastLogin?.rememberSession, isTrue);
   });
 
+  testWidgets('keeps the account signed in after closing and reopening', (
+    tester,
+  ) async {
+    final authRepository = FakeAuthRepository(
+      authenticatedUser: _testAuthUser,
+      expireOnRefresh: true,
+    );
+    await tester.pumpWidget(
+      GalaxyNovelsApp(
+        homeRepository: _TestHomeRepository(_homeData),
+        catalogRepository: const _TestCatalogRepository(),
+        novelRepository: const _TestNovelRepository(),
+        authRepository: authRepository,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.menu));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('حسابي'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('login-username')),
+      'reader@example.com',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('login-password')),
+      'secret-value',
+    );
+    await tester.tap(find.byKey(const ValueKey('login-submit')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('قارئ الاختبار'), findsOneWidget);
+
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.menu));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('حسابي'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('قارئ الاختبار'), findsOneWidget);
+    expect(find.byKey(const ValueKey('login-submit')), findsNothing);
+    expect(authRepository.refreshProfileCalls, 0);
+  });
+
   testWidgets('signed in account can log out', (tester) async {
     final authRepository = FakeAuthRepository(
       initialState: const AuthSessionState.authenticated(_testAuthUser),
@@ -163,7 +210,7 @@ void main() {
     expect(find.byKey(const ValueKey('login-submit')), findsOneWidget);
   });
 
-  testWidgets('signed in account refreshes and shows server XP statistics', (
+  testWidgets('signed in account shows cached XP statistics without refresh', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(320, 720);
@@ -189,7 +236,7 @@ void main() {
     await tester.tap(find.text('حسابي'));
     await tester.pumpAndSettle();
 
-    expect(authRepository.refreshProfileCalls, 1);
+    expect(authRepository.refreshProfileCalls, 0);
     expect(find.text('نقاط XP'), findsOneWidget);
     expect(find.text('XP اليوم'), findsOneWidget);
     expect(find.text('فصول مقروءة'), findsOneWidget);

@@ -27,9 +27,14 @@ class _AccountScreenState extends State<AccountScreen> {
 
     _repository = repository;
     if (repository.value.status == AuthSessionStatus.idle) {
-      unawaited(repository.restoreSession());
-    } else if (repository.value.status == AuthSessionStatus.authenticated) {
-      unawaited(repository.refreshProfile());
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _repository != repository) {
+          return;
+        }
+        if (repository.value.status == AuthSessionStatus.idle) {
+          unawaited(repository.restoreSession());
+        }
+      });
     }
   }
 
