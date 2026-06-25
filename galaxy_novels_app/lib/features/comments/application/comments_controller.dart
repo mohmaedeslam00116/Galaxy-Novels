@@ -4,6 +4,7 @@ import '../../../core/network/private_api_client.dart';
 import '../../account/application/auth_repository.dart';
 import '../../account/domain/auth_session.dart';
 import '../data/comments_error_messages.dart';
+import '../domain/comment_interaction.dart';
 import '../domain/comment_target.dart';
 import '../domain/public_comment.dart';
 import 'comments_repository.dart';
@@ -12,10 +13,19 @@ enum CommentsStatus { idle, loading, ready, failure }
 
 enum CommentSubmitStatus { saved, signInRequired, busy, failed }
 
+enum CommentInteractionStatus { saved, signInRequired, busy, failed }
+
 class CommentSubmitOutcome {
   const CommentSubmitOutcome(this.status, {this.errorMessage});
 
   final CommentSubmitStatus status;
+  final String? errorMessage;
+}
+
+class CommentInteractionOutcome {
+  const CommentInteractionOutcome(this.status, {this.errorMessage});
+
+  final CommentInteractionStatus status;
   final String? errorMessage;
 }
 
@@ -28,12 +38,17 @@ class CommentsState {
     this.page = 0,
     this.totalPages = 0,
     this.totalComments = 0,
+    Map<CommentReaction, int> reactions = const {},
+    this.myReaction,
     this.isLoadingMore = false,
     this.isSubmitting = false,
+    this.isInteracting = false,
     this.errorMessage,
     this.loadMoreErrorMessage,
     this.submitErrorMessage,
-  }) : comments = List<PublicComment>.unmodifiable(comments);
+    this.interactionErrorMessage,
+  }) : comments = List<PublicComment>.unmodifiable(comments),
+       reactions = Map<CommentReaction, int>.unmodifiable(reactions);
 
   final CommentTarget target;
   final CommentsSort sort;
@@ -42,11 +57,15 @@ class CommentsState {
   final int page;
   final int totalPages;
   final int totalComments;
+  final Map<CommentReaction, int> reactions;
+  final CommentReaction? myReaction;
   final bool isLoadingMore;
   final bool isSubmitting;
+  final bool isInteracting;
   final String? errorMessage;
   final String? loadMoreErrorMessage;
   final String? submitErrorMessage;
+  final String? interactionErrorMessage;
 
   bool get hasNextPage => status == CommentsStatus.ready && page < totalPages;
 }
@@ -145,6 +164,7 @@ class CommentsController extends ChangeNotifier
           page: page.page,
           totalPages: page.totalPages,
           totalComments: page.totalComments,
+          reactions: _reactionCountsFromPage(page.reactions),
         ),
       );
     } on Exception catch (error) {
@@ -186,6 +206,8 @@ class CommentsController extends ChangeNotifier
         page: current.page,
         totalPages: current.totalPages,
         totalComments: current.totalComments,
+        reactions: current.reactions,
+        myReaction: current.myReaction,
         isLoadingMore: true,
       ),
     );
@@ -285,6 +307,142 @@ class CommentsController extends ChangeNotifier
     }
   }
 
+  Future<CommentInteractionOutcome> voteComment({
+    required int commentId,
+    CommentVote? vote,
+  }) async {
+    if (_disposed) {
+      return const CommentInteractionOutcome(CommentInteractionStatus.failed);
+    }
+    if (commentId <= 0) {
+      const message = 'تعذر تحديد التعليق.';
+      _publishInteractionFailure(message);
+      return const CommentInteractionOutcome(
+        CommentInteractionStatus.failed,
+        errorMessage: message,
+      );
+    }
+    if (_value.isInteracting) {
+      return const CommentInteractionOutcome(CommentInteractionStatus.busy);
+    }
+    final authRepository = _authRepository;
+    if (authRepository != null && _authenticatedUserId == null) {
+      const message = 'سجل الدخول للتفاعل.';
+      _publishInteractionFailure(message);
+      return const CommentInteractionOutcome(
+        CommentInteractionStatus.signInRequired,
+        errorMessage: message,
+      );
+    }
+
+    final sort = _value.sort;
+    final generation = _generation;
+    _publishInteracting();
+
+    try {
+      final result = await _repository.voteComment(
+        commentId: commentId,
+        vote: vote,
+      );
+      if (!_isCurrent(sort, generation)) {
+        return const CommentInteractionOutcome(CommentInteractionStatus.failed);
+      }
+      _publishVotedComment(result);
+      return const CommentInteractionOutcome(CommentInteractionStatus.saved);
+    } on PrivateApiException catch (error) {
+      if (error.statusCode == 401 || error.statusCode == 403) {
+        await authRepository?.restoreSession();
+      }
+      final message = commentInteractionMessageFor(error);
+      _finishFailedInteraction(sort, generation, message);
+      return CommentInteractionOutcome(
+        CommentInteractionStatus.failed,
+        errorMessage: message,
+      );
+    } on FormatException {
+      const message = 'أرسل الموقع بيانات تفاعل غير صالحة.';
+      _finishFailedInteraction(sort, generation, message);
+      return const CommentInteractionOutcome(
+        CommentInteractionStatus.failed,
+        errorMessage: message,
+      );
+    } on RangeError {
+      const message = 'تعذر تحديد التعليق.';
+      _finishFailedInteraction(sort, generation, message);
+      return const CommentInteractionOutcome(
+        CommentInteractionStatus.failed,
+        errorMessage: message,
+      );
+    } on ArgumentError {
+      const message = 'تعذر تنفيذ التفاعل الآن.';
+      _finishFailedInteraction(sort, generation, message);
+      return const CommentInteractionOutcome(
+        CommentInteractionStatus.failed,
+        errorMessage: message,
+      );
+    }
+  }
+
+  Future<CommentInteractionOutcome> reactToTarget(
+    CommentReaction? reaction,
+  ) async {
+    if (_disposed) {
+      return const CommentInteractionOutcome(CommentInteractionStatus.failed);
+    }
+    if (_value.isInteracting) {
+      return const CommentInteractionOutcome(CommentInteractionStatus.busy);
+    }
+    final authRepository = _authRepository;
+    if (authRepository != null && _authenticatedUserId == null) {
+      const message = 'سجل الدخول للتفاعل.';
+      _publishInteractionFailure(message);
+      return const CommentInteractionOutcome(
+        CommentInteractionStatus.signInRequired,
+        errorMessage: message,
+      );
+    }
+
+    final sort = _value.sort;
+    final generation = _generation;
+    _publishInteracting();
+
+    try {
+      final result = await _repository.reactToTarget(
+        target: _target,
+        reaction: reaction,
+      );
+      if (!_isCurrent(sort, generation)) {
+        return const CommentInteractionOutcome(CommentInteractionStatus.failed);
+      }
+      _publishReactedTarget(result);
+      return const CommentInteractionOutcome(CommentInteractionStatus.saved);
+    } on PrivateApiException catch (error) {
+      if (error.statusCode == 401 || error.statusCode == 403) {
+        await authRepository?.restoreSession();
+      }
+      final message = commentInteractionMessageFor(error);
+      _finishFailedInteraction(sort, generation, message);
+      return CommentInteractionOutcome(
+        CommentInteractionStatus.failed,
+        errorMessage: message,
+      );
+    } on FormatException {
+      const message = 'أرسل الموقع بيانات تفاعل غير صالحة.';
+      _finishFailedInteraction(sort, generation, message);
+      return const CommentInteractionOutcome(
+        CommentInteractionStatus.failed,
+        errorMessage: message,
+      );
+    } on ArgumentError {
+      const message = 'تعذر تنفيذ التفاعل الآن.';
+      _finishFailedInteraction(sort, generation, message);
+      return const CommentInteractionOutcome(
+        CommentInteractionStatus.failed,
+        errorMessage: message,
+      );
+    }
+  }
+
   Future<void> _performLoadMore(
     CommentsSort sort,
     int nextPage,
@@ -309,6 +467,8 @@ class CommentsController extends ChangeNotifier
           page: page.page,
           totalPages: page.totalPages,
           totalComments: page.totalComments,
+          reactions: _reactionCountsFromPage(page.reactions),
+          myReaction: _value.myReaction,
         ),
       );
     } on Exception catch (error) {
@@ -325,6 +485,8 @@ class CommentsController extends ChangeNotifier
           page: current.page,
           totalPages: current.totalPages,
           totalComments: current.totalComments,
+          reactions: current.reactions,
+          myReaction: current.myReaction,
           loadMoreErrorMessage: commentsMessageFor(error),
         ),
       );
@@ -376,6 +538,48 @@ class CommentsController extends ChangeNotifier
     return root.copyWith(replies: replies, repliesCount: count);
   }
 
+  List<PublicComment> _applyVoteResult(
+    List<PublicComment> currentComments,
+    CommentVoteResult result,
+  ) {
+    return [
+      for (final comment in currentComments)
+        _updateCommentVote(comment, result),
+    ];
+  }
+
+  PublicComment _updateCommentVote(
+    PublicComment comment,
+    CommentVoteResult result,
+  ) {
+    if (comment.id == result.commentId) {
+      return comment.copyWith(
+        likeCount: result.likeCount,
+        dislikeCount: result.dislikeCount,
+        score: result.score,
+        myVote: result.vote,
+        clearMyVote: result.vote == null,
+      );
+    }
+    if (comment.replies.isEmpty) {
+      return comment;
+    }
+    return comment.copyWith(
+      replies: [
+        for (final reply in comment.replies) _updateCommentVote(reply, result),
+      ],
+    );
+  }
+
+  Map<CommentReaction, int> _reactionCountsFromPage(
+    Map<String, int> rawCounts,
+  ) {
+    return {
+      for (final reaction in CommentReaction.values)
+        reaction: rawCounts[reaction.apiValue] ?? 0,
+    };
+  }
+
   void _publishSubmitting() {
     final current = _value;
     _publish(
@@ -387,7 +591,10 @@ class CommentsController extends ChangeNotifier
         page: current.page,
         totalPages: current.totalPages,
         totalComments: current.totalComments,
+        reactions: current.reactions,
+        myReaction: current.myReaction,
         isLoadingMore: current.isLoadingMore,
+        isInteracting: current.isInteracting,
         isSubmitting: true,
       ),
     );
@@ -404,6 +611,8 @@ class CommentsController extends ChangeNotifier
         page: current.page <= 0 ? 1 : current.page,
         totalPages: current.totalPages,
         totalComments: current.totalComments + 1,
+        reactions: current.reactions,
+        myReaction: current.myReaction,
       ),
     );
   }
@@ -419,7 +628,10 @@ class CommentsController extends ChangeNotifier
         page: current.page,
         totalPages: current.totalPages,
         totalComments: current.totalComments,
+        reactions: current.reactions,
+        myReaction: current.myReaction,
         isLoadingMore: current.isLoadingMore,
+        isInteracting: current.isInteracting,
         submitErrorMessage: message,
       ),
     );
@@ -430,6 +642,95 @@ class CommentsController extends ChangeNotifier
       return;
     }
     _publishSubmitFailure(message);
+  }
+
+  void _publishInteracting() {
+    final current = _value;
+    _publish(
+      CommentsState(
+        target: current.target,
+        sort: current.sort,
+        status: current.status,
+        comments: current.comments,
+        page: current.page,
+        totalPages: current.totalPages,
+        totalComments: current.totalComments,
+        reactions: current.reactions,
+        myReaction: current.myReaction,
+        isLoadingMore: current.isLoadingMore,
+        isSubmitting: current.isSubmitting,
+        isInteracting: true,
+      ),
+    );
+  }
+
+  void _publishVotedComment(CommentVoteResult result) {
+    final current = _value;
+    _publish(
+      CommentsState(
+        target: current.target,
+        sort: current.sort,
+        status: current.status,
+        comments: _applyVoteResult(current.comments, result),
+        page: current.page,
+        totalPages: current.totalPages,
+        totalComments: current.totalComments,
+        reactions: current.reactions,
+        myReaction: current.myReaction,
+        isLoadingMore: current.isLoadingMore,
+        isSubmitting: current.isSubmitting,
+      ),
+    );
+  }
+
+  void _publishReactedTarget(CommentReactionResult result) {
+    final current = _value;
+    _publish(
+      CommentsState(
+        target: current.target,
+        sort: current.sort,
+        status: current.status,
+        comments: current.comments,
+        page: current.page,
+        totalPages: current.totalPages,
+        totalComments: current.totalComments,
+        reactions: result.counts,
+        myReaction: result.reaction,
+        isLoadingMore: current.isLoadingMore,
+        isSubmitting: current.isSubmitting,
+      ),
+    );
+  }
+
+  void _publishInteractionFailure(String message) {
+    final current = _value;
+    _publish(
+      CommentsState(
+        target: current.target,
+        sort: current.sort,
+        status: current.status,
+        comments: current.comments,
+        page: current.page,
+        totalPages: current.totalPages,
+        totalComments: current.totalComments,
+        reactions: current.reactions,
+        myReaction: current.myReaction,
+        isLoadingMore: current.isLoadingMore,
+        isSubmitting: current.isSubmitting,
+        interactionErrorMessage: message,
+      ),
+    );
+  }
+
+  void _finishFailedInteraction(
+    CommentsSort sort,
+    int generation,
+    String message,
+  ) {
+    if (!_isCurrent(sort, generation)) {
+      return;
+    }
+    _publishInteractionFailure(message);
   }
 
   bool _isCurrent(CommentsSort sort, int generation) {

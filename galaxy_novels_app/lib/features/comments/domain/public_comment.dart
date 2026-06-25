@@ -1,3 +1,5 @@
+import 'comment_interaction.dart';
+
 class PublicComment {
   PublicComment({
     required this.id,
@@ -14,6 +16,7 @@ class PublicComment {
     required this.dislikeCount,
     required this.repliesCount,
     required this.score,
+    this.myVote,
     required this.isPinned,
     required this.createdLabel,
     required this.createdAt,
@@ -41,6 +44,7 @@ class PublicComment {
       dislikeCount: _asInt(json['dislike_count']).clamp(0, 1 << 31).toInt(),
       repliesCount: _asInt(json['replies_count']).clamp(0, 1 << 31).toInt(),
       score: _asInt(json['score']),
+      myVote: CommentVote.fromApi(json['my_vote']),
       isPinned: _asBool(json['is_pinned']),
       createdLabel: _asString(json['created_at']),
       createdAt: DateTime.tryParse(_asString(json['created_iso'])),
@@ -64,12 +68,21 @@ class PublicComment {
   final int dislikeCount;
   final int repliesCount;
   final int score;
+  final CommentVote? myVote;
   final bool isPinned;
   final String createdLabel;
   final DateTime? createdAt;
   final List<PublicComment> replies;
 
-  PublicComment copyWith({int? repliesCount, List<PublicComment>? replies}) {
+  PublicComment copyWith({
+    int? likeCount,
+    int? dislikeCount,
+    int? repliesCount,
+    int? score,
+    CommentVote? myVote,
+    bool clearMyVote = false,
+    List<PublicComment>? replies,
+  }) {
     return PublicComment(
       id: id,
       parentId: parentId,
@@ -81,10 +94,11 @@ class PublicComment {
       replyToName: replyToName,
       content: content,
       isSpoiler: isSpoiler,
-      likeCount: likeCount,
-      dislikeCount: dislikeCount,
+      likeCount: likeCount ?? this.likeCount,
+      dislikeCount: dislikeCount ?? this.dislikeCount,
       repliesCount: repliesCount ?? this.repliesCount,
-      score: score,
+      score: score ?? this.score,
+      myVote: clearMyVote ? null : myVote ?? this.myVote,
       isPinned: isPinned,
       createdLabel: createdLabel,
       createdAt: createdAt,

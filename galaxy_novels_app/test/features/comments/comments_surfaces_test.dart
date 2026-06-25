@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:galaxy_novels_app/app/app_theme.dart';
 import 'package:galaxy_novels_app/features/account/domain/auth_session.dart';
 import 'package:galaxy_novels_app/features/comments/application/comments_controller.dart';
+import 'package:galaxy_novels_app/features/comments/domain/comment_interaction.dart';
 import 'package:galaxy_novels_app/features/comments/domain/comment_target.dart';
 import 'package:galaxy_novels_app/features/comments/domain/comments_page.dart';
 import 'package:galaxy_novels_app/features/comments/domain/public_comment.dart';
@@ -129,6 +130,60 @@ void main() {
     expect(find.text('تعليق من التطبيق'), findsOneWidget);
   });
 
+  testWidgets('authenticated reader votes and reacts from comments surface', (
+    tester,
+  ) async {
+    final target = CommentTarget.novel(42);
+    final repository = FakeCommentsRepository(
+      handler: (_, sort, _) async => _page(
+        target: target,
+        sort: sort,
+        page: 1,
+        totalPages: 1,
+        reactions: const {'like': 1, 'love': 2},
+        comments: [_comment(7, 'تعليق قابل للتفاعل')],
+      ),
+      voteHandler: (commentId, vote) async => const CommentVoteResult(
+        commentId: 7,
+        vote: CommentVote.like,
+        likeCount: 6,
+        dislikeCount: 0,
+        score: 6,
+      ),
+      reactionHandler: (target, reaction) async => CommentReactionResult(
+        reaction: CommentReaction.love,
+        counts: const {
+          CommentReaction.like: 1,
+          CommentReaction.laugh: 0,
+          CommentReaction.love: 3,
+          CommentReaction.wow: 0,
+          CommentReaction.angry: 0,
+          CommentReaction.sad: 0,
+        },
+      ),
+    );
+    final controller = CommentsController(
+      repository: repository,
+      target: target,
+      authRepository: FakeAuthRepository(
+        initialState: const AuthSessionState.authenticated(_user),
+      ),
+    );
+    addTearDown(controller.dispose);
+    await controller.loadInitial();
+    await tester.pumpWidget(_surface(controller));
+
+    await tester.tap(find.byKey(const ValueKey('comment-vote-like-7')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('comment-reaction-love')));
+    await tester.pumpAndSettle();
+
+    expect(repository.voteCalls.single.vote, CommentVote.like);
+    expect(repository.reactionCalls.single.reaction, CommentReaction.love);
+    expect(controller.value.comments.single.likeCount, 6);
+    expect(controller.value.reactions[CommentReaction.love], 3);
+  });
+
   testWidgets('chapter sheet owns a draggable comments surface', (
     tester,
   ) async {
@@ -227,6 +282,7 @@ CommentsPage _page({
   required CommentsSort sort,
   required int page,
   required int totalPages,
+  Map<String, int> reactions = const {},
   List<PublicComment> comments = const [],
 }) {
   return CommentsPage(
@@ -239,7 +295,7 @@ CommentsPage _page({
     totalRoots: totalPages,
     totalPages: totalPages,
     generated: 1,
-    reactions: const {},
+    reactions: reactions,
     comments: comments,
   );
 }

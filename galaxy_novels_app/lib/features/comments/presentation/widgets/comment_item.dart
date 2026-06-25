@@ -1,13 +1,20 @@
 import 'package:flutter/material.dart';
 
 import '../../../../app/app_theme.dart';
+import '../../domain/comment_interaction.dart';
 import '../../domain/public_comment.dart';
 
 class CommentItem extends StatelessWidget {
-  const CommentItem({required this.comment, this.onReply, super.key});
+  const CommentItem({
+    required this.comment,
+    this.onReply,
+    this.onVote,
+    super.key,
+  });
 
   final PublicComment comment;
   final ValueChanged<PublicComment>? onReply;
+  final void Function(PublicComment comment, CommentVote? vote)? onVote;
 
   @override
   Widget build(BuildContext context) {
@@ -25,7 +32,7 @@ class CommentItem extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _CommentBody(comment: comment, onReply: onReply),
+              _CommentBody(comment: comment, onReply: onReply, onVote: onVote),
               if (comment.replies.isNotEmpty) ...[
                 const SizedBox(height: 14),
                 Padding(
@@ -49,6 +56,7 @@ class CommentItem extends StatelessWidget {
                               comment: comment.replies[index],
                               compact: true,
                               onReply: onReply,
+                              onVote: onVote,
                             ),
                             if (index < comment.replies.length - 1)
                               Padding(
@@ -77,11 +85,13 @@ class _CommentBody extends StatefulWidget {
     required this.comment,
     this.compact = false,
     this.onReply,
+    this.onVote,
   });
 
   final PublicComment comment;
   final bool compact;
   final ValueChanged<PublicComment>? onReply;
+  final void Function(PublicComment comment, CommentVote? vote)? onVote;
 
   @override
   State<_CommentBody> createState() => _CommentBodyState();
@@ -213,15 +223,35 @@ class _CommentBodyState extends State<_CommentBody> {
           spacing: 14,
           runSpacing: 6,
           children: [
-            _CommentMetric(
+            _CommentVoteButton(
+              key: ValueKey('comment-vote-like-${comment.id}'),
               icon: Icons.thumb_up_alt_outlined,
               value: comment.likeCount,
+              selected: comment.myVote == CommentVote.like,
               semanticLabel: 'إعجاب',
+              onPressed: widget.onVote == null
+                  ? null
+                  : () => widget.onVote!(
+                      comment,
+                      comment.myVote == CommentVote.like
+                          ? null
+                          : CommentVote.like,
+                    ),
             ),
-            _CommentMetric(
+            _CommentVoteButton(
+              key: ValueKey('comment-vote-dislike-${comment.id}'),
               icon: Icons.thumb_down_alt_outlined,
               value: comment.dislikeCount,
+              selected: comment.myVote == CommentVote.dislike,
               semanticLabel: 'عدم إعجاب',
+              onPressed: widget.onVote == null
+                  ? null
+                  : () => widget.onVote!(
+                      comment,
+                      comment.myVote == CommentVote.dislike
+                          ? null
+                          : CommentVote.dislike,
+                    ),
             ),
             if (comment.repliesCount > 0)
               _CommentMetric(
@@ -351,6 +381,53 @@ class _CommentMetric extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CommentVoteButton extends StatelessWidget {
+  const _CommentVoteButton({
+    super.key,
+    required this.icon,
+    required this.value,
+    required this.selected,
+    required this.semanticLabel,
+    this.onPressed,
+  });
+
+  final IconData icon;
+  final int value;
+  final bool selected;
+  final String semanticLabel;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens =
+        Theme.of(context).extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
+    final color = selected ? tokens.primary : tokens.textSecondary;
+
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '$semanticLabel: $value',
+      child: TextButton.icon(
+        onPressed: onPressed,
+        style: TextButton.styleFrom(
+          foregroundColor: color,
+          minimumSize: const Size(0, 32),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+        icon: Icon(icon, size: 15),
+        label: Text(
+          '$value',
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: color,
+            fontWeight: FontWeight.w800,
+          ),
         ),
       ),
     );

@@ -32,3 +32,21 @@ String commentSubmitMessageFor(Object error) {
   }
   return 'تعذر إرسال التعليق الآن.';
 }
+
+String commentInteractionMessageFor(Object error) {
+  if (error is PrivateApiException) {
+    if (error.statusCode == 401 || error.statusCode == 403) {
+      return 'سجل الدخول للتفاعل.';
+    }
+    if (error.statusCode == 404) {
+      return 'لم يعد هذا التفاعل متاحًا.';
+    }
+    if (error.statusCode == 429) {
+      return 'طلبات كثيرة. حاول بعد قليل.';
+    }
+  }
+  if (error is FormatException) {
+    return 'تعذر قراءة بيانات التفاعل.';
+  }
+  return 'تعذر تنفيذ التفاعل الآن.';
+}

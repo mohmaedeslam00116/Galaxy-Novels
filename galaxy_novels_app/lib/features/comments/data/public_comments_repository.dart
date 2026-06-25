@@ -1,5 +1,6 @@
 import '../../../core/network/private_api_client.dart';
 import '../application/comments_repository.dart';
+import '../domain/comment_interaction.dart';
 import '../domain/comment_target.dart';
 import '../domain/comments_page.dart';
 import '../domain/public_comment.dart';
@@ -59,6 +60,38 @@ class PublicCommentsRepository implements CommentsRepository {
       },
     );
     return PublicComment.fromJson(_commentPayload(response));
+  }
+
+  @override
+  Future<CommentVoteResult> voteComment({
+    required int commentId,
+    CommentVote? vote,
+  }) async {
+    if (commentId <= 0) {
+      throw RangeError.value(
+        commentId,
+        'commentId',
+        'Comment id must be positive.',
+      );
+    }
+
+    final response = await _client.postAuthenticatedWithNonceRefresh(
+      'comments/$commentId/vote',
+      body: {'vote': vote?.apiValue ?? ''},
+    );
+    return CommentVoteResult.fromJson(response);
+  }
+
+  @override
+  Future<CommentReactionResult> reactToTarget({
+    required CommentTarget target,
+    CommentReaction? reaction,
+  }) async {
+    final response = await _client.postAuthenticatedWithNonceRefresh(
+      'comments/${target.pathSegment}/reaction',
+      body: {'reaction': reaction?.apiValue ?? ''},
+    );
+    return CommentReactionResult.fromJson(response);
   }
 
   Map<String, dynamic> _commentPayload(Map<String, dynamic> response) {

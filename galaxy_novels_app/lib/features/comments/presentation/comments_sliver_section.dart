@@ -6,6 +6,7 @@ import '../../../app/app_theme.dart';
 import '../../../shared/widgets/section_title.dart';
 import '../../account/application/auth_repository.dart';
 import '../application/comments_controller.dart';
+import '../domain/comment_interaction.dart';
 import '../domain/comment_target.dart';
 import '../domain/public_comment.dart';
 import 'widgets/comment_composer.dart';
@@ -54,6 +55,15 @@ class _CommentsSliverSectionState extends State<CommentsSliverSection> {
               ),
             ),
             SliverToBoxAdapter(
+              child: _TargetReactionsStrip(
+                state: state,
+                onSelected: (reaction) {
+                  final next = state.myReaction == reaction ? null : reaction;
+                  unawaited(widget.controller.reactToTarget(next));
+                },
+              ),
+            ),
+            SliverToBoxAdapter(
               child: CommentComposer(
                 controller: widget.controller,
                 authRepository: widget.authRepository,
@@ -94,6 +104,9 @@ class _CommentsSliverSectionState extends State<CommentsSliverSection> {
           (context, index) => CommentItem(
             comment: state.comments[index],
             onReply: (comment) => setState(() => _replyTarget = comment),
+            onVote: (comment, vote) => unawaited(
+              widget.controller.voteComment(commentId: comment.id, vote: vote),
+            ),
           ),
           childCount: state.comments.length,
           addAutomaticKeepAlives: false,
@@ -138,6 +151,113 @@ class _CommentsToolbar extends StatelessWidget {
           const SizedBox(width: 12),
           CommentsSortMenu(value: state.sort, onChanged: onSortChanged),
         ],
+      ),
+    );
+  }
+}
+
+class _TargetReactionsStrip extends StatelessWidget {
+  const _TargetReactionsStrip({required this.state, required this.onSelected});
+
+  final CommentsState state;
+  final ValueChanged<CommentReaction> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    if (state.status != CommentsStatus.ready) {
+      return const SizedBox.shrink();
+    }
+    final tokens =
+        Theme.of(context).extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
+    final error = state.interactionErrorMessage;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (final reaction in CommentReaction.values) ...[
+                  _ReactionButton(
+                    reaction: reaction,
+                    count: state.reactions[reaction] ?? 0,
+                    selected: state.myReaction == reaction,
+                    enabled: !state.isInteracting,
+                    onPressed: () => onSelected(reaction),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+              ],
+            ),
+          ),
+          if (error != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              error,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: tokens.danger,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ReactionButton extends StatelessWidget {
+  const _ReactionButton({
+    required this.reaction,
+    required this.count,
+    required this.selected,
+    required this.enabled,
+    required this.onPressed,
+  });
+
+  final CommentReaction reaction;
+  final int count;
+  final bool selected;
+  final bool enabled;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens =
+        Theme.of(context).extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
+    final foreground = selected ? tokens.primary : tokens.textSecondary;
+    final background = selected ? tokens.primary.withValues(alpha: 0.12) : null;
+
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '${reaction.label}: $count',
+      child: InkWell(
+        key: ValueKey('comment-reaction-${reaction.apiValue}'),
+        onTap: enabled ? onPressed : null,
+        borderRadius: BorderRadius.circular(8),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: background,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: selected ? tokens.primary : tokens.border,
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+            child: Text(
+              '${reaction.label} $count',
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: foreground,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

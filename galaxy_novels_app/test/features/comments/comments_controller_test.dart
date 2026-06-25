@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:galaxy_novels_app/features/account/domain/auth_session.dart';
 import 'package:galaxy_novels_app/features/comments/application/comments_controller.dart';
+import 'package:galaxy_novels_app/features/comments/domain/comment_interaction.dart';
 import 'package:galaxy_novels_app/features/comments/domain/comment_target.dart';
 import 'package:galaxy_novels_app/features/comments/domain/comments_page.dart';
 import 'package:galaxy_novels_app/features/comments/domain/public_comment.dart';
@@ -197,6 +198,106 @@ void main() {
     expect(root.replies.single.isSpoiler, isTrue);
     expect(controller.value.isSubmitting, isFalse);
   });
+
+  test('guest cannot vote on a comment', () async {
+    final repository = FakeCommentsRepository.empty();
+    final controller = CommentsController(
+      repository: repository,
+      target: CommentTarget.novel(42),
+      authRepository: FakeAuthRepository(),
+    );
+    addTearDown(controller.dispose);
+
+    final outcome = await controller.voteComment(
+      commentId: 1,
+      vote: CommentVote.like,
+    );
+
+    expect(outcome.status, CommentInteractionStatus.signInRequired);
+    expect(repository.voteCalls, isEmpty);
+    expect(controller.value.interactionErrorMessage, 'سجل الدخول للتفاعل.');
+  });
+
+  test('authenticated vote updates comment counts from the server', () async {
+    final target = CommentTarget.novel(42);
+    final repository = FakeCommentsRepository(
+      handler: (_, sort, _) => Future.value(
+        _page(target: target, sort: sort, comments: [_comment(1)]),
+      ),
+      voteHandler: (commentId, vote) async {
+        return const CommentVoteResult(
+          commentId: 1,
+          vote: CommentVote.like,
+          likeCount: 7,
+          dislikeCount: 2,
+          score: 5,
+        );
+      },
+    );
+    final controller = CommentsController(
+      repository: repository,
+      target: target,
+      authRepository: FakeAuthRepository(
+        initialState: const AuthSessionState.authenticated(_user),
+      ),
+    );
+    addTearDown(controller.dispose);
+    await controller.loadInitial();
+
+    final outcome = await controller.voteComment(
+      commentId: 1,
+      vote: CommentVote.like,
+    );
+
+    expect(outcome.status, CommentInteractionStatus.saved);
+    expect(repository.voteCalls.single.vote, CommentVote.like);
+    final comment = controller.value.comments.single;
+    expect(comment.likeCount, 7);
+    expect(comment.dislikeCount, 2);
+    expect(comment.score, 5);
+    expect(comment.myVote, CommentVote.like);
+  });
+
+  test(
+    'authenticated reaction updates target counts from the server',
+    () async {
+      final target = CommentTarget.chapter(9);
+      final repository = FakeCommentsRepository(
+        handler: (_, sort, _) =>
+            Future.value(_page(target: target, sort: sort)),
+        reactionHandler: (target, reaction) async {
+          return CommentReactionResult(
+            reaction: CommentReaction.love,
+            counts: const {
+              CommentReaction.like: 2,
+              CommentReaction.laugh: 0,
+              CommentReaction.love: 4,
+              CommentReaction.wow: 1,
+              CommentReaction.angry: 0,
+              CommentReaction.sad: 0,
+            },
+          );
+        },
+      );
+      final controller = CommentsController(
+        repository: repository,
+        target: target,
+        authRepository: FakeAuthRepository(
+          initialState: const AuthSessionState.authenticated(_user),
+        ),
+      );
+      addTearDown(controller.dispose);
+      await controller.loadInitial();
+
+      final outcome = await controller.reactToTarget(CommentReaction.love);
+
+      expect(outcome.status, CommentInteractionStatus.saved);
+      expect(repository.reactionCalls.single.reaction, CommentReaction.love);
+      expect(controller.value.myReaction, CommentReaction.love);
+      expect(controller.value.reactions[CommentReaction.love], 4);
+      expect(controller.value.reactions[CommentReaction.wow], 1);
+    },
+  );
 }
 
 const _user = AuthUser(

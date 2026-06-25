@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:galaxy_novels_app/core/config/app_config.dart';
 import 'package:galaxy_novels_app/core/network/private_api_client.dart';
 import 'package:galaxy_novels_app/features/comments/data/public_comments_repository.dart';
+import 'package:galaxy_novels_app/features/comments/domain/comment_interaction.dart';
 import 'package:galaxy_novels_app/features/comments/domain/comment_target.dart';
 
 void main() {
@@ -124,6 +125,90 @@ void main() {
     );
     expect(requests, 0);
   });
+
+  test(
+    'votes on an authenticated comment and parses returned counts',
+    () async {
+      late PrivateRawRequest sent;
+      final client = PrivateApiClient(
+        config: const AppConfig(),
+        requestSender: (request) async {
+          sent = request;
+          return const PrivateRawResponse(
+            statusCode: 200,
+            body: '''{
+            "success": true,
+            "comment_id": 55,
+            "vote": "like",
+            "counts": {
+              "like_count": 4,
+              "dislike_count": 1,
+              "score": 3
+            }
+          }''',
+          );
+        },
+      )..updateNonce('nonce-1');
+      final repository = PublicCommentsRepository(client: client);
+
+      final result = await repository.voteComment(
+        commentId: 55,
+        vote: CommentVote.like,
+      );
+
+      expect(sent.method, 'POST');
+      expect(sent.uri.path, endsWith('/comments/55/vote'));
+      expect(sent.headers['X-WP-Nonce'], 'nonce-1');
+      expect(sent.body, '{"vote":"like"}');
+      expect(result.commentId, 55);
+      expect(result.vote, CommentVote.like);
+      expect(result.likeCount, 4);
+      expect(result.dislikeCount, 1);
+      expect(result.score, 3);
+    },
+  );
+
+  test(
+    'reacts to an authenticated comments target and parses counts',
+    () async {
+      late PrivateRawRequest sent;
+      final client = PrivateApiClient(
+        config: const AppConfig(),
+        requestSender: (request) async {
+          sent = request;
+          return const PrivateRawResponse(
+            statusCode: 200,
+            body: '''{
+            "success": true,
+            "reaction": "love",
+            "counts": {
+              "like": 3,
+              "laugh": 0,
+              "love": 5,
+              "wow": 1,
+              "angry": 0,
+              "sad": 0
+            }
+          }''',
+          );
+        },
+      )..updateNonce('nonce-1');
+      final repository = PublicCommentsRepository(client: client);
+
+      final result = await repository.reactToTarget(
+        target: CommentTarget.chapter(7),
+        reaction: CommentReaction.love,
+      );
+
+      expect(sent.method, 'POST');
+      expect(sent.uri.path, endsWith('/comments/chapter/7/reaction'));
+      expect(sent.headers['X-WP-Nonce'], 'nonce-1');
+      expect(sent.body, '{"reaction":"love"}');
+      expect(result.reaction, CommentReaction.love);
+      expect(result.counts[CommentReaction.love], 5);
+      expect(result.counts[CommentReaction.wow], 1);
+    },
+  );
 
   test('rejects a non-positive page before the network', () async {
     var requests = 0;
