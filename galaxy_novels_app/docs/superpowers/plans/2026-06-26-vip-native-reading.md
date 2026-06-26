@@ -8,6 +8,20 @@
 
 **Tech Stack:** Flutter/Dart, `ChangeNotifier`/`ValueListenableBuilder`, existing `PrivateApiClient`, existing `ReaderRepository`, `flutter_test`.
 
+## Execution Status
+
+- [x] Task 0: Confirm required VIP content contract.
+- [x] Task 1: Add VIP chapter domain and list repository.
+- [x] Task 2: Add VIP-aware native reader routing.
+- [x] Task 3: Wire VIP dependencies without breaking tests.
+- [x] Task 4: Add VIP chapters tab to novel details.
+- [x] Task 5: Show VIP expiry in account.
+- [x] Task 6: Final docs, validation, and manual-device notes.
+
+**Current blocker:** production still needs `GET /wp-json/wor-reader-app/v1/vip/chapter?chapter_id=ID`. Until that endpoint exists, the app lists VIP chapters but shows a clear server-route message instead of opening the first VIP chapter.
+
+**Validation completed:** `flutter analyze`, full `flutter test`, and `flutter build apk --debug` all passed after implementation.
+
 ## Global Constraints
 
 - No purchase, checkout, PayPal, subscription activation, or Store screen work in this implementation.
