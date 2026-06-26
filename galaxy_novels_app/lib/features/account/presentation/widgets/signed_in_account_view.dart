@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../app/app_theme.dart';
 import '../../domain/auth_session.dart';
 
 class SignedInAccountView extends StatelessWidget {
@@ -54,12 +55,7 @@ class SignedInAccountView extends StatelessWidget {
         ],
         if (user.vip.active) ...[
           const SizedBox(height: 10),
-          Align(
-            child: Chip(
-              avatar: const Icon(Icons.workspace_premium_outlined, size: 18),
-              label: Text(user.vip.label.isEmpty ? 'عضو VIP' : user.vip.label),
-            ),
-          ),
+          _VipStatusCard(vip: user.vip),
         ],
         const SizedBox(height: 28),
         LayoutBuilder(
@@ -121,6 +117,85 @@ class SignedInAccountView extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+class _VipStatusCard extends StatelessWidget {
+  const _VipStatusCard({required this.vip});
+
+  final AuthVip vip;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tokens = theme.extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
+    final title = vip.label.isEmpty ? 'عضو VIP' : vip.label;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: tokens.gold.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: tokens.gold.withValues(alpha: 0.32)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: tokens.gold.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                Icons.workspace_premium_outlined,
+                color: tokens.gold,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      color: tokens.textPrimary,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    _vipExpiryText(context, vip.expiresAt),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: tokens.textSecondary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _vipExpiryText(BuildContext context, DateTime? expiresAt) {
+    if (expiresAt == null) {
+      return 'فعال حاليا';
+    }
+    final date = MaterialLocalizations.of(
+      context,
+    ).formatCompactDate(expiresAt.toLocal());
+    return 'ينتهي في $date';
   }
 }
 
