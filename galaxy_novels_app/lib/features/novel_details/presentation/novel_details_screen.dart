@@ -18,7 +18,11 @@ import '../../novel_engagement/application/novel_engagement_controller.dart';
 import '../../novel_engagement/application/novel_engagement_repository.dart';
 import '../../novel_engagement/presentation/novel_rating_sheet.dart';
 import '../../reader/presentation/reader_screen.dart';
+import '../../vip/application/vip_chapters_controller.dart';
+import '../../vip/application/vip_repository.dart';
 import 'widgets/novel_details_content.dart';
+
+const _isVipNativeReaderAvailable = false;
 
 class NovelDetailsScreen extends StatefulWidget {
   const NovelDetailsScreen({required this.manifestPath, super.key});
@@ -38,13 +42,25 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
   FavoritesRepository? _favoritesRepository;
   NovelEngagementRepository? _novelEngagementRepository;
   CommentsRepository? _commentsRepository;
+  VipRepository? _vipRepository;
   NovelEngagementController? _novelEngagementController;
+  VipChaptersController? _vipChaptersController;
   int? _loadedNovelId;
+  String _loadedNovelTitle = '';
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     final dependencies = AppDependencies.of(context);
+    final vipRepository = dependencies.vipRepository;
+    if (_vipRepository != vipRepository) {
+      _vipRepository = vipRepository;
+      final novelId = _loadedNovelId;
+      if (novelId != null) {
+        _recreateVipController(novelId);
+      }
+    }
+
     final repository = dependencies.novelRepository;
     if (_repository != repository) {
       _repository = repository;
@@ -113,7 +129,10 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
                 engagementState: engagementState,
                 commentsRepository: _commentsRepository!,
                 authRepository: _authRepository!,
+                vipController: _vipChaptersController!,
+                isVipNativeReaderAvailable: _isVipNativeReaderAvailable,
                 onRead: _openReader,
+                onOpenVipChapter: _openVipReader,
                 onDownloadChapters: () => _openDownloadSheet(snapshot.data!),
                 onToggleFavorite: () => _toggleFavorite(snapshot.data!.details),
                 onRate: _openRatingSheet,
@@ -141,6 +160,8 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
     final novelLoad = await repository.loadNovel(widget.manifestPath);
     if (mounted && identical(_repository, repository)) {
       _loadedNovelId = novelLoad.details.id;
+      _loadedNovelTitle = novelLoad.details.title;
+      _recreateVipController(novelLoad.details.id);
       unawaited(_novelEngagementController?.loadNovel(novelLoad.details.id));
     }
     return novelLoad;
@@ -259,6 +280,30 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
     );
   }
 
+  void _openVipReader(String contentApi, String title) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => ReaderScreen(
+          contentApi: contentApi,
+          chapterTitle: title,
+          novelTitle: _loadedNovelTitle,
+        ),
+      ),
+    );
+  }
+
+  void _recreateVipController(int novelId) {
+    final repository = _vipRepository;
+    if (repository == null) {
+      return;
+    }
+    _vipChaptersController?.dispose();
+    _vipChaptersController = VipChaptersController(
+      repository: repository,
+      novelId: novelId,
+    );
+  }
+
   Future<void> _openDownloadSheet(NovelDetailsLoadResult result) async {
     final repository = _downloadsRepository;
     if (repository == null || result.chapters.isEmpty) {
@@ -324,6 +369,7 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
   void dispose() {
     _authRepository?.removeListener(_handleAuthChanged);
     _novelEngagementController?.dispose();
+    _vipChaptersController?.dispose();
     super.dispose();
   }
 }

@@ -142,6 +142,32 @@ void main() {
     expect(find.text('تعذر تحميل التعليقات الآن.'), findsOneWidget);
     expect(find.text('ابدأ القراءة'), findsOneWidget);
   });
+
+  testWidgets('shows VIP tab for novels with a private schedule', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _TestApp(repository: _LongNovelRepository(hasVipSchedule: true)),
+    );
+    await tester.pumpAndSettle();
+
+    final vipTab = find.byKey(
+      const ValueKey('novel-section-vip'),
+      skipOffstage: false,
+    );
+    await tester.scrollUntilVisible(
+      vipTab,
+      300,
+      scrollable: _verticalScrollable(),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(vipTab);
+    await tester.pumpAndSettle();
+
+    expect(find.text('فصول VIP'), findsOneWidget);
+    expect(find.textContaining('متاحة للمشتركين فقط'), findsOneWidget);
+  });
 }
 
 Finder _verticalScrollable() {
@@ -212,13 +238,16 @@ PublicComment _comment(String content) {
 }
 
 class _LongNovelRepository implements NovelRepository {
+  _LongNovelRepository({this.hasVipSchedule = false});
+
+  final bool hasVipSchedule;
   int loadCalls = 0;
 
   @override
   Future<NovelDetailsLoadResult> loadNovel(String manifestPath) async {
     loadCalls++;
     return NovelDetailsLoadResult(
-      details: const NovelDetails(
+      details: NovelDetails(
         id: 500,
         title: 'رواية طويلة',
         originalTitle: '',
@@ -241,7 +270,7 @@ class _LongNovelRepository implements NovelRepository {
         updatedAt: null,
         summary: '',
         chaptersManifest: '/chapters.json',
-        vipScheduleManifest: '',
+        vipScheduleManifest: hasVipSchedule ? '/vip-schedule.json' : '',
         manifest: '/novel-long.json',
       ),
       chapters: List.generate(300, (index) {

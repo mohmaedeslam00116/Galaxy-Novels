@@ -14,6 +14,8 @@ import '../../../comments/presentation/comments_sliver_section.dart';
 import '../../../account/application/auth_repository.dart';
 import '../../../novel_engagement/application/novel_engagement_controller.dart';
 import '../../../novel_engagement/presentation/novel_personal_state_section.dart';
+import '../../../vip/application/vip_chapters_controller.dart';
+import '../../../vip/presentation/vip_chapters_section.dart';
 import 'favorite_toggle_button.dart';
 import 'novel_chapters_section.dart';
 import 'novel_details_header.dart';
@@ -24,7 +26,10 @@ class NovelDetailsContent extends StatefulWidget {
     required this.engagementState,
     required this.commentsRepository,
     required this.authRepository,
+    required this.vipController,
+    required this.isVipNativeReaderAvailable,
     required this.onRead,
+    required this.onOpenVipChapter,
     required this.onDownloadChapters,
     required this.onToggleFavorite,
     required this.onRate,
@@ -37,7 +42,10 @@ class NovelDetailsContent extends StatefulWidget {
   final NovelEngagementState engagementState;
   final CommentsRepository commentsRepository;
   final AuthRepository authRepository;
+  final VipChaptersController vipController;
+  final bool isVipNativeReaderAvailable;
   final void Function(NovelChapter chapter, String novelTitle) onRead;
+  final void Function(String contentApi, String title) onOpenVipChapter;
   final VoidCallback onDownloadChapters;
   final Future<void> Function() onToggleFavorite;
   final VoidCallback onRate;
@@ -48,7 +56,7 @@ class NovelDetailsContent extends StatefulWidget {
   State<NovelDetailsContent> createState() => _NovelDetailsContentState();
 }
 
-enum _NovelDetailsSection { chapters, comments }
+enum _NovelDetailsSection { chapters, vip, comments }
 
 class _NovelDetailsContentState extends State<NovelDetailsContent> {
   _NovelDetailsSection _section = _NovelDetailsSection.chapters;
@@ -69,6 +77,11 @@ class _NovelDetailsContentState extends State<NovelDetailsContent> {
   Widget build(BuildContext context) {
     final loadResult = widget.loadResult;
     final details = loadResult.details;
+    final hasVipSchedule = details.vipScheduleManifest.isNotEmpty;
+    final selectedSection =
+        hasVipSchedule || _section != _NovelDetailsSection.vip
+        ? _section
+        : _NovelDetailsSection.chapters;
     final firstReadableChapter = _firstReadableChapter(loadResult.chapters);
     final continuationChapter = _continuationChapter(
       loadResult.chapters,
@@ -95,21 +108,31 @@ class _NovelDetailsContentState extends State<NovelDetailsContent> {
               ),
             SliverToBoxAdapter(
               child: _DetailsSectionTabs(
-                selected: _section,
+                selected: selectedSection,
+                showVip: hasVipSchedule,
                 onSelected: _selectSection,
               ),
             ),
-            if (_section == _NovelDetailsSection.chapters)
-              NovelChaptersSection(
+            switch (selectedSection) {
+              _NovelDetailsSection.chapters => NovelChaptersSection(
                 result: loadResult,
                 onRead: widget.onRead,
                 onDownloadChapters: widget.onDownloadChapters,
-              )
-            else
-              CommentsSliverSection(
+              ),
+              _NovelDetailsSection.vip => VipChaptersSection(
+                controller: widget.vipController,
+                canReadPrivate:
+                    widget.engagementState.userState?.vip.canReadPrivate ??
+                    false,
+                nativeReaderAvailable: widget.isVipNativeReaderAvailable,
+                onSignIn: widget.onSignIn,
+                onOpenVipChapter: widget.onOpenVipChapter,
+              ),
+              _NovelDetailsSection.comments => CommentsSliverSection(
                 controller: _commentsController!,
                 authRepository: widget.authRepository,
               ),
+            },
             const SliverToBoxAdapter(child: SizedBox(height: 118)),
           ],
         ),
@@ -157,9 +180,14 @@ class _NovelDetailsContentState extends State<NovelDetailsContent> {
 }
 
 class _DetailsSectionTabs extends StatelessWidget {
-  const _DetailsSectionTabs({required this.selected, required this.onSelected});
+  const _DetailsSectionTabs({
+    required this.selected,
+    required this.showVip,
+    required this.onSelected,
+  });
 
   final _NovelDetailsSection selected;
+  final bool showVip;
   final ValueChanged<_NovelDetailsSection> onSelected;
 
   @override
@@ -189,6 +217,18 @@ class _DetailsSectionTabs extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 4),
+              if (showVip) ...[
+                Expanded(
+                  child: _DetailsTabButton(
+                    key: const ValueKey('novel-section-vip'),
+                    label: 'VIP',
+                    icon: Icons.workspace_premium_outlined,
+                    selected: selected == _NovelDetailsSection.vip,
+                    onTap: () => onSelected(_NovelDetailsSection.vip),
+                  ),
+                ),
+                const SizedBox(width: 4),
+              ],
               Expanded(
                 child: _DetailsTabButton(
                   key: const ValueKey('novel-section-comments'),
