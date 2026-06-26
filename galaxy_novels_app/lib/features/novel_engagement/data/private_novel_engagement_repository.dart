@@ -13,9 +13,7 @@ class PrivateNovelEngagementRepository implements NovelEngagementRepository {
     if (novelId <= 0) {
       throw RangeError.value(novelId, 'novelId');
     }
-    final response = await _client.getAuthenticatedWithNonceRefresh(
-      'me/novels/$novelId',
-    );
+    final response = await _client.getAuthenticated('me/novels/$novelId');
     return NovelUserState.fromResponse(response, expectedNovelId: novelId);
   }
 
@@ -28,7 +26,7 @@ class PrivateNovelEngagementRepository implements NovelEngagementRepository {
       throw RangeError.range(rating, 1, 5, 'rating');
     }
 
-    final response = await _client.postAuthenticatedWithNonceRefresh(
+    final response = await _client.postAuthenticated(
       'ratings/novel/$novelId',
       body: {'rating': rating},
     );

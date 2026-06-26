@@ -30,12 +30,14 @@ class SecureAuthSessionStore implements AuthSessionStore {
 
     try {
       final json = jsonDecode(encoded);
-      if (json is! Map<String, dynamic> || json['version'] != 1) {
+      if (json is! Map<String, dynamic> || json['version'] != 2) {
         throw const FormatException('Unsupported session payload.');
       }
-      final nonce = _requiredString(json['nonce']);
-      final cookieHeader = _requiredString(json['cookie_header']);
-      return PrivateSessionSnapshot(nonce: nonce, cookieHeader: cookieHeader);
+      return PrivateSessionSnapshot(
+        accessToken: _requiredString(json['access_token']),
+        tokenType: _optionalString(json['token_type']) ?? 'Bearer',
+        expiresAt: DateTime.tryParse(_optionalString(json['expires_at']) ?? ''),
+      );
     } on FormatException {
       await clear();
       return null;
@@ -45,9 +47,11 @@ class SecureAuthSessionStore implements AuthSessionStore {
   @override
   Future<void> write(PrivateSessionSnapshot session) async {
     final encoded = jsonEncode({
-      'version': 1,
-      'nonce': session.nonce,
-      'cookie_header': session.cookieHeader,
+      'version': 2,
+      'access_token': session.accessToken,
+      'token_type': session.tokenType,
+      if (session.expiresAt != null)
+        'expires_at': session.expiresAt!.toUtc().toIso8601String(),
     });
     try {
       await _storage.write(key: _key, value: encoded);
@@ -80,4 +84,9 @@ String _requiredString(Object? storedValue) {
     throw const FormatException('Missing session value.');
   }
   return text;
+}
+
+String? _optionalString(Object? storedValue) {
+  final text = storedValue?.toString().trim() ?? '';
+  return text.isEmpty ? null : text;
 }

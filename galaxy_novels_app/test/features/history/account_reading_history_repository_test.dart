@@ -60,6 +60,32 @@ void main() {
     expect(history, [localProgress]);
   });
 
+  test('private history failure keeps the account session active', () async {
+    final localProgress = _progress(
+      novelId: 4,
+      chapterId: 12,
+      updatedAt: DateTime.utc(2026, 6, 23),
+    );
+    final authRepository = _TrackingAuthRepository(
+      initialState: const AuthSessionState.authenticated(_firstUser),
+    );
+    final harness = _HistoryHarness(
+      localRepository: _MemoryReadingHistoryRepository([localProgress]),
+      auth: authRepository,
+      requestSender: (_) async => const PrivateRawResponse(
+        statusCode: 401,
+        body: '{"code":"wor_reader_app_login_required"}',
+      ),
+    );
+    addTearDown(harness.dispose);
+
+    final history = await harness.repository.load();
+
+    expect(history, [localProgress]);
+    expect(authRepository.value.status, AuthSessionStatus.authenticated);
+    expect(authRepository.restoreCalls, 0);
+  });
+
   test('does not apply a late response from the previous account', () async {
     final firstResponse = Completer<PrivateRawResponse>();
     final firstRequestStarted = Completer<void>();
@@ -119,15 +145,18 @@ class _HistoryHarness {
     required _MemoryReadingHistoryRepository localRepository,
     String responseBody = '{"items":[]}',
     PrivateRequestSender? requestSender,
-  }) : authRepository = FakeAuthRepository(
-         initialState: const AuthSessionState.authenticated(_firstUser),
-       ) {
+    FakeAuthRepository? auth,
+  }) : authRepository =
+           auth ??
+           FakeAuthRepository(
+             initialState: const AuthSessionState.authenticated(_firstUser),
+           ) {
     final client = PrivateApiClient(
       config: const AppConfig(siteBaseUrl: 'https://example.com/'),
       requestSender:
           requestSender ??
           (_) async => PrivateRawResponse(statusCode: 200, body: responseBody),
-    )..updateNonce('test-nonce');
+    )..updateAccessToken('wra_test_token');
     repository = AccountReadingHistoryRepository(
       localRepository: localRepository,
       remoteService: ReadingHistoryRemoteService(client: client),
@@ -142,6 +171,18 @@ class _HistoryHarness {
   void dispose() {
     repository.dispose();
     authRepository.dispose();
+  }
+}
+
+class _TrackingAuthRepository extends FakeAuthRepository {
+  _TrackingAuthRepository({required super.initialState});
+
+  int restoreCalls = 0;
+
+  @override
+  Future<void> restoreSession() async {
+    restoreCalls++;
+    await super.restoreSession();
   }
 }
 

@@ -18,14 +18,15 @@ void main() {
           body: '{"success":true,"accepted":49,"duplicates":1}',
         );
       },
-    )..updateNonce('test-nonce');
+    )..updateAccessToken('wra_test_token');
     final service = ReadingActivityRemoteService(client: client);
 
     final response = await service.sync(List.generate(55, _eventAt));
     final body = jsonDecode(captured.body!) as Map<String, dynamic>;
 
     expect(captured.uri.path, endsWith('/reading/sync'));
-    expect(captured.headers['X-WP-Nonce'], 'test-nonce');
+    expect(captured.headers['Authorization'], 'Bearer wra_test_token');
+    expect(captured.headers, isNot(contains('X-WP-Nonce')));
     expect(body['items'], hasLength(50));
     expect(body.containsKey('final'), isFalse);
     expect(response.accepted, 49);

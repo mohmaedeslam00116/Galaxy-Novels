@@ -5,75 +5,87 @@ import 'package:galaxy_novels_app/core/config/app_config.dart';
 import 'package:galaxy_novels_app/core/network/private_api_client.dart';
 
 void main() {
-  test(
-    'keeps session cookies and nonce inside authenticated requests',
-    () async {
-      final requests = <PrivateRawRequest>[];
-      final responses = <PrivateRawResponse>[
-        const PrivateRawResponse(
-          statusCode: 200,
-          body: '{"logged_in":true,"nonce":"fresh-nonce"}',
-          setCookieHeaders: [
-            'wordpress_logged_in_test=session-token; Path=/; Secure; HttpOnly',
-          ],
-        ),
-        const PrivateRawResponse(statusCode: 200, body: '{"user":{}}'),
-      ];
-      final client = PrivateApiClient(
-        config: const AppConfig(siteBaseUrl: 'https://example.com/'),
-        requestSender: (request) async {
-          requests.add(request);
-          return responses.removeAt(0);
-        },
-      );
-
-      await client.getPublic('session');
-      await client.getAuthenticated('me');
-
-      expect(requests.first.uri.path, '/wp-json/wor-reader-app/v1/session');
-      expect(requests.first.headers['Accept'], 'application/json');
-      expect(requests.first.headers['User-Agent'], 'WorReaderApp/1.0 Android');
-      expect(requests.first.headers['Cache-Control'], 'no-store');
-      expect(requests.first.headers['Pragma'], 'no-cache');
-      expect(requests.first.headers, isNot(contains('Cookie')));
-      expect(requests.last.headers['X-WP-Nonce'], 'fresh-nonce');
-      expect(
-        requests.last.headers['Cookie'],
-        'wordpress_logged_in_test=session-token',
-      );
-    },
-  );
-
-  test('encodes JSON posts and sends nonce only when required', () async {
-    late PrivateRawRequest request;
-    final client = PrivateApiClient(
-      config: const AppConfig(siteBaseUrl: 'https://example.com/'),
-      requestSender: (outgoing) async {
-        request = outgoing;
-        return const PrivateRawResponse(statusCode: 200, body: '{}');
-      },
-    )..updateNonce('nonce-value');
-
-    await client.postAuthenticated(
-      'me/favorites/sync',
-      body: {
-        'novel_ids': [1, 2],
-      },
-    );
-
-    expect(request.method, 'POST');
-    expect(request.headers['X-WP-Nonce'], 'nonce-value');
-    expect(request.headers['Content-Type'], 'application/json; charset=utf-8');
-    expect(jsonDecode(request.body!), {
-      'novel_ids': [1, 2],
-    });
-  });
-
-  test('exports and imports a complete in-memory session snapshot', () async {
+  test('uses the bearer token from login for authenticated requests', () async {
+    final requests = <PrivateRawRequest>[];
     final responses = <PrivateRawResponse>[
       const PrivateRawResponse(
         statusCode: 200,
-        body: '{"logged_in":true,"nonce":"persisted-nonce"}',
+        body: '''
+            {
+              "logged_in": true,
+              "auth_method": "bearer",
+              "access_token": "wra_login_token",
+              "token_type": "Bearer",
+              "user": {}
+            }
+          ''',
+        setCookieHeaders: [
+          'wordpress_logged_in_test=session-token; Path=/; Secure; HttpOnly',
+        ],
+      ),
+      const PrivateRawResponse(statusCode: 200, body: '{"user":{}}'),
+    ];
+    final client = PrivateApiClient(
+      config: const AppConfig(siteBaseUrl: 'https://example.com/'),
+      requestSender: (request) async {
+        requests.add(request);
+        return responses.removeAt(0);
+      },
+    );
+
+    await client.postPublic('auth/login');
+    await client.getAuthenticated('me');
+
+    expect(requests.first.uri.path, '/wp-json/wor-reader-app/v1/auth/login');
+    expect(requests.first.headers['Accept'], 'application/json');
+    expect(requests.first.headers['User-Agent'], 'WorReaderApp/1.0 Android');
+    expect(requests.first.headers['Cache-Control'], 'no-store');
+    expect(requests.first.headers['Pragma'], 'no-cache');
+    expect(requests.first.headers, isNot(contains('Cookie')));
+    expect(requests.last.headers['Authorization'], 'Bearer wra_login_token');
+    expect(requests.last.headers['X-Wor-App-Token'], 'wra_login_token');
+    expect(requests.last.headers, isNot(contains('Cookie')));
+    expect(requests.last.headers, isNot(contains('X-WP-Nonce')));
+  });
+
+  test(
+    'encodes JSON posts and sends the bearer token only when required',
+    () async {
+      late PrivateRawRequest request;
+      final client = PrivateApiClient(
+        config: const AppConfig(siteBaseUrl: 'https://example.com/'),
+        requestSender: (outgoing) async {
+          request = outgoing;
+          return const PrivateRawResponse(statusCode: 200, body: '{}');
+        },
+      )..updateAccessToken('wra_post_token');
+
+      await client.postAuthenticated(
+        'me/favorites/sync',
+        body: {
+          'novel_ids': [1, 2],
+        },
+      );
+
+      expect(request.method, 'POST');
+      expect(request.headers['Authorization'], 'Bearer wra_post_token');
+      expect(request.headers['X-Wor-App-Token'], 'wra_post_token');
+      expect(request.headers, isNot(contains('X-WP-Nonce')));
+      expect(
+        request.headers['Content-Type'],
+        'application/json; charset=utf-8',
+      );
+      expect(jsonDecode(request.body!), {
+        'novel_ids': [1, 2],
+      });
+    },
+  );
+
+  test('exports and imports a bearer session snapshot', () async {
+    final responses = <PrivateRawResponse>[
+      const PrivateRawResponse(
+        statusCode: 200,
+        body: '{"logged_in":true,"access_token":"wra_persisted_token"}',
         setCookieHeaders: [
           'wordpress_logged_in_test=persisted-cookie; Path=/; Secure; HttpOnly',
         ],
@@ -96,12 +108,16 @@ void main() {
     )..importSessionSnapshot(snapshot!);
     await restored.getAuthenticated('me');
 
-    expect(restoredRequest.headers['X-WP-Nonce'], 'persisted-nonce');
-    expect(restoredRequest.headers['Cookie'], contains('persisted-cookie'));
+    expect(
+      restoredRequest.headers['Authorization'],
+      'Bearer wra_persisted_token',
+    );
+    expect(restoredRequest.headers, isNot(contains('Cookie')));
+    expect(restoredRequest.headers, isNot(contains('X-WP-Nonce')));
   });
 
   test(
-    'fails before the network when an authenticated nonce is missing',
+    'fails before the network when an authenticated token is missing',
     () async {
       var requestCount = 0;
       final client = PrivateApiClient(
@@ -118,7 +134,7 @@ void main() {
           isA<PrivateApiException>().having(
             (error) => error.code,
             'code',
-            'missing_nonce',
+            'missing_access_token',
           ),
         ),
       );

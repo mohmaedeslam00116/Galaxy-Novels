@@ -215,9 +215,6 @@ class SyncedFavoritesRepository extends ChangeNotifier
       _isSyncing = false;
       _errorMessage = favoritesSyncMessage(error);
       _emit();
-      if (error.statusCode == 401) {
-        unawaited(_authRepository.restoreSession());
-      }
     } on FavoritesStoreException {
       if (!_isCurrent(userId, generation)) {
         return;

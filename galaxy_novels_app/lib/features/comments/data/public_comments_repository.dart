@@ -51,7 +51,7 @@ class PublicCommentsRepository implements CommentsRepository {
       );
     }
 
-    final response = await _client.postAuthenticatedWithNonceRefresh(
+    final response = await _client.postAuthenticated(
       'comments/${target.pathSegment}',
       body: {
         'content': trimmed,
@@ -75,7 +75,7 @@ class PublicCommentsRepository implements CommentsRepository {
       );
     }
 
-    final response = await _client.postAuthenticatedWithNonceRefresh(
+    final response = await _client.postAuthenticated(
       'comments/$commentId/vote',
       body: {'vote': vote?.apiValue ?? ''},
     );
@@ -87,7 +87,7 @@ class PublicCommentsRepository implements CommentsRepository {
     required CommentTarget target,
     CommentReaction? reaction,
   }) async {
-    final response = await _client.postAuthenticatedWithNonceRefresh(
+    final response = await _client.postAuthenticated(
       'comments/${target.pathSegment}/reaction',
       body: {'reaction': reaction?.apiValue ?? ''},
     );

@@ -151,9 +151,7 @@ class SyncedReadingActivityRepository implements ReadingActivityRecorder {
     if (_authenticatedUserId != userId) {
       return;
     }
-    if (error.statusCode == 401) {
-      await _authRepository.restoreSession();
-    } else if (error.statusCode == 429) {
+    if (error.statusCode == 429) {
       _scheduleSync(userId);
     }
   }

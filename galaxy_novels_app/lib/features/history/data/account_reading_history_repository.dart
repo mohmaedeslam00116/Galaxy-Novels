@@ -94,10 +94,8 @@ class AccountReadingHistoryRepository extends ChangeNotifier
       if (_activeUserId == userId && _authenticatedUserId == userId) {
         _remoteHistory = List.unmodifiable(remoteHistory);
       }
-    } on PrivateApiException catch (error) {
-      if (error.statusCode == 401) {
-        await _authRepository.restoreSession();
-      }
+    } on PrivateApiException {
+      // Background history sync must not demote a valid local account session.
     } finally {
       if (_activeUserId == userId) {
         _lastRemoteAttempt = DateTime.now();

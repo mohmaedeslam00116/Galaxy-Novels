@@ -29,10 +29,7 @@ void main() {
 
   test('restores a guest and clears an obsolete saved session', () async {
     final sessionStore = FakeAuthSessionStore()
-      ..session = const PrivateSessionSnapshot(
-        nonce: 'old-nonce',
-        cookieHeader: 'wordpress_logged_in_test=old-cookie',
-      );
+      ..session = const PrivateSessionSnapshot(accessToken: 'wra_old_token');
     final harness = _AuthHarness(
       responses: [
         const PrivateRawResponse(statusCode: 200, body: '{"logged_in":false}'),
@@ -48,12 +45,9 @@ void main() {
     expect(sessionStore.clearCount, 1);
   });
 
-  test('restores a saved account and refreshes its persisted nonce', () async {
+  test('restores a saved account and refreshes its persisted token', () async {
     final sessionStore = FakeAuthSessionStore()
-      ..session = const PrivateSessionSnapshot(
-        nonce: 'old-nonce',
-        cookieHeader: 'wordpress_logged_in_test=saved-cookie',
-      );
+      ..session = const PrivateSessionSnapshot(accessToken: 'wra_saved_token');
     final harness = _AuthHarness(
       responses: [_authenticatedResponse(nonce: 'fresh-nonce')],
       sessionStore: sessionStore,
@@ -64,8 +58,11 @@ void main() {
 
     expect(harness.repository.value.status, AuthSessionStatus.authenticated);
     expect(harness.repository.value.user?.displayName, 'قارئ المجرة');
-    expect(harness.requests.single.headers['Cookie'], contains('saved-cookie'));
-    expect(sessionStore.session?.nonce, 'fresh-nonce');
+    expect(
+      harness.requests.single.headers['Authorization'],
+      'Bearer wra_saved_token',
+    );
+    expect(sessionStore.session?.accessToken, 'wra_fresh_nonce');
     expect(sessionStore.writeCount, 1);
   });
 
@@ -101,7 +98,11 @@ void main() {
       expect(harness.requests, hasLength(2));
       expect(harness.requests[1].method, 'GET');
       expect(harness.requests[1].uri.path, endsWith('/me'));
-      expect(harness.requests[1].headers['X-WP-Nonce'], 'profile-nonce');
+      expect(
+        harness.requests[1].headers['Authorization'],
+        'Bearer wra_profile_nonce',
+      );
+      expect(harness.requests[1].headers, isNot(contains('X-WP-Nonce')));
       expect(publishedStatuses, isNot(contains(AuthSessionStatus.restoring)));
     },
   );
@@ -589,38 +590,39 @@ void main() {
     expect(_profileRequestCount(harness), 2);
   });
 
-  test('profile refresh retries with a fresh session nonce', () async {
-    final harness = _AuthHarness(
-      responses: [
-        _authenticatedResponse(nonce: 'old-nonce'),
-        const PrivateRawResponse(
-          statusCode: 403,
-          body: '{"code":"wor_reader_app_bad_nonce"}',
+  test(
+    'profile refresh failure keeps the bearer session without nonce refresh',
+    () async {
+      final harness = _AuthHarness(
+        responses: [
+          _authenticatedResponse(nonce: 'old-nonce'),
+          const PrivateRawResponse(
+            statusCode: 403,
+            body: '{"code":"rest_cookie_invalid_nonce"}',
+          ),
+        ],
+      );
+      addTearDown(harness.repository.dispose);
+      await harness.repository.login(
+        const LoginCredentials(
+          username: 'reader',
+          password: 'secret',
+          rememberSession: false,
         ),
-        _authenticatedResponse(nonce: 'fresh-nonce'),
-        _profileResponse(totalXp: 1840, todayXp: 35),
-      ],
-    );
-    addTearDown(harness.repository.dispose);
-    await harness.repository.login(
-      const LoginCredentials(
-        username: 'reader',
-        password: 'secret',
-        rememberSession: false,
-      ),
-    );
+      );
 
-    await harness.repository.refreshProfile();
+      await harness.repository.refreshProfile();
 
-    expect(harness.requests, hasLength(4));
-    expect(harness.requests[1].uri.path, endsWith('/me'));
-    expect(harness.requests[1].headers['X-WP-Nonce'], 'old-nonce');
-    expect(harness.requests[2].uri.path, endsWith('/session'));
-    expect(harness.requests[3].uri.path, endsWith('/me'));
-    expect(harness.requests[3].headers['X-WP-Nonce'], 'fresh-nonce');
-    expect(harness.repository.value.user?.xp.total, 1840);
-    expect(harness.repository.value.user?.xp.today, 35);
-  });
+      expect(harness.repository.value.status, AuthSessionStatus.authenticated);
+      expect(harness.requests, hasLength(2));
+      expect(harness.requests[1].uri.path, endsWith('/me'));
+      expect(
+        harness.requests[1].headers['Authorization'],
+        'Bearer wra_old_nonce',
+      );
+      expect(harness.requests[1].headers, isNot(contains('X-WP-Nonce')));
+    },
+  );
 
   test(
     'stale profile refresh success cannot overwrite a same-user relogin',
@@ -907,16 +909,47 @@ void main() {
     });
   }
 
-  test('unauthorized profile refresh restores the session to guest', () async {
+  test(
+    'unauthorized profile refresh keeps the authenticated session',
+    () async {
+      final harness = _AuthHarness(
+        responses: [
+          _authenticatedResponse(nonce: 'profile-nonce'),
+          const PrivateRawResponse(
+            statusCode: 401,
+            body: '{"code":"wor_reader_app_login_required"}',
+          ),
+        ],
+      );
+      addTearDown(harness.repository.dispose);
+      await harness.repository.login(
+        const LoginCredentials(
+          username: 'reader',
+          password: 'secret',
+          rememberSession: false,
+        ),
+      );
+      final originalUser = harness.repository.value.user;
+
+      await harness.repository.refreshProfile();
+
+      expect(harness.repository.value.status, AuthSessionStatus.authenticated);
+      expect(harness.repository.value.user, same(originalUser));
+      expect(harness.requests, hasLength(2));
+      expect(harness.requests[1].uri.path, endsWith('/me'));
+    },
+  );
+
+  test('private profile auth failure keeps the bearer session', () async {
     final harness = _AuthHarness(
       responses: [
         _authenticatedResponse(nonce: 'profile-nonce'),
         const PrivateRawResponse(
-          statusCode: 401,
-          body: '{"code":"wor_reader_app_login_required"}',
+          statusCode: 403,
+          body: '{"code":"rest_cookie_invalid_nonce"}',
         ),
-        const PrivateRawResponse(statusCode: 200, body: '{"logged_in":false}'),
       ],
+      profileRefreshCooldown: Duration.zero,
     );
     addTearDown(harness.repository.dispose);
     await harness.repository.login(
@@ -926,17 +959,22 @@ void main() {
         rememberSession: false,
       ),
     );
+    final originalUser = harness.repository.value.user;
 
     await harness.repository.refreshProfile();
 
-    expect(harness.repository.value.status, AuthSessionStatus.guest);
-    expect(harness.requests, hasLength(3));
+    expect(harness.repository.value.status, AuthSessionStatus.authenticated);
+    expect(harness.repository.value.user, same(originalUser));
+    expect(harness.requests, hasLength(2));
     expect(harness.requests[1].uri.path, endsWith('/me'));
-    expect(harness.requests[2].uri.path, endsWith('/session'));
+    expect(
+      harness.requests[1].headers['Authorization'],
+      'Bearer wra_profile_nonce',
+    );
   });
 
   test(
-    'login persists cookies only when remember session is enabled',
+    'login persists the bearer token only when remember session is enabled',
     () async {
       final rememberedStore = FakeAuthSessionStore();
       final remembered = _AuthHarness(
@@ -960,7 +998,7 @@ void main() {
         'remember': true,
       });
       expect(rememberedStore.writeCount, 1);
-      expect(rememberedStore.session?.cookieHeader, contains('session-cookie'));
+      expect(rememberedStore.session?.accessToken, 'wra_new_nonce');
 
       final temporaryStore = FakeAuthSessionStore();
       final temporary = _AuthHarness(
@@ -1012,18 +1050,11 @@ void main() {
     },
   );
 
-  test('logout refreshes an expired nonce once before retrying', () async {
+  test('logout sends the bearer token and clears the saved session', () async {
     final sessionStore = FakeAuthSessionStore();
     final harness = _AuthHarness(
       responses: [
         _authenticatedResponse(setCookie: true, nonce: 'old-nonce'),
-        const PrivateRawResponse(
-          statusCode: 403,
-          body: '''
-            {"code":"wor_reader_app_bad_nonce","message":"expired"}
-          ''',
-        ),
-        _authenticatedResponse(nonce: 'fresh-nonce'),
         const PrivateRawResponse(statusCode: 200, body: '{"logged_in":false}'),
       ],
       sessionStore: sessionStore,
@@ -1040,10 +1071,13 @@ void main() {
     await harness.repository.logout();
 
     expect(harness.repository.value.status, AuthSessionStatus.guest);
-    expect(harness.requests, hasLength(4));
-    expect(harness.requests[1].headers['X-WP-Nonce'], 'old-nonce');
-    expect(harness.requests[2].uri.path, endsWith('/session'));
-    expect(harness.requests[3].headers['X-WP-Nonce'], 'fresh-nonce');
+    expect(harness.requests, hasLength(2));
+    expect(harness.requests[1].uri.path, endsWith('/auth/logout'));
+    expect(
+      harness.requests[1].headers['Authorization'],
+      'Bearer wra_old_nonce',
+    );
+    expect(harness.requests[1].headers, isNot(contains('X-WP-Nonce')));
     expect(sessionStore.session, isNull);
   });
 
@@ -1208,6 +1242,7 @@ PrivateRawResponse _authenticatedResponse({
   String nonce = 'new-nonce',
   bool setCookie = false,
 }) {
+  final accessToken = 'wra_${nonce.replaceAll('-', '_')}';
   return PrivateRawResponse(
     statusCode: 200,
     setCookieHeaders: setCookie
@@ -1219,6 +1254,10 @@ PrivateRawResponse _authenticatedResponse({
         '''
       {
         "logged_in": true,
+        "auth_method": "bearer",
+        "access_token": "$accessToken",
+        "token_type": "Bearer",
+        "expires_in": 2592000,
         "nonce": "$nonce",
         "user": {
           "id": 7,

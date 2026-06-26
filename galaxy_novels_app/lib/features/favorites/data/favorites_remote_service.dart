@@ -8,9 +8,7 @@ class FavoritesRemoteService {
   final PrivateApiClient _client;
 
   Future<List<FavoriteItem>> fetchFavorites() async {
-    final response = await _client.getAuthenticatedWithNonceRefresh(
-      'me/favorites',
-    );
+    final response = await _client.getAuthenticated('me/favorites');
     return _asList(response['items'])
         .map((item) => _favoriteFromServer(_asMap(item)))
         .where((item) => item.id > 0 && item.title.isNotEmpty)
@@ -21,7 +19,7 @@ class FavoritesRemoteService {
     if (changes.isEmpty) {
       return 0;
     }
-    final response = await _client.postAuthenticatedWithNonceRefresh(
+    final response = await _client.postAuthenticated(
       'me/favorites/sync',
       body: {
         'changes': changes

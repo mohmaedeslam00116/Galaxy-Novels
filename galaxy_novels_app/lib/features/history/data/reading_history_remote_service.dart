@@ -8,9 +8,7 @@ class ReadingHistoryRemoteService {
   final PrivateApiClient _client;
 
   Future<List<ReadingProgress>> fetchHistory() async {
-    final response = await _client.getAuthenticatedWithNonceRefresh(
-      'me/history',
-    );
+    final response = await _client.getAuthenticated('me/history');
     return _asList(response['items'])
         .map((entry) => _progressFromServer(_asMap(entry)))
         .where((progress) => progress.novelId > 0 && progress.chapterId > 0)

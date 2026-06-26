@@ -106,16 +106,20 @@ void main() {
     expect(harness.auth.refreshProfileCalls, 0);
   });
 
-  test('unauthorized sync keeps the queue and restores the session', () async {
-    final harness = _Harness(events: [_eventAt(1)], unauthorized: true);
-    addTearDown(harness.dispose);
+  test(
+    'unauthorized sync keeps the queue without restoring the session',
+    () async {
+      final harness = _Harness(events: [_eventAt(1)], unauthorized: true);
+      addTearDown(harness.dispose);
 
-    await harness.repository.syncPending();
+      await harness.repository.syncPending();
 
-    expect(await harness.store.read(7), hasLength(1));
-    expect(harness.auth.restoreCalls, 1);
-    expect(harness.auth.refreshProfileCalls, 0);
-  });
+      expect(await harness.store.read(7), hasLength(1));
+      expect(harness.auth.restoreCalls, 0);
+      expect(harness.auth.value.status, AuthSessionStatus.authenticated);
+      expect(harness.auth.refreshProfileCalls, 0);
+    },
+  );
 
   test('does not refresh when sent events cannot be removed locally', () async {
     final harness = _Harness(events: [_eventAt(1)], failStoreWrites: true);
@@ -165,7 +169,7 @@ class _Harness {
     final client = PrivateApiClient(
       config: const AppConfig(siteBaseUrl: 'https://example.com/'),
       requestSender: server.send,
-    )..updateNonce('test-nonce');
+    )..updateAccessToken('wra_test_token');
     repository = SyncedReadingActivityRepository(
       store: store,
       remoteService: ReadingActivityRemoteService(client: client),

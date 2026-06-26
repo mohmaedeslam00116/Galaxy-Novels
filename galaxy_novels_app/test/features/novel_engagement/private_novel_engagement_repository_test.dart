@@ -28,14 +28,15 @@ void main() {
           }''',
         );
       },
-    )..updateNonce('nonce-1');
+    )..updateAccessToken('wra_token_1');
     final repository = PrivateNovelEngagementRepository(client: client);
 
     final state = await repository.loadState(123);
 
     expect(sent.method, 'GET');
     expect(sent.uri.path, endsWith('/me/novels/123'));
-    expect(sent.headers['X-WP-Nonce'], 'nonce-1');
+    expect(sent.headers['Authorization'], 'Bearer wra_token_1');
+    expect(sent.headers, isNot(contains('X-WP-Nonce')));
     expect(sent.headers['Cache-Control'], 'no-store');
     expect(state.novelId, 123);
     expect(state.myRating, 4);
@@ -52,14 +53,15 @@ void main() {
           body: '{"rating":5,"message":"saved"}',
         );
       },
-    )..updateNonce('nonce-2');
+    )..updateAccessToken('wra_token_2');
     final repository = PrivateNovelEngagementRepository(client: client);
 
     final rating = await repository.submitRating(novelId: 123, rating: 4);
 
     expect(sent.method, 'POST');
     expect(sent.uri.path, endsWith('/ratings/novel/123'));
-    expect(sent.headers['X-WP-Nonce'], 'nonce-2');
+    expect(sent.headers['Authorization'], 'Bearer wra_token_2');
+    expect(sent.headers, isNot(contains('X-WP-Nonce')));
     expect(jsonDecode(sent.body!), {'rating': 4});
     expect(rating, 5);
   });
@@ -73,7 +75,7 @@ void main() {
           calls++;
           throw StateError('The request must not run.');
         },
-      )..updateNonce('nonce'),
+      )..updateAccessToken('wra_token'),
     );
 
     await expectLater(
@@ -93,7 +95,7 @@ void main() {
         config: const AppConfig(),
         requestSender: (_) async =>
             const PrivateRawResponse(statusCode: 200, body: '{"rating":9}'),
-      )..updateNonce('nonce'),
+      )..updateAccessToken('wra_token'),
     );
 
     await expectLater(

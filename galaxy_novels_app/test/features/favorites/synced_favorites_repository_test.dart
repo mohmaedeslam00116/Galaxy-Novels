@@ -88,49 +88,51 @@ void main() {
     expect(online.repository.value.pendingCount, 0);
   });
 
-  test(
-    'refreshes an expired nonce once and retries the private request',
-    () async {
-      final requests = <PrivateRawRequest>[];
-      var responseIndex = 0;
-      final client = PrivateApiClient(
-        config: const AppConfig(siteBaseUrl: 'https://example.com/'),
-        requestSender: (request) async {
-          requests.add(request);
-          responseIndex++;
-          return switch (responseIndex) {
-            1 => const PrivateRawResponse(
-              statusCode: 403,
-              body: '{"code":"wor_reader_app_bad_nonce"}',
-            ),
-            2 => const PrivateRawResponse(
-              statusCode: 200,
-              body: '{"logged_in":true,"nonce":"fresh-nonce"}',
-            ),
-            _ => const PrivateRawResponse(
-              statusCode: 200,
-              body: '{"accepted":1}',
-            ),
-          };
-        },
-      )..updateNonce('old-nonce');
-      final service = FavoritesRemoteService(client: client);
+  test('private sync failure keeps the account session active', () async {
+    final server = _FakeFavoritesServer()..unauthorized = true;
+    final authRepository = _TrackingAuthRepository(
+      initialState: const AuthSessionState.authenticated(_user),
+    );
+    final harness = _FavoritesHarness(server: server, auth: authRepository);
+    addTearDown(harness.dispose);
 
-      final accepted = await service.syncChanges([
-        FavoriteChange(
-          novelId: 9,
-          action: FavoriteChangeAction.add,
-          changedAt: DateTime.utc(2026, 6, 23),
-        ),
-      ]);
+    await harness.repository.refresh();
 
-      expect(accepted, 1);
-      expect(requests, hasLength(3));
-      expect(requests.first.headers['X-WP-Nonce'], 'old-nonce');
-      expect(requests[1].uri.path, endsWith('/session'));
-      expect(requests.last.headers['X-WP-Nonce'], 'fresh-nonce');
-    },
-  );
+    expect(harness.repository.value.status, FavoritesLoadStatus.ready);
+    expect(
+      harness.authRepository.value.status,
+      AuthSessionStatus.authenticated,
+    );
+    expect(authRepository.restoreCalls, 0);
+  });
+
+  test('sends a bearer token with private favorites sync', () async {
+    final requests = <PrivateRawRequest>[];
+    final client = PrivateApiClient(
+      config: const AppConfig(siteBaseUrl: 'https://example.com/'),
+      requestSender: (request) async {
+        requests.add(request);
+        return const PrivateRawResponse(
+          statusCode: 200,
+          body: '{"accepted":1}',
+        );
+      },
+    )..updateAccessToken('wra_old_token');
+    final service = FavoritesRemoteService(client: client);
+
+    final accepted = await service.syncChanges([
+      FavoriteChange(
+        novelId: 9,
+        action: FavoriteChangeAction.add,
+        changedAt: DateTime.utc(2026, 6, 23),
+      ),
+    ]);
+
+    expect(accepted, 1);
+    expect(requests, hasLength(1));
+    expect(requests.single.headers['Authorization'], 'Bearer wra_old_token');
+    expect(requests.single.headers, isNot(contains('X-WP-Nonce')));
+  });
 
   test('account switch during sync starts the new user refresh', () async {
     final firstResponse = Completer<PrivateRawResponse>();
@@ -159,7 +161,7 @@ void main() {
           ),
         );
       },
-    )..updateNonce('test-nonce');
+    )..updateAccessToken('wra_test_token');
     final authRepository = FakeAuthRepository(
       initialState: const AuthSessionState.authenticated(_user),
     );
@@ -195,14 +197,17 @@ class _FavoritesHarness {
   _FavoritesHarness({
     required _FakeFavoritesServer server,
     _FakeFavoritesLocalStore? store,
+    FakeAuthRepository? auth,
   }) : store = store ?? _FakeFavoritesLocalStore(),
-       authRepository = FakeAuthRepository(
-         initialState: const AuthSessionState.authenticated(_user),
-       ) {
+       authRepository =
+           auth ??
+           FakeAuthRepository(
+             initialState: const AuthSessionState.authenticated(_user),
+           ) {
     final client = PrivateApiClient(
       config: const AppConfig(siteBaseUrl: 'https://example.com/'),
       requestSender: server.send,
-    )..updateNonce('test-nonce');
+    )..updateAccessToken('wra_test_token');
     repository = SyncedFavoritesRepository(
       remoteService: FavoritesRemoteService(client: client),
       localStore: this.store,
@@ -225,12 +230,19 @@ class _FakeFavoritesServer {
   final Set<int> favoriteIds = {};
   final List<int> syncBatchSizes = [];
   bool offline = false;
+  bool unauthorized = false;
 
   Future<PrivateRawResponse> send(PrivateRawRequest request) async {
     if (offline) {
       throw const PrivateApiException(
         code: 'network_unavailable',
         message: 'offline',
+      );
+    }
+    if (unauthorized) {
+      return const PrivateRawResponse(
+        statusCode: 401,
+        body: '{"code":"wor_reader_app_login_required"}',
       );
     }
     if (request.uri.path.endsWith('/me/favorites/sync')) {
@@ -266,6 +278,18 @@ class _FakeFavoritesServer {
       statusCode: 200,
       body: jsonEncode({'items': items}),
     );
+  }
+}
+
+class _TrackingAuthRepository extends FakeAuthRepository {
+  _TrackingAuthRepository({required super.initialState});
+
+  int restoreCalls = 0;
+
+  @override
+  Future<void> restoreSession() async {
+    restoreCalls++;
+    await super.restoreSession();
   }
 }
 

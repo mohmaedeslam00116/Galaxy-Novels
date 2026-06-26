@@ -6,7 +6,7 @@ import 'package:galaxy_novels_app/features/comments/domain/comment_interaction.d
 import 'package:galaxy_novels_app/features/comments/domain/comment_target.dart';
 
 void main() {
-  test('loads a public novel comments page without a nonce', () async {
+  test('loads a public novel comments page without auth headers', () async {
     late PrivateRawRequest sent;
     final repository = PublicCommentsRepository(
       client: PrivateApiClient(
@@ -43,6 +43,7 @@ void main() {
     expect(sent.method, 'GET');
     expect(sent.uri.path, endsWith('/comments/novel/42'));
     expect(sent.uri.queryParameters, {'page': '2', 'sort': 'top'});
+    expect(sent.headers.containsKey('Authorization'), isFalse);
     expect(sent.headers.containsKey('X-WP-Nonce'), isFalse);
     expect(page.page, 2);
   });
@@ -81,7 +82,7 @@ void main() {
           }''',
           );
         },
-      )..updateNonce('nonce-1');
+      )..updateAccessToken('wra_token_1');
       final repository = PublicCommentsRepository(client: client);
 
       final comment = await repository.submitComment(
@@ -93,7 +94,8 @@ void main() {
 
       expect(sent.method, 'POST');
       expect(sent.uri.path, endsWith('/comments/novel/42'));
-      expect(sent.headers['X-WP-Nonce'], 'nonce-1');
+      expect(sent.headers['Authorization'], 'Bearer wra_token_1');
+      expect(sent.headers, isNot(contains('X-WP-Nonce')));
       expect(
         sent.body,
         '{"content":"تعليق جديد","parent_id":0,"is_spoiler":true}',
@@ -113,7 +115,7 @@ void main() {
           requests++;
           throw StateError('The request must not run.');
         },
-      )..updateNonce('nonce-1'),
+      )..updateAccessToken('wra_token_1'),
     );
 
     await expectLater(
@@ -148,7 +150,7 @@ void main() {
           }''',
           );
         },
-      )..updateNonce('nonce-1');
+      )..updateAccessToken('wra_token_1');
       final repository = PublicCommentsRepository(client: client);
 
       final result = await repository.voteComment(
@@ -158,7 +160,8 @@ void main() {
 
       expect(sent.method, 'POST');
       expect(sent.uri.path, endsWith('/comments/55/vote'));
-      expect(sent.headers['X-WP-Nonce'], 'nonce-1');
+      expect(sent.headers['Authorization'], 'Bearer wra_token_1');
+      expect(sent.headers, isNot(contains('X-WP-Nonce')));
       expect(sent.body, '{"vote":"like"}');
       expect(result.commentId, 55);
       expect(result.vote, CommentVote.like);
@@ -192,7 +195,7 @@ void main() {
           }''',
           );
         },
-      )..updateNonce('nonce-1');
+      )..updateAccessToken('wra_token_1');
       final repository = PublicCommentsRepository(client: client);
 
       final result = await repository.reactToTarget(
@@ -202,7 +205,8 @@ void main() {
 
       expect(sent.method, 'POST');
       expect(sent.uri.path, endsWith('/comments/chapter/7/reaction'));
-      expect(sent.headers['X-WP-Nonce'], 'nonce-1');
+      expect(sent.headers['Authorization'], 'Bearer wra_token_1');
+      expect(sent.headers, isNot(contains('X-WP-Nonce')));
       expect(sent.body, '{"reaction":"love"}');
       expect(result.reaction, CommentReaction.love);
       expect(result.counts[CommentReaction.love], 5);

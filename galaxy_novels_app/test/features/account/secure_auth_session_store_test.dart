@@ -10,23 +10,25 @@ void main() {
     FlutterSecureStorage.setMockInitialValues({});
   });
 
-  test('stores only the private session snapshot', () async {
+  test('stores only the app bearer session snapshot', () async {
     const platformStorage = FlutterSecureStorage();
     final store = SecureAuthSessionStore(storage: platformStorage);
 
     await store.write(
       const PrivateSessionSnapshot(
-        nonce: 'nonce-value',
-        cookieHeader: 'wordpress_logged_in_test=cookie-value',
+        accessToken: 'wra_access_token',
+        tokenType: 'Bearer',
       ),
     );
 
     final restored = await store.read();
     final encoded = await platformStorage.read(key: storageKey);
-    expect(restored?.nonce, 'nonce-value');
-    expect(restored?.cookieHeader, contains('cookie-value'));
+    expect(restored?.accessToken, 'wra_access_token');
+    expect(restored?.tokenType, 'Bearer');
     expect(encoded, isNot(contains('password')));
     expect(encoded, isNot(contains('display_name')));
+    expect(encoded, isNot(contains('wordpress_logged_in')));
+    expect(encoded, isNot(contains('nonce')));
   });
 
   test('deletes malformed stored session data', () async {

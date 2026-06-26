@@ -23,7 +23,7 @@ class ReadingActivityRemoteService {
     if (events.isEmpty) {
       return const ReadingActivitySyncResult(accepted: 0, duplicates: 0);
     }
-    final response = await _client.postAuthenticatedWithNonceRefresh(
+    final response = await _client.postAuthenticated(
       'reading/sync',
       body: {
         'items': events

@@ -28,13 +28,14 @@ void main() {
           ''',
         );
       },
-    )..updateNonce('test-nonce');
+    )..updateAccessToken('wra_test_token');
     final service = ReadingHistoryRemoteService(client: client);
 
     final history = await service.fetchHistory();
 
     expect(capturedRequest.uri.path, endsWith('/me/history'));
-    expect(capturedRequest.headers['X-WP-Nonce'], 'test-nonce');
+    expect(capturedRequest.headers['Authorization'], 'Bearer wra_test_token');
+    expect(capturedRequest.headers, isNot(contains('X-WP-Nonce')));
     expect(history.single.novelId, 42);
     expect(history.single.chapterId, 501);
     expect(history.single.chapterTitle, 'الفصل 18');

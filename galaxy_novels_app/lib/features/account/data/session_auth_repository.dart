@@ -57,6 +57,7 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
   }
 
   Future<void> _restore() async {
+    _authLog('restore:start');
     _resetProfileRefreshRequests();
     _sessionGeneration += 1;
     _publishState(const AuthSessionState.restoring());
@@ -65,6 +66,7 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
     try {
       final session = await _loadServerSession();
       if (session == null) {
+        _authLog('restore:no-server-session');
         await _clearSession();
         _publishState(const AuthSessionState.guest());
         return;
@@ -73,15 +75,21 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
       _publishState(
         AuthSessionState.authenticated(session.user, noticeMessage: notice),
       );
+      _authLog('restore:authenticated user=${session.user.id}');
     } on PrivateApiException catch (error) {
+      _authLog(
+        'restore:api-error status=${error.statusCode} code=${error.code}',
+      );
       _publishState(AuthSessionState.failure(restoreMessageFor(error)));
     } on AuthSessionStoreException {
+      _authLog('restore:store-error');
       _publishState(
         const AuthSessionState.failure(
           'تعذر الوصول إلى الجلسة المحفوظة على الجهاز.',
         ),
       );
     } on FormatException {
+      _authLog('restore:format-error');
       await _clearSessionAfterInvalidResponse();
       _publishState(
         const AuthSessionState.failure(
@@ -94,6 +102,7 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
   Future<AuthSessionPayload?> _loadServerSession() async {
     final storedSession = await _sessionStore.read();
     _persistSession = storedSession != null;
+    _authLog('load-server-session stored=${storedSession != null}');
     if (storedSession != null) {
       _client.importSessionSnapshot(storedSession);
     }
@@ -103,7 +112,7 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
       return null;
     }
     final session = AuthSessionPayload.fromResponse(response);
-    _client.updateNonce(session.nonce);
+    _applySessionAccessToken(session, requireToken: false);
     return session;
   }
 
@@ -112,6 +121,7 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
     if (_value.status == AuthSessionStatus.authenticating) {
       return;
     }
+    _authLog('login:start remember=${credentials.rememberSession}');
     _resetProfileRefreshRequests();
     _sessionGeneration += 1;
     if (credentials.username.trim().isEmpty || credentials.password.isEmpty) {
@@ -133,18 +143,25 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
       _publishState(
         AuthSessionState.authenticated(session.user, noticeMessage: notice),
       );
+      _authLog(
+        'login:authenticated user=${session.user.id} '
+        'persist=$_persistSession notice=${notice != null}',
+      );
     } on PrivateApiException catch (error) {
+      _authLog('login:api-error status=${error.statusCode} code=${error.code}');
       _client.clearSession();
       _publishState(
         AuthSessionState.guest(errorMessage: loginMessageFor(error)),
       );
     } on AuthSessionStoreException {
+      _authLog('login:store-error');
       _publishState(
         const AuthSessionState.guest(
           errorMessage: 'تعذر استخدام التخزين الآمن على هذا الجهاز.',
         ),
       );
     } on FormatException {
+      _authLog('login:format-error');
       _client.clearSession();
       _publishState(
         const AuthSessionState.guest(
@@ -156,6 +173,7 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
 
   Future<AuthSessionPayload> _requestLogin(LoginCredentials credentials) async {
     await _sessionStore.clear();
+    _authLog('login:cleared-stored-session');
     final response = await _client.postPublic(
       'auth/login',
       body: {
@@ -165,15 +183,34 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
       },
     );
     final session = AuthSessionPayload.fromResponse(response);
-    _client.updateNonce(session.nonce);
+    _applySessionAccessToken(session, requireToken: true);
     _persistSession = credentials.rememberSession;
     return session;
+  }
+
+  void _applySessionAccessToken(
+    AuthSessionPayload session, {
+    required bool requireToken,
+  }) {
+    final accessToken = session.accessToken;
+    if (accessToken == null) {
+      if (requireToken) {
+        throw const FormatException('Missing app access token.');
+      }
+      return;
+    }
+    _client.updateAccessToken(
+      accessToken,
+      tokenType: session.tokenType,
+      expiresAt: session.expiresAt,
+    );
   }
 
   @override
   Future<void> refreshProfile() {
     final requestSession = _activeAuthenticatedSession();
     if (requestSession == null) {
+      _authLog('refresh:skipped-no-auth-session');
       return Future.value();
     }
 
@@ -190,6 +227,9 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
           _profileRefreshCooldown -
           (_profileRefreshClock.elapsed - lastAttemptElapsed);
       if (cooldownRemaining > Duration.zero) {
+        _authLog(
+          'refresh:scheduled-after-cooldown user=${requestSession.user.id}',
+        );
         _scheduleProfileRefresh(requestSession, cooldownRemaining);
         return Future.value();
       }
@@ -267,26 +307,24 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
     ({AuthUser user, int generation}) requestSession,
   ) async {
     try {
+      _authLog('refresh:start user=${requestSession.user.id}');
       final refreshed = await _requestProfile(requestSession.user.id);
       _publishProfileIfCurrent(
         requestSession.user.id,
         requestSession.generation,
         refreshed,
       );
+      _authLog('refresh:success user=${requestSession.user.id}');
     } on PrivateApiException catch (error) {
-      if (error.statusCode == 401) {
-        if (_isCurrentAuthenticatedSession(
-          requestSession.user.id,
-          requestSession.generation,
-        )) {
-          await restoreSession();
-        }
-        return;
-      }
+      _authLog(
+        'refresh:api-error user=${requestSession.user.id} '
+        'status=${error.statusCode} code=${error.code}',
+      );
       if (!_isExpectedProfileFailure(error)) {
         rethrow;
       }
     } on FormatException {
+      _authLog('refresh:format-error user=${requestSession.user.id}');
       return;
     }
   }
@@ -304,7 +342,7 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
   }
 
   Future<AuthUser> _requestProfile(int ownerId) async {
-    final response = await _client.getAuthenticatedWithNonceRefresh('me');
+    final response = await _client.getAuthenticated('me');
     return AuthProfilePayload.fromResponse(
       response,
       expectedUserId: ownerId,
@@ -342,6 +380,8 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
         error.code == 'timeout' ||
         error.code == 'network_unavailable' ||
         error.code == 'secure_connection_failed' ||
+        statusCode == 401 ||
+        statusCode == 403 ||
         statusCode == 429 ||
         (statusCode >= 500 && statusCode < 600);
   }
@@ -357,7 +397,7 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
     _publishState(AuthSessionState.signingOut(user));
 
     try {
-      await _logoutWithNonceRefresh();
+      await _client.postAuthenticated('auth/logout');
       await _completeLogout();
     } on PrivateApiException catch (error) {
       if (error.statusCode == 401) {
@@ -381,6 +421,7 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
   }
 
   Future<void> _completeLogout() async {
+    _authLog('logout:complete');
     _client.clearSession();
     _persistSession = false;
     try {
@@ -392,27 +433,6 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
           errorMessage: 'تم تسجيل الخروج، لكن تعذر تنظيف الجلسة المحفوظة.',
         ),
       );
-    }
-  }
-
-  Future<void> _logoutWithNonceRefresh() async {
-    try {
-      await _client.postAuthenticated('auth/logout');
-    } on PrivateApiException catch (error) {
-      final nonceExpired =
-          error.code == 'wor_reader_app_bad_nonce' ||
-          error.code == 'missing_nonce';
-      if (!nonceExpired) {
-        rethrow;
-      }
-
-      final response = await _client.getPublic('session');
-      if (response['logged_in'] != true) {
-        return;
-      }
-      final refreshed = AuthSessionPayload.fromResponse(response);
-      _client.updateNonce(refreshed.nonce);
-      await _client.postAuthenticated('auth/logout');
     }
   }
 
@@ -464,6 +484,7 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
     if (_disposed) {
       return;
     }
+    _authLog('state ${_value.status.name}->${nextState.status.name}');
     _value = nextState;
     notifyListeners();
   }
@@ -489,4 +510,11 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
     _disposed = true;
     super.dispose();
   }
+}
+
+void _authLog(String message) {
+  assert(() {
+    debugPrint('[GalaxyAuth] $message');
+    return true;
+  }());
 }

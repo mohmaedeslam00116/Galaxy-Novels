@@ -3,12 +3,14 @@ typedef PrivateRequestSender =
 
 class PrivateSessionSnapshot {
   const PrivateSessionSnapshot({
-    required this.nonce,
-    required this.cookieHeader,
+    required this.accessToken,
+    this.tokenType = 'Bearer',
+    this.expiresAt,
   });
 
-  final String nonce;
-  final String cookieHeader;
+  final String accessToken;
+  final String tokenType;
+  final DateTime? expiresAt;
 }
 
 class PrivateRawRequest {
