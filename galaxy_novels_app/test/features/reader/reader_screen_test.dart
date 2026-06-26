@@ -27,6 +27,7 @@ import '../../helpers/fake_auth_repository.dart';
 import '../../helpers/fake_comments_repository.dart';
 import '../../helpers/fake_favorites_repository.dart';
 import '../../helpers/fake_novel_engagement_repository.dart';
+import '../../helpers/fake_vip_repository.dart';
 
 void main() {
   testWidgets('loads chapter content and renders it natively', (tester) async {
@@ -419,6 +420,7 @@ class _ReaderTestApp extends StatelessWidget {
       commentsRepository: commentsRepository ?? FakeCommentsRepository.empty(),
       favoritesRepository: FakeFavoritesRepository(),
       novelEngagementRepository: FakeNovelEngagementRepository(),
+      vipRepository: const FakeVipRepository(),
       readingActivityRecorder: readingActivityRecorder,
       child: MaterialApp(
         locale: const Locale('ar'),

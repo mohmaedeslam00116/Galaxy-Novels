@@ -30,6 +30,7 @@ import 'helpers/fake_auth_repository.dart';
 import 'helpers/fake_comments_repository.dart';
 import 'helpers/fake_novel_engagement_repository.dart';
 import 'helpers/fake_reader_preferences_repository.dart';
+import 'helpers/fake_vip_repository.dart';
 
 void main() {
   testWidgets('shows Galaxy Novels Arabic shell', (tester) async {
@@ -95,6 +96,22 @@ void main() {
       AppDependencies.of(shellContext).commentsRepository,
       same(commentsRepository),
     );
+  });
+
+  testWidgets('injects the configured VIP repository', (tester) async {
+    const vipRepository = FakeVipRepository();
+    await tester.pumpWidget(
+      GalaxyNovelsApp(
+        homeRepository: _TestHomeRepository(_homeData),
+        catalogRepository: const _TestCatalogRepository(),
+        novelRepository: const _TestNovelRepository(),
+        vipRepository: vipRepository,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final shellContext = tester.element(find.byType(AppShell));
+    expect(AppDependencies.of(shellContext).vipRepository, same(vipRepository));
   });
 
   testWidgets('opens account screen and submits login credentials', (

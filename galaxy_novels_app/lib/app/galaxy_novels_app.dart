@@ -50,6 +50,9 @@ import '../features/reader/application/reader_preferences_repository.dart';
 import '../features/reader/data/shared_preferences_reader_preferences_store.dart';
 import '../features/reader/data/stored_reader_preferences_repository.dart';
 import '../features/shell/presentation/app_shell.dart';
+import '../features/vip/application/vip_repository.dart';
+import '../features/vip/data/private_vip_repository.dart';
+import '../features/vip/data/vip_aware_reader_repository.dart';
 import 'app_dependencies.dart';
 import 'app_theme.dart';
 
@@ -69,6 +72,7 @@ class GalaxyNovelsApp extends StatefulWidget {
     this.commentsRepository,
     this.favoritesRepository,
     this.novelEngagementRepository,
+    this.vipRepository,
     this.readingActivityRecorder,
     super.key,
   }) : config = config ?? const AppConfig();
@@ -87,6 +91,7 @@ class GalaxyNovelsApp extends StatefulWidget {
   final CommentsRepository? commentsRepository;
   final FavoritesRepository? favoritesRepository;
   final NovelEngagementRepository? novelEngagementRepository;
+  final VipRepository? vipRepository;
   final ReadingActivityRecorder? readingActivityRecorder;
 
   @override
@@ -111,6 +116,7 @@ class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
   );
   AccountReadingHistoryRepository? _defaultAccountReadingHistoryRepository;
   SyncedReadingActivityRepository? _defaultReadingActivityRepository;
+  PrivateVipRepository? _defaultVipRepository;
   PrivateApiClient? _privateApiClient;
 
   @override
@@ -125,6 +131,8 @@ class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
         widget.readingHistoryRepository != oldWidget.readingHistoryRepository;
     final readingActivityRecorderChanged =
         widget.readingActivityRecorder != oldWidget.readingActivityRecorder;
+    final vipRepositoryChanged =
+        widget.vipRepository != oldWidget.vipRepository;
     final configChanged = widget.config != oldWidget.config;
     if (favoritesRepositoryChanged || authRepositoryChanged || configChanged) {
       _defaultFavoritesRepository?.dispose();
@@ -152,6 +160,7 @@ class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
       _privateApiClient = null;
       _defaultNovelEngagementRepository = null;
       _defaultCommentsRepository = null;
+      _defaultVipRepository = null;
     }
 
     if (widget.downloadsRepository != null) {
@@ -165,6 +174,7 @@ class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
 
     if (switchedBackToDefault ||
         readerRepositoryChanged ||
+        vipRepositoryChanged ||
         (defaultDownloadsUsesConfig && configChanged)) {
       _defaultDownloadsRepository = null;
     }
@@ -192,9 +202,18 @@ class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
     final effectiveNovelRepository =
         widget.novelRepository ??
         PublicNovelRepository(cacheClient: cacheClient);
+    final defaultPrivateVipRepository = _defaultVipRepositoryFor();
+    final effectiveVipRepository =
+        widget.vipRepository ?? defaultPrivateVipRepository;
+    final publicReaderRepository = PublicReaderRepository(
+      cacheClient: cacheClient,
+    );
     final effectiveReaderRepository =
         widget.readerRepository ??
-        PublicReaderRepository(cacheClient: cacheClient);
+        VipAwareReaderRepository(
+          publicReader: publicReaderRepository,
+          vipRepository: defaultPrivateVipRepository,
+        );
     final effectiveDownloadsRepository =
         widget.downloadsRepository ??
         _defaultDownloadsRepositoryFor(effectiveReaderRepository);
@@ -250,6 +269,7 @@ class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
       commentsRepository: effectiveCommentsRepository,
       favoritesRepository: effectiveFavoritesRepository,
       novelEngagementRepository: effectiveNovelEngagementRepository,
+      vipRepository: effectiveVipRepository,
       readingActivityRecorder: effectiveReadingActivityRecorder,
       child: MaterialApp(
         title: 'مجرة الروايات',
@@ -320,6 +340,12 @@ class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
   PrivateNovelEngagementRepository _defaultNovelEngagementRepositoryFor() {
     return _defaultNovelEngagementRepository ??=
         PrivateNovelEngagementRepository(client: _privateApiClientFor());
+  }
+
+  PrivateVipRepository _defaultVipRepositoryFor() {
+    return _defaultVipRepository ??= PrivateVipRepository(
+      client: _privateApiClientFor(),
+    );
   }
 
   PublicCommentsRepository _defaultCommentsRepositoryFor() {

@@ -20,6 +20,7 @@ import '../../helpers/fake_auth_repository.dart';
 import '../../helpers/fake_comments_repository.dart';
 import '../../helpers/fake_favorites_repository.dart';
 import '../../helpers/fake_novel_engagement_repository.dart';
+import '../../helpers/fake_vip_repository.dart';
 
 void main() {
   testWidgets('renders saved reading history entries', (tester) async {
@@ -106,6 +107,7 @@ class _HistoryTestApp extends StatelessWidget {
       commentsRepository: FakeCommentsRepository.empty(),
       favoritesRepository: FakeFavoritesRepository(),
       novelEngagementRepository: FakeNovelEngagementRepository(),
+      vipRepository: const FakeVipRepository(),
       child: const MaterialApp(
         locale: Locale('ar'),
         home: Scaffold(

@@ -16,6 +16,7 @@ import '../features/favorites/application/favorites_repository.dart';
 import '../features/novel_engagement/application/novel_engagement_repository.dart';
 import '../features/reading_activity/application/reading_activity_recorder.dart';
 import '../features/reader/application/reader_preferences_repository.dart';
+import '../features/vip/application/vip_repository.dart';
 
 class AppDependencies extends InheritedWidget {
   const AppDependencies({
@@ -34,6 +35,7 @@ class AppDependencies extends InheritedWidget {
     required this.commentsRepository,
     required this.favoritesRepository,
     required this.novelEngagementRepository,
+    required this.vipRepository,
     this.readingActivityRecorder = const NoopReadingActivityRecorder(),
     required super.child,
     super.key,
@@ -54,6 +56,7 @@ class AppDependencies extends InheritedWidget {
   final CommentsRepository commentsRepository;
   final FavoritesRepository favoritesRepository;
   final NovelEngagementRepository novelEngagementRepository;
+  final VipRepository vipRepository;
   final ReadingActivityRecorder readingActivityRecorder;
 
   static AppDependencies of(BuildContext context) {
@@ -81,6 +84,7 @@ class AppDependencies extends InheritedWidget {
         commentsRepository != oldWidget.commentsRepository ||
         favoritesRepository != oldWidget.favoritesRepository ||
         novelEngagementRepository != oldWidget.novelEngagementRepository ||
+        vipRepository != oldWidget.vipRepository ||
         readingActivityRecorder != oldWidget.readingActivityRecorder;
   }
 }

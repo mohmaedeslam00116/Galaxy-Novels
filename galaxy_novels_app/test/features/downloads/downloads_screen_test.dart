@@ -22,6 +22,7 @@ import '../../helpers/fake_auth_repository.dart';
 import '../../helpers/fake_comments_repository.dart';
 import '../../helpers/fake_favorites_repository.dart';
 import '../../helpers/fake_novel_engagement_repository.dart';
+import '../../helpers/fake_vip_repository.dart';
 
 void main() {
   testWidgets('renders downloaded chapters grouped by novel', (tester) async {
@@ -104,6 +105,7 @@ class _DownloadsTestApp extends StatelessWidget {
       commentsRepository: FakeCommentsRepository.empty(),
       favoritesRepository: FakeFavoritesRepository(),
       novelEngagementRepository: FakeNovelEngagementRepository(),
+      vipRepository: const FakeVipRepository(),
       child: MaterialApp(
         locale: const Locale('ar'),
         theme: ThemeData(useMaterial3: true),
