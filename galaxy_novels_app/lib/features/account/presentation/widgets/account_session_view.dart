@@ -6,9 +6,20 @@ import 'login_account_view.dart';
 import 'signed_in_account_view.dart';
 
 class AccountSessionView extends StatelessWidget {
-  const AccountSessionView({required this.repository, super.key});
+  const AccountSessionView({
+    required this.repository,
+    this.onOpenFavorites,
+    this.onOpenHistory,
+    this.onOpenDownloads,
+    this.onOpenReaderSettings,
+    super.key,
+  });
 
   final AuthRepository repository;
+  final VoidCallback? onOpenFavorites;
+  final VoidCallback? onOpenHistory;
+  final VoidCallback? onOpenDownloads;
+  final VoidCallback? onOpenReaderSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -34,6 +45,10 @@ class AccountSessionView extends StatelessWidget {
             noticeMessage: state.noticeMessage,
             isSigningOut: state.status == AuthSessionStatus.signingOut,
             onLogout: repository.logout,
+            onOpenFavorites: onOpenFavorites,
+            onOpenHistory: onOpenHistory,
+            onOpenDownloads: onOpenDownloads,
+            onOpenReaderSettings: onOpenReaderSettings,
           ),
         };
       },

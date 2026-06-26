@@ -4,6 +4,78 @@ import 'package:galaxy_novels_app/features/account/domain/auth_session.dart';
 import 'package:galaxy_novels_app/features/account/presentation/widgets/signed_in_account_view.dart';
 
 void main() {
+  testWidgets('shows a reader dashboard from authenticated profile data', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Directionality(
+          textDirection: TextDirection.rtl,
+          child: Scaffold(
+            body: SignedInAccountView(
+              user: _user.copyWith(
+                xp: const AuthXp(
+                  total: 120,
+                  today: 10,
+                  secondsTotal: 7260,
+                  chaptersTotal: 4,
+                  rank: AuthRank(level: 3, display: 'قارئ مجري'),
+                ),
+              ),
+              isSigningOut: false,
+              onLogout: () async {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('لوحة القارئ'), findsOneWidget);
+    expect(find.text('قارئ الاختبار'), findsOneWidget);
+    expect(find.text('قارئ مجري'), findsOneWidget);
+    expect(find.text('المستوى 3'), findsOneWidget);
+    expect(find.text('120'), findsOneWidget);
+    expect(find.text('10'), findsOneWidget);
+    expect(find.text('4'), findsOneWidget);
+    expect(find.text('2س 1د'), findsOneWidget);
+    expect(find.text('المفضلة'), findsOneWidget);
+    expect(find.text('السجل'), findsOneWidget);
+    expect(find.text('التنزيلات'), findsOneWidget);
+    expect(find.text('إعدادات القراءة'), findsOneWidget);
+  });
+
+  testWidgets('opens account shortcuts from the dashboard tiles', (
+    tester,
+  ) async {
+    final opened = <String>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Directionality(
+          textDirection: TextDirection.rtl,
+          child: Scaffold(
+            body: SignedInAccountView(
+              user: _user,
+              isSigningOut: false,
+              onLogout: () async {},
+              onOpenFavorites: () => opened.add('favorites'),
+              onOpenHistory: () => opened.add('history'),
+              onOpenDownloads: () => opened.add('downloads'),
+              onOpenReaderSettings: () => opened.add('settings'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('المفضلة'));
+    await tester.tap(find.text('السجل'));
+    await tester.tap(find.text('التنزيلات'));
+    await tester.tap(find.text('إعدادات القراءة'));
+
+    expect(opened, ['favorites', 'history', 'downloads', 'settings']);
+  });
+
   testWidgets('shows active VIP status with expiry date', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -56,13 +128,13 @@ class _TestAuthUser extends AuthUser {
     required super.xp,
   });
 
-  AuthUser copyWith({AuthVip? vip}) {
+  AuthUser copyWith({AuthVip? vip, AuthXp? xp}) {
     return AuthUser(
       id: id,
       displayName: displayName,
       avatar: avatar,
       vip: vip ?? this.vip,
-      xp: xp,
+      xp: xp ?? this.xp,
     );
   }
 }

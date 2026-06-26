@@ -1,0 +1,206 @@
+import 'package:flutter/material.dart';
+
+import '../../../../app/app_theme.dart';
+import '../../domain/auth_session.dart';
+
+class AccountHeroPanel extends StatelessWidget {
+  const AccountHeroPanel({required this.user, super.key});
+
+  final AuthUser user;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tokens = theme.extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: tokens.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: tokens.border),
+        boxShadow: [
+          BoxShadow(
+            color: tokens.primary.withValues(alpha: 0.07),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                _AccountAvatar(user: user),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        user.displayName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          color: tokens.textPrimary,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      if (user.xp.rank.display.isNotEmpty) ...[
+                        const SizedBox(height: 5),
+                        Text(
+                          user.xp.rank.display,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: tokens.primary,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                if (user.xp.rank.level > 0)
+                  _LevelPill(level: user.xp.rank.level),
+              ],
+            ),
+            const SizedBox(height: 16),
+            _VipStatusStrip(vip: user.vip),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AccountAvatar extends StatelessWidget {
+  const _AccountAvatar({required this.user});
+
+  final AuthUser user;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tokens = theme.extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
+    final trimmedName = user.displayName.trim();
+    final chars = trimmedName.characters;
+    final initial = chars.isEmpty ? 'م' : chars.first;
+    final avatarUrl = user.avatar?.toString();
+
+    return CircleAvatar(
+      radius: 34,
+      backgroundColor: tokens.surfaceRaised,
+      backgroundImage: avatarUrl == null || avatarUrl.isEmpty
+          ? null
+          : NetworkImage(avatarUrl),
+      child: avatarUrl == null || avatarUrl.isEmpty
+          ? Text(
+              initial,
+              style: theme.textTheme.headlineSmall?.copyWith(
+                color: tokens.primary,
+                fontWeight: FontWeight.w900,
+              ),
+            )
+          : null,
+    );
+  }
+}
+
+class _LevelPill extends StatelessWidget {
+  const _LevelPill({required this.level});
+
+  final int level;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tokens = theme.extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: tokens.primary.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: tokens.primary.withValues(alpha: 0.2)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        child: Text(
+          'المستوى $level',
+          style: theme.textTheme.labelMedium?.copyWith(
+            color: tokens.primary,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _VipStatusStrip extends StatelessWidget {
+  const _VipStatusStrip({required this.vip});
+
+  final AuthVip vip;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tokens = theme.extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
+    final activeTitle = vip.label.isEmpty ? 'عضو VIP' : vip.label;
+    final title = vip.active ? activeTitle : 'العضوية العادية';
+    final subtitle = vip.active
+        ? _vipExpiryText(context, vip.expiresAt)
+        : 'اقرأ الفصول العامة وتابع تقدمك من هنا';
+    final color = vip.active ? tokens.gold : tokens.textSecondary;
+
+    return Row(
+      children: [
+        Icon(
+          vip.active
+              ? Icons.workspace_premium_outlined
+              : Icons.person_outline_rounded,
+          color: color,
+          size: 22,
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  color: vip.active ? tokens.gold : tokens.textPrimary,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: tokens.textSecondary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _vipExpiryText(BuildContext context, DateTime? expiresAt) {
+    if (expiresAt == null) {
+      return 'فعال حاليا';
+    }
+    final date = MaterialLocalizations.of(
+      context,
+    ).formatCompactDate(expiresAt.toLocal());
+    return 'ينتهي في $date';
+  }
+}
