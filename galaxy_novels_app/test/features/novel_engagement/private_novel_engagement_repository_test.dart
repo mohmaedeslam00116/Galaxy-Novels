@@ -6,12 +6,112 @@ import 'package:galaxy_novels_app/core/network/private_api_client.dart';
 import 'package:galaxy_novels_app/features/novel_engagement/data/private_novel_engagement_repository.dart';
 
 void main() {
+  test(
+    'prefers the per-novel account history for the continue chapter',
+    () async {
+      final requests = <PrivateRawRequest>[];
+      final client = PrivateApiClient(
+        config: const AppConfig(),
+        requestSender: (request) async {
+          requests.add(request);
+          if (request.uri.path.endsWith('/me/novels/123')) {
+            return const PrivateRawResponse(
+              statusCode: 200,
+              body: '''{
+              "novel_id": 123,
+              "favorite": false,
+              "my_rating": 0,
+              "last_read": {
+                "chapter_id": 111,
+                "chapter_url": "/chapter-111/",
+                "progress": 20,
+                "updated_at": "2026-06-18T10:00:00+00:00"
+              },
+              "vip": {"active": false, "can_read_private": false}
+            }''',
+            );
+          }
+          return const PrivateRawResponse(
+            statusCode: 200,
+            body: '''{
+            "novelId": 123,
+            "lastReadAt": "2026-06-25T12:30:00+00:00",
+            "lastChapter": {
+              "chapterId": 777,
+              "chapterUrl": "/chapter-777/",
+              "progress": 64,
+              "readAt": "2026-06-25T12:29:00+00:00"
+            }
+          }''',
+          );
+        },
+      )..updateAccessToken('wra_token_history');
+      final repository = PrivateNovelEngagementRepository(client: client);
+
+      final state = await repository.loadState(123);
+
+      expect(requests.map((request) => request.uri.path), [
+        contains('/me/novels/123'),
+        contains('/me/history/novel/123'),
+      ]);
+      expect(state.lastRead.chapterId, 777);
+      expect(state.lastRead.chapterUrl, '/chapter-777/');
+      expect(state.lastRead.progress, 64);
+      expect(state.lastRead.updatedAt, DateTime.parse('2026-06-25T12:30:00Z'));
+    },
+  );
+
+  test(
+    'keeps the novel state last read when per-novel history is unavailable',
+    () async {
+      final requests = <PrivateRawRequest>[];
+      final client = PrivateApiClient(
+        config: const AppConfig(),
+        requestSender: (request) async {
+          requests.add(request);
+          if (request.uri.path.endsWith('/me/novels/123')) {
+            return const PrivateRawResponse(
+              statusCode: 200,
+              body: '''{
+              "novel_id": 123,
+              "favorite": false,
+              "my_rating": 0,
+              "last_read": {
+                "chapter_id": 111,
+                "chapter_url": "/chapter-111/",
+                "progress": 20,
+                "updated_at": "2026-06-18T10:00:00+00:00"
+              },
+              "vip": {"active": false, "can_read_private": false}
+            }''',
+            );
+          }
+          return const PrivateRawResponse(
+            statusCode: 404,
+            body: '{"code":"rest_no_route","message":"missing"}',
+          );
+        },
+      )..updateAccessToken('wra_token_history');
+      final repository = PrivateNovelEngagementRepository(client: client);
+
+      final state = await repository.loadState(123);
+
+      expect(requests.map((request) => request.uri.path), [
+        contains('/me/novels/123'),
+        contains('/me/history/novel/123'),
+      ]);
+      expect(state.lastRead.chapterId, 111);
+      expect(state.lastRead.chapterUrl, '/chapter-111/');
+      expect(state.lastRead.progress, 20);
+    },
+  );
+
   test('loads state through the authenticated novel endpoint', () async {
-    late PrivateRawRequest sent;
+    final requests = <PrivateRawRequest>[];
     final client = PrivateApiClient(
       config: const AppConfig(),
       requestSender: (request) async {
-        sent = request;
+        requests.add(request);
         return const PrivateRawResponse(
           statusCode: 200,
           body: '''{
@@ -33,11 +133,12 @@ void main() {
 
     final state = await repository.loadState(123);
 
-    expect(sent.method, 'GET');
-    expect(sent.uri.path, endsWith('/me/novels/123'));
-    expect(sent.headers['Authorization'], 'Bearer wra_token_1');
-    expect(sent.headers, isNot(contains('X-WP-Nonce')));
-    expect(sent.headers['Cache-Control'], 'no-store');
+    final stateRequest = requests.first;
+    expect(stateRequest.method, 'GET');
+    expect(stateRequest.uri.path, endsWith('/me/novels/123'));
+    expect(stateRequest.headers['Authorization'], 'Bearer wra_token_1');
+    expect(stateRequest.headers, isNot(contains('X-WP-Nonce')));
+    expect(stateRequest.headers['Cache-Control'], 'no-store');
     expect(state.novelId, 123);
     expect(state.myRating, 4);
   });
