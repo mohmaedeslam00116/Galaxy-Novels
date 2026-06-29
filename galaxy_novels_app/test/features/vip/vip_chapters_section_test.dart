@@ -93,6 +93,35 @@ void main() {
 
     expect(openedPath, 'vip:chapter:1');
   });
+
+  testWidgets('opens a server-provided VIP content_api when present', (
+    tester,
+  ) async {
+    String? openedPath;
+    final controller = VipChaptersController(
+      repository: _FakeVipRepository(
+        contentApi: '/wp-json/wor-reader-app/v1/vip/chapters/1',
+      ),
+      novelId: 1,
+    );
+
+    await tester.pumpWidget(
+      _wrap(
+        VipChaptersSection(
+          controller: controller,
+          canReadPrivate: true,
+          nativeReaderAvailable: false,
+          onSignIn: () {},
+          onOpenVipChapter: (path, _) => openedPath = path,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('الفصل 1'));
+
+    expect(openedPath, '/wp-json/wor-reader-app/v1/vip/chapters/1');
+  });
 }
 
 Widget _wrap(Widget child) {
@@ -106,9 +135,13 @@ Widget _wrap(Widget child) {
 }
 
 class _FakeVipRepository implements VipRepository {
+  const _FakeVipRepository({this.contentApi = ''});
+
+  final String contentApi;
+
   @override
   Future<VipChapterPage> loadChapters(VipChapterQuery query) async {
-    return const VipChapterPage(
+    return VipChapterPage(
       items: [
         VipChapter(
           id: 1,
@@ -120,6 +153,7 @@ class _FakeVipRepository implements VipRepository {
           publicAt: '',
           views: 0,
           comments: 0,
+          contentApi: contentApi,
         ),
       ],
       hasMore: false,

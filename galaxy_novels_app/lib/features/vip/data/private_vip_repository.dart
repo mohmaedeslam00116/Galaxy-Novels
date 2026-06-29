@@ -43,9 +43,7 @@ class PrivateVipRepository implements VipRepository {
     }
 
     try {
-      final json = await _client.getAuthenticated(
-        'vip/chapter?chapter_id=$chapterId',
-      );
+      final json = await _client.getAuthenticated('vip/chapters/$chapterId');
       return ReaderChapterContent.fromJson(json);
     } on PrivateApiException catch (error) {
       throw _vipExceptionFrom(error);
@@ -109,7 +107,7 @@ ReaderChapterContent _readerContentFromVipNext(Map<String, dynamic> json) {
     contentHtml: contentHtml,
     navigation: ReaderChapterNavigation(
       previousApi: previousId > 0 ? VipReaderRequest.chapter(previousId) : '',
-      nextApi: nextId > 0 ? VipReaderRequest.nextAfter(chapterId) : '',
+      nextApi: nextId > 0 ? VipReaderRequest.chapter(nextId) : '',
       previousId: previousId,
       nextId: nextId,
     ),

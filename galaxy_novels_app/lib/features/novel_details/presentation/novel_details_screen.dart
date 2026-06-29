@@ -22,7 +22,7 @@ import '../../vip/application/vip_chapters_controller.dart';
 import '../../vip/application/vip_repository.dart';
 import 'widgets/novel_details_content.dart';
 
-const _isVipNativeReaderAvailable = false;
+const _isVipNativeReaderAvailable = true;
 
 class NovelDetailsScreen extends StatefulWidget {
   const NovelDetailsScreen({required this.manifestPath, super.key});

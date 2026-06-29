@@ -15,6 +15,7 @@ void main() {
           'public_at': '2026/06/20 08:00',
           'views': 99,
           'comments': 4,
+          'content_api': '/wp-json/wor-reader-app/v1/vip/chapters/11',
         },
       ],
       'has_more': true,
@@ -29,6 +30,10 @@ void main() {
     expect(page.nextCursorOrder, '164.000000');
     expect(page.nextCursorId, 11);
     expect(page.totalAvailable, 40);
+    expect(
+      page.items.single.contentApi,
+      '/wp-json/wor-reader-app/v1/vip/chapters/11',
+    );
   });
 
   test('falls back to position when a VIP chapter has no number', () {

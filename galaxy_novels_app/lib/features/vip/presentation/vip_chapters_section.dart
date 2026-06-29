@@ -125,7 +125,10 @@ class _VipChaptersSectionState extends State<VipChaptersSection> {
   }
 
   void _openChapter(VipChapter chapter) {
-    if (!widget.nativeReaderAvailable) {
+    final contentApi = chapter.contentApi.isNotEmpty
+        ? chapter.contentApi
+        : VipReaderRequest.chapter(chapter.id);
+    if (!widget.nativeReaderAvailable && chapter.contentApi.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('قراءة فصول VIP داخل التطبيق تنتظر تحديث السيرفر.'),
@@ -134,10 +137,7 @@ class _VipChaptersSectionState extends State<VipChaptersSection> {
       return;
     }
 
-    widget.onOpenVipChapter(
-      VipReaderRequest.chapter(chapter.id),
-      chapter.displayLabel,
-    );
+    widget.onOpenVipChapter(contentApi, chapter.displayLabel);
   }
 }
 
@@ -217,6 +217,7 @@ class _VipChapterRow extends StatelessWidget {
     final secondary = chapter.title.isNotEmpty
         ? chapter.title
         : chapter.publicAt;
+    final canOpen = nativeReaderAvailable || chapter.contentApi.isNotEmpty;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -277,7 +278,7 @@ class _VipChapterRow extends StatelessWidget {
                 ),
               ),
               Icon(
-                nativeReaderAvailable
+                canOpen
                     ? Icons.chevron_left_rounded
                     : Icons.lock_outline_rounded,
                 color: tokens.gold,

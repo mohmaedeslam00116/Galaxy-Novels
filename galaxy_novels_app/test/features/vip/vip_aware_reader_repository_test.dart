@@ -30,39 +30,44 @@ void main() {
     expect(public.calls, 1);
   });
 
-  test('routes vip chapter requests to the private chapter endpoint', () async {
-    late PrivateRawRequest sent;
-    final vip = PrivateVipRepository(
-      client: PrivateApiClient(
-        config: const AppConfig(siteBaseUrl: 'https://example.com/'),
-        requestSender: (request) async {
-          sent = request;
-          return const PrivateRawResponse(
-            statusCode: 200,
-            body:
-                '{"data":{"id":44,"novel_id":8,'
-                '"label":"الفصل 44","title":"VIP",'
-                '"display_title":"VIP","position":44,"total":80,'
-                '"content_html":"<p>خاص</p>",'
-                '"navigation":{"previous_api":"",'
-                '"next_api":"vip:next:44",'
-                '"previous_id":0,"next_id":45}}}',
-          );
-        },
-      )..updateAccessToken('wra_vip_token'),
-    );
-    final repository = VipAwareReaderRepository(
-      publicReader: _FakeReaderRepository(),
-      vipRepository: vip,
-    );
+  test(
+    'routes vip chapter content_api requests to the private endpoint',
+    () async {
+      late PrivateRawRequest sent;
+      final vip = PrivateVipRepository(
+        client: PrivateApiClient(
+          config: const AppConfig(siteBaseUrl: 'https://example.com/'),
+          requestSender: (request) async {
+            sent = request;
+            return const PrivateRawResponse(
+              statusCode: 200,
+              body:
+                  '{"data":{"id":44,"novel_id":8,'
+                  '"label":"الفصل 44","title":"VIP",'
+                  '"display_title":"VIP","position":44,"total":80,'
+                  '"content_html":"<p>خاص</p>",'
+                  '"navigation":{"previous_api":"",'
+                  '"next_api":"vip:next:44",'
+                  '"previous_id":0,"next_id":45}}}',
+            );
+          },
+        )..updateAccessToken('wra_vip_token'),
+      );
+      final repository = VipAwareReaderRepository(
+        publicReader: _FakeReaderRepository(),
+        vipRepository: vip,
+      );
 
-    final content = await repository.loadChapter(VipReaderRequest.chapter(44));
+      final content = await repository.loadChapter(
+        '/wp-json/wor-reader-app/v1/vip/chapters/44',
+      );
 
-    expect(sent.uri.path, '/wp-json/wor-reader-app/v1/vip/chapter');
-    expect(sent.uri.queryParameters['chapter_id'], '44');
-    expect(content.id, 44);
-    expect(content.contentHtml, '<p>خاص</p>');
-  });
+      expect(sent.uri.path, '/wp-json/wor-reader-app/v1/vip/chapters/44');
+      expect(sent.uri.queryParameters, isEmpty);
+      expect(content.id, 44);
+      expect(content.contentHtml, '<p>خاص</p>');
+    },
+  );
 
   test('routes vip next requests and adapts the HTML fragment', () async {
     late PrivateRawRequest sent;
@@ -101,7 +106,7 @@ void main() {
     expect(content.novelId, 8);
     expect(content.contentHtml, '<p>الفصل التالي</p>');
     expect(content.navigation.previousApi, VipReaderRequest.chapter(44));
-    expect(content.navigation.nextApi, VipReaderRequest.nextAfter(45));
+    expect(content.navigation.nextApi, VipReaderRequest.chapter(46));
   });
 }
 

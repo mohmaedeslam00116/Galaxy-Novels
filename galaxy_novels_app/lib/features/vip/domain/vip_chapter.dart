@@ -9,9 +9,11 @@ class VipChapter {
     required this.publicAt,
     required this.views,
     required this.comments,
+    this.contentApi = '',
   });
 
   factory VipChapter.fromJson(Map<String, dynamic> json) {
+    final contentApi = _asString(json['content_api']);
     return VipChapter(
       id: _asInt(json['id']),
       number: _asString(json['number']),
@@ -22,6 +24,7 @@ class VipChapter {
       publicAt: _asString(json['public_at']),
       views: _asInt(json['views']),
       comments: _asInt(json['comments']),
+      contentApi: contentApi.isNotEmpty ? contentApi : _asString(json['api']),
     );
   }
 
@@ -34,6 +37,7 @@ class VipChapter {
   final String publicAt;
   final int views;
   final int comments;
+  final String contentApi;
 
   String get displayLabel {
     if (number.isNotEmpty) {
