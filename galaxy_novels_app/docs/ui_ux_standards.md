@@ -103,7 +103,6 @@ Prefer shared widgets:
 
 - `NovelCover`
 - `NovelPosterTile`
-- `FeaturedPosterTile`
 - `NovelListRow`
 - `SectionTitle`
 - `StatusBadge`
@@ -119,13 +118,13 @@ Legacy widgets:
 
 Required order:
 
-1. Featured/recent shelf when data exists.
-2. Continue reading when history exists.
-3. Updated novels.
-4. Latest chapter updates.
+1. Continue reading when history exists.
+2. Updated novels.
+3. Latest chapter updates.
 
 Rules:
 
+- Do not duplicate `recent_novels` in a separate featured shelf unless the API later provides a distinct editorial/featured data source.
 - Keep the list/grid toggle visible and labeled by tooltip.
 - Grid mode uses stable poster dimensions.
 - List mode shows novel title on one line.
