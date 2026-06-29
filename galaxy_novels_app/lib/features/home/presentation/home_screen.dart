@@ -103,11 +103,6 @@ class _HomeScreenState extends State<HomeScreen> {
     return ListView(
       padding: const EdgeInsets.only(bottom: 28),
       children: [
-        if (home.recentNovels.isNotEmpty)
-          _FeaturedNovelsShelf(
-            novels: home.recentNovels.take(8).toList(),
-            onNovelTap: _openNovelDetails,
-          ),
         if (continueReading != null) ...[
           const SectionTitle(
             title: 'أكمل القراءة',
@@ -200,37 +195,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-class _FeaturedNovelsShelf extends StatelessWidget {
-  const _FeaturedNovelsShelf({required this.novels, required this.onNovelTap});
-
-  final List<NovelSummary> novels;
-  final ValueChanged<String> onNovelTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 216,
-      child: ListView.separated(
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
-        scrollDirection: Axis.horizontal,
-        itemCount: novels.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 12),
-        itemBuilder: (context, index) {
-          final novel = novels[index];
-          return FeaturedPosterTile(
-            title: novel.title,
-            imageUrl: novel.coverThumbnail,
-            statusLabel: index == 0 ? 'مختارة' : novel.statusLabel,
-            onTap: novel.manifest.isEmpty
-                ? null
-                : () => onNovelTap(novel.manifest),
-          );
-        },
-      ),
-    );
-  }
-}
-
 class _RecentNovelsStrip extends StatelessWidget {
   const _RecentNovelsStrip({required this.novels, required this.onNovelTap});
 
@@ -240,6 +204,7 @@ class _RecentNovelsStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
+      key: const ValueKey('updated-novels-strip'),
       height: NovelPosterTile.height,
       child: ListView.separated(
         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -248,13 +213,14 @@ class _RecentNovelsStrip extends StatelessWidget {
         separatorBuilder: (_, _) => const SizedBox(width: 12),
         itemBuilder: (context, index) {
           final novel = novels[index];
+          final onTap = novel.manifest.isEmpty
+              ? null
+              : () => onNovelTap(novel.manifest);
           return NovelPosterTile(
             title: novel.title,
             imageUrl: novel.coverThumbnail,
             statusLabel: novel.statusLabel,
-            onTap: novel.manifest.isEmpty
-                ? null
-                : () => onNovelTap(novel.manifest),
+            onTap: onTap,
           );
         },
       ),

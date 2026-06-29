@@ -356,11 +356,80 @@ void main() {
 
     expect(find.text('اختبار المجرة'), findsOneWidget);
     expect(find.text('رواية الاختبار'), findsWidgets);
-    expect(find.text('مختارة من المجرة'), findsOneWidget);
+    expect(find.text('مختارة من المجرة'), findsNothing);
+    expect(find.byKey(const ValueKey('updated-novels-strip')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('updated-novel-spotlight-1')),
+      findsNothing,
+    );
 
     await _scrollHomeDown(tester);
 
     expect(find.text('الفصل 5'), findsOneWidget);
+  });
+
+  testWidgets('home fits a narrow phone without recent novel overflow', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 720);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(
+      GalaxyNovelsApp(
+        homeRepository: _TestHomeRepository(_homeDataWithMultipleRecent()),
+        catalogRepository: const _TestCatalogRepository(),
+        novelRepository: const _TestNovelRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+
+    await _scrollHomeDown(tester);
+
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('latest updates header keeps the count hidden', (tester) async {
+    tester.view.physicalSize = const Size(360, 720);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(
+      GalaxyNovelsApp(
+        homeRepository: _TestHomeRepository(_homeDataWithLatestCount(50)),
+        catalogRepository: const _TestCatalogRepository(),
+        novelRepository: const _TestNovelRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _scrollHomeDown(tester);
+
+    final countChip = find.byKey(const ValueKey('latest-updates-count-chip'));
+    expect(countChip, findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('home cover images request cache-sized decodes', (tester) async {
+    await tester.pumpWidget(
+      GalaxyNovelsApp(
+        homeRepository: _TestHomeRepository(_homeDataWithCoverImages()),
+        catalogRepository: const _TestCatalogRepository(),
+        novelRepository: const _TestNovelRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final images = tester.widgetList<Image>(find.byType(Image));
+
+    expect(images.any((image) => image.image is ResizeImage), isTrue);
   });
 
   testWidgets('home prefers local history and continues in native reader', (
@@ -453,6 +522,10 @@ void main() {
     await _scrollHomeDown(tester);
 
     expect(find.text('آخر تحديثات الروايات'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('latest-updates-count-chip')),
+      findsNothing,
+    );
     expect(find.text('الفصل 5'), findsOneWidget);
     expect(find.byTooltip('عرض كجرد ثلاثي'), findsOneWidget);
 
@@ -1047,6 +1120,83 @@ const _homeData = HomeData(
     ),
   ],
 );
+
+HomeData _homeDataWithMultipleRecent() {
+  return HomeData(
+    continueReading: _homeData.continueReading,
+    latestChapters: _homeData.latestChapters,
+    recentNovels: [
+      ..._homeData.recentNovels,
+      const NovelSummary(
+        id: 2,
+        title: 'عنوان طويل لرواية ثانية لا يجب أن يسبب overflow',
+        url: '/novel/second/',
+        coverThumbnail: '',
+        statusLabel: 'مستمرة',
+        genres: ['أكشن'],
+        chaptersCount: 100,
+        manifest: '/novel-second.json',
+      ),
+    ],
+  );
+}
+
+HomeData _homeDataWithLatestCount(int count) {
+  return HomeData(
+    continueReading: _homeData.continueReading,
+    recentNovels: _homeData.recentNovels,
+    latestChapters: List.generate(count, (index) {
+      final chapterNumber = index + 1;
+      return ChapterSummary(
+        id: chapterNumber,
+        novelId: 1,
+        novelTitle: 'نجوم الاختبار',
+        label: 'الفصل $chapterNumber',
+        title: '',
+        dateLabel: 'الآن',
+        url: '/chapter-$chapterNumber/',
+        chapters: [
+          ChapterSummaryItem(
+            id: chapterNumber,
+            label: 'الفصل $chapterNumber',
+            title: 'عنوان الاختبار',
+            dateLabel: 'الآن',
+            url: '/chapter-$chapterNumber/',
+          ),
+        ],
+      );
+    }),
+  );
+}
+
+HomeData _homeDataWithCoverImages() {
+  return HomeData(
+    continueReading: _homeData.continueReading,
+    latestChapters: const [],
+    recentNovels: [
+      const NovelSummary(
+        id: 1,
+        title: 'رواية الاختبار',
+        url: '/novel/test/',
+        coverThumbnail: '/wp-content/uploads/test-cover.jpg',
+        statusLabel: 'مستمرة',
+        genres: ['خيال'],
+        chaptersCount: 12,
+        manifest: '/novel-home-test.json',
+      ),
+      const NovelSummary(
+        id: 2,
+        title: 'رواية ثانية',
+        url: '/novel/second/',
+        coverThumbnail: '/wp-content/uploads/test-cover-2.jpg',
+        statusLabel: 'مستمرة',
+        genres: ['أكشن'],
+        chaptersCount: 100,
+        manifest: '/novel-second.json',
+      ),
+    ],
+  );
+}
 
 const _testAuthUser = AuthUser(
   id: 7,

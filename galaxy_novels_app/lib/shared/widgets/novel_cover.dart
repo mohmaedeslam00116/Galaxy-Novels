@@ -67,6 +67,9 @@ class NovelCover extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final resolvedUrl = _resolveImageUrl(context, imageUrl);
+    final devicePixelRatio = MediaQuery.maybeDevicePixelRatioOf(context) ?? 1;
+    final cacheWidth = _cacheDimension(width, devicePixelRatio);
+    final cacheHeight = _cacheDimension(height, devicePixelRatio);
 
     return SizedBox(
       width: width,
@@ -78,6 +81,8 @@ class NovelCover extends StatelessWidget {
             : Image.network(
                 resolvedUrl,
                 fit: BoxFit.cover,
+                cacheWidth: cacheWidth,
+                cacheHeight: cacheHeight,
                 errorBuilder: (_, _, _) => _CoverFallback(title: title),
               ),
       ),
@@ -127,4 +132,12 @@ String? _resolveImageUrl(BuildContext context, String url) {
   } on Object {
     return null;
   }
+}
+
+int? _cacheDimension(double dimension, double devicePixelRatio) {
+  final scaledDimension = dimension * devicePixelRatio;
+  if (!scaledDimension.isFinite || scaledDimension <= 0) {
+    return null;
+  }
+  return scaledDimension.ceil();
 }

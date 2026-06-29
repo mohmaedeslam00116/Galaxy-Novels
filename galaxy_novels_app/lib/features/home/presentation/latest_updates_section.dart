@@ -147,7 +147,7 @@ class _LatestChapterTile extends StatelessWidget {
         child: Ink(
           height: _latestUpdateCardHeight,
           decoration: BoxDecoration(
-            color: tokens.surface,
+            color: tokens.surfaceRaised,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: tokens.border),
           ),
@@ -158,7 +158,7 @@ class _LatestChapterTile extends StatelessWidget {
                 imageUrl: chapter.coverUrl.isNotEmpty
                     ? chapter.coverUrl
                     : novel?.coverThumbnail ?? '',
-                width: 104,
+                width: 96,
                 height: _latestUpdateCardHeight,
                 borderRadius: 8,
               ),
@@ -168,16 +168,24 @@ class _LatestChapterTile extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        chapter.novelTitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w900,
-                          height: 1.2,
-                        ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              chapter.novelTitle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w900,
+                                height: 1.2,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          _LatestBadge(),
+                        ],
                       ),
-                      const SizedBox(height: 5),
+                      const SizedBox(height: 6),
                       for (final item in previewChapters)
                         Padding(
                           padding: const EdgeInsets.only(top: 3),
@@ -187,8 +195,45 @@ class _LatestChapterTile extends StatelessWidget {
                   ),
                 ),
               ),
+              Padding(
+                padding: const EdgeInsetsDirectional.only(end: 8),
+                child: Icon(
+                  Icons.chevron_left_rounded,
+                  color: tokens.textSecondary,
+                  size: 22,
+                ),
+              ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LatestBadge extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tokens = theme.extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
+
+    return Container(
+      height: 24,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: tokens.accent.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: tokens.accent.withValues(alpha: 0.30)),
+      ),
+      child: Text(
+        'جديد',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: tokens.accent,
+          fontWeight: FontWeight.w900,
+          height: 1,
         ),
       ),
     );
