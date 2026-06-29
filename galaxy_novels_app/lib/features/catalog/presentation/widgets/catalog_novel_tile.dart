@@ -19,60 +19,66 @@ class CatalogNovelTile extends StatelessWidget {
         ? novel.coverMedium
         : novel.coverThumbnail;
 
-    return InkWell(
-      borderRadius: BorderRadius.circular(8),
-      onTap: onTap,
-      child: Ink(
-        decoration: BoxDecoration(
-          color: tokens.surface,
+    return RepaintBoundary(
+      child: Semantics(
+        button: onTap != null,
+        label: novel.title,
+        child: InkWell(
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: tokens.border),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.10),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  NovelCover(
-                    title: novel.title,
-                    imageUrl: imageUrl,
-                    width: double.infinity,
-                    height: double.infinity,
-                    borderRadius: 8,
-                  ),
-                  if (novel.statusLabel.isNotEmpty)
-                    PositionedDirectional(
-                      top: 7,
-                      end: 7,
-                      child: StatusBadge(label: novel.statusLabel),
-                    ),
-                ],
-              ),
-            ),
-            _CatalogStatsBar(novel: novel),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 8, 8, 10),
-              child: Text(
-                novel.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w900,
-                  height: 1.22,
+          onTap: onTap,
+          child: Ink(
+            decoration: BoxDecoration(
+              color: tokens.surface,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: tokens.border),
+              boxShadow: [
+                BoxShadow(
+                  color: tokens.primary.withValues(alpha: 0.06),
+                  blurRadius: 12,
+                  offset: const Offset(0, 6),
                 ),
-              ),
+              ],
             ),
-          ],
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      NovelCover(
+                        title: novel.title,
+                        imageUrl: imageUrl,
+                        width: double.infinity,
+                        height: double.infinity,
+                        borderRadius: 8,
+                      ),
+                      if (novel.statusLabel.isNotEmpty)
+                        PositionedDirectional(
+                          top: 7,
+                          end: 7,
+                          child: StatusBadge(label: novel.statusLabel),
+                        ),
+                    ],
+                  ),
+                ),
+                _CatalogStatsBar(novel: novel),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 8, 8, 10),
+                  child: Text(
+                    novel.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w900,
+                      height: 1.22,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -128,23 +134,29 @@ class _TinyStat extends StatelessWidget {
     final theme = Theme.of(context);
     final tokens = theme.extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
 
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Flexible(
-          child: Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: tokens.textPrimary,
-              fontWeight: FontWeight.w900,
+    return Center(
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          textDirection: TextDirection.ltr,
+          children: [
+            Icon(icon, size: 13, color: tokens.accent),
+            const SizedBox(width: 4),
+            Text(
+              value,
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.visible,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: tokens.textPrimary,
+                fontWeight: FontWeight.w900,
+                height: 1,
+              ),
             ),
-          ),
+          ],
         ),
-        const SizedBox(width: 4),
-        Icon(icon, size: 13, color: tokens.accent),
-      ],
+      ),
     );
   }
 }

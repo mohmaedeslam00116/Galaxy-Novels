@@ -115,60 +115,88 @@ class _CatalogScreenState extends State<CatalogScreen> {
         : _query.copyWith(searchText: '');
     final result = applyCatalogQuery(source, effectiveQuery);
 
-    return ListView(
-      padding: const EdgeInsets.only(bottom: 24),
-      children: [
-        _CatalogControls(
-          searchController: _searchController,
-          query: _query,
-          resultCount: result.items.length,
-          availableStatuses: result.availableStatuses,
-          availableGenres: result.availableGenres,
-          onSearchChanged: _onSearchChanged,
-          onSortChanged: (sort) {
-            setState(() => _query = _query.copyWith(sort: sort));
-          },
-          onFiltersChanged: (status, genre) {
-            setState(() {
-              _query = _query.copyWith(
-                statusLabel: status,
-                genreName: genre,
-                clearStatus: status == null,
-                clearGenre: genre == null,
-              );
-            });
-          },
-          onClear: _clearQuery,
+    return CustomScrollView(
+      key: const ValueKey('catalog-scroll-view'),
+      slivers: [
+        SliverToBoxAdapter(
+          child: _CatalogControls(
+            searchController: _searchController,
+            query: _query,
+            resultCount: result.items.length,
+            availableStatuses: result.availableStatuses,
+            availableGenres: result.availableGenres,
+            onSearchChanged: _onSearchChanged,
+            onSearchCleared: _clearSearchText,
+            onSortChanged: (sort) {
+              setState(() => _query = _query.copyWith(sort: sort));
+            },
+            onFiltersChanged: (status, genre) {
+              setState(() {
+                _query = _query.copyWith(
+                  statusLabel: status,
+                  genreName: genre,
+                  clearStatus: status == null,
+                  clearGenre: genre == null,
+                );
+              });
+            },
+            onClear: _clearQuery,
+          ),
         ),
+        if (state?.backgroundError != null)
+          SliverToBoxAdapter(
+            child: _CatalogLoadStatus(state: state, onRetry: _retryCatalog),
+          ),
         if (result.items.isEmpty)
-          _CatalogMessage(
-            title: 'لا توجد نتائج مطابقة',
-            actionLabel: 'مسح البحث والفلاتر',
-            onAction: _clearQuery,
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: _CatalogMessage(
+              title: 'لا توجد نتائج مطابقة',
+              actionLabel: 'مسح البحث والفلاتر',
+              onAction: _clearQuery,
+            ),
           )
         else
-          GridView.builder(
+          SliverPadding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: result.items.length,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 16,
-              mainAxisExtent: 258,
+            sliver: SliverLayoutBuilder(
+              builder: (context, constraints) {
+                final columns = _catalogColumnCount(
+                  constraints.crossAxisExtent,
+                );
+                final spacing = columns > 3 ? 14.0 : 12.0;
+                final tileExtent = _catalogTileExtent(
+                  constraints.crossAxisExtent,
+                  columns,
+                  spacing,
+                );
+
+                return SliverGrid(
+                  key: const ValueKey('catalog-sliver-grid'),
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: columns,
+                    crossAxisSpacing: spacing,
+                    mainAxisSpacing: 16,
+                    mainAxisExtent: tileExtent,
+                  ),
+                  delegate: SliverChildBuilderDelegate((context, index) {
+                    final novel = result.items[index];
+                    return CatalogNovelTile(
+                      novel: novel,
+                      onTap: novel.manifest.isEmpty
+                          ? null
+                          : () => _openNovelDetails(novel.manifest),
+                    );
+                  }, childCount: result.items.length),
+                );
+              },
             ),
-            itemBuilder: (context, index) {
-              final novel = result.items[index];
-              return CatalogNovelTile(
-                novel: novel,
-                onTap: novel.manifest.isEmpty
-                    ? null
-                    : () => _openNovelDetails(novel.manifest),
-              );
-            },
           ),
-        _CatalogLoadStatus(state: state, onRetry: _retryCatalog),
+        if (state?.backgroundError == null)
+          SliverToBoxAdapter(
+            child: _CatalogLoadStatus(state: state, onRetry: _retryCatalog),
+          ),
+        const SliverToBoxAdapter(child: SizedBox(height: 24)),
       ],
     );
   }
@@ -190,6 +218,12 @@ class _CatalogScreenState extends State<CatalogScreen> {
     _searchDebounce?.cancel();
     _searchController.clear();
     setState(() => _query = const CatalogQuery());
+  }
+
+  void _clearSearchText() {
+    _searchDebounce?.cancel();
+    _searchController.clear();
+    setState(() => _query = _query.copyWith(searchText: ''));
   }
 
   void _retryCatalog() {
@@ -219,6 +253,7 @@ class _CatalogControls extends StatelessWidget {
     required this.availableStatuses,
     required this.availableGenres,
     required this.onSearchChanged,
+    required this.onSearchCleared,
     required this.onSortChanged,
     required this.onFiltersChanged,
     required this.onClear,
@@ -230,6 +265,7 @@ class _CatalogControls extends StatelessWidget {
   final List<String> availableStatuses;
   final List<String> availableGenres;
   final ValueChanged<String> onSearchChanged;
+  final VoidCallback onSearchCleared;
   final ValueChanged<CatalogSort> onSortChanged;
   final void Function(String? status, String? genre) onFiltersChanged;
   final VoidCallback onClear;
@@ -240,24 +276,57 @@ class _CatalogControls extends StatelessWidget {
     final tokens = theme.extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          TextField(
+          Row(
+            children: [
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: tokens.accent.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: tokens.accent.withValues(alpha: 0.22),
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(10),
+                  child: Icon(
+                    Icons.local_library_outlined,
+                    color: tokens.accent,
+                    size: 22,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'مكتبة الروايات',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                    height: 1.15,
+                  ),
+                ),
+              ),
+              _ResultCountPill(count: resultCount),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _CatalogSearchField(
             controller: searchController,
+            query: query,
             onChanged: onSearchChanged,
-            decoration: InputDecoration(
-              prefixIcon: const Icon(Icons.search_rounded),
-              hintText: 'ابحث عن رواية...',
-              fillColor: tokens.surfaceRaised,
-            ),
+            onClear: onSearchCleared,
           ),
           const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
                 child: _CatalogToolButton(
+                  key: const ValueKey('catalog-filter-button'),
                   icon: Icons.category_outlined,
                   label: query.genreName ?? 'كل التصنيفات',
                   onTap: () => _showFilters(context),
@@ -265,77 +334,19 @@ class _CatalogControls extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: tokens.surface,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: tokens.border),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<CatalogSort>(
-                        value: query.sort,
-                        isExpanded: true,
-                        icon: Icon(
-                          Icons.sort_rounded,
-                          color: tokens.accent,
-                          size: 20,
-                        ),
-                        borderRadius: BorderRadius.circular(8),
-                        items: [
-                          for (final sort in CatalogSort.values)
-                            DropdownMenuItem(
-                              value: sort,
-                              child: Text(
-                                sort.label,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                        ],
-                        onChanged: (sort) {
-                          if (sort != null) {
-                            onSortChanged(sort);
-                          }
-                        },
-                      ),
-                    ),
-                  ),
+                child: _CatalogSortButton(
+                  selectedSort: query.sort,
+                  onSelected: onSortChanged,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 7,
-                ),
-                decoration: BoxDecoration(
-                  color: tokens.primary.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: tokens.primary.withValues(alpha: 0.20),
-                  ),
-                ),
-                child: Text(
-                  '$resultCount رواية',
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: tokens.primary,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-              const Spacer(),
-              if (query.hasActiveFilters)
-                TextButton.icon(
-                  onPressed: onClear,
-                  icon: const Icon(Icons.close_rounded, size: 18),
-                  label: const Text('مسح'),
-                ),
-            ],
+          _ActiveCatalogFilters(
+            query: query,
+            onSearchCleared: onSearchCleared,
+            onSortReset: () => onSortChanged(CatalogSort.latest),
+            onFiltersChanged: onFiltersChanged,
+            onClear: onClear,
           ),
         ],
       ),
@@ -366,11 +377,146 @@ class _CatalogControls extends StatelessWidget {
   }
 }
 
+class _ResultCountPill extends StatelessWidget {
+  const _ResultCountPill({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tokens = theme.extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
+
+    return DecoratedBox(
+      key: const ValueKey('catalog-results-count'),
+      decoration: BoxDecoration(
+        color: tokens.primary.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: tokens.primary.withValues(alpha: 0.22)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        child: Text(
+          '$count رواية',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.labelMedium?.copyWith(
+            color: tokens.primary,
+            fontWeight: FontWeight.w900,
+            height: 1,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CatalogSearchField extends StatelessWidget {
+  const _CatalogSearchField({
+    required this.controller,
+    required this.query,
+    required this.onChanged,
+    required this.onClear,
+  });
+
+  final TextEditingController controller;
+  final CatalogQuery query;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens =
+        Theme.of(context).extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
+    final hasSearch = query.searchText.trim().isNotEmpty;
+
+    return TextField(
+      key: const ValueKey('catalog-search-field'),
+      controller: controller,
+      onChanged: onChanged,
+      textInputAction: TextInputAction.search,
+      decoration: InputDecoration(
+        prefixIcon: const Icon(Icons.search_rounded),
+        suffixIcon: hasSearch
+            ? IconButton(
+                tooltip: 'مسح البحث',
+                onPressed: onClear,
+                icon: const Icon(Icons.close_rounded),
+              )
+            : null,
+        hintText: 'ابحث عن رواية...',
+        fillColor: tokens.surfaceRaised,
+      ),
+    );
+  }
+}
+
+class _CatalogSortButton extends StatelessWidget {
+  const _CatalogSortButton({
+    required this.selectedSort,
+    required this.onSelected,
+  });
+
+  final CatalogSort selectedSort;
+  final ValueChanged<CatalogSort> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens =
+        Theme.of(context).extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
+
+    return PopupMenuButton<CatalogSort>(
+      key: const ValueKey('catalog-sort-menu'),
+      initialValue: selectedSort,
+      position: PopupMenuPosition.under,
+      tooltip: 'ترتيب الروايات',
+      color: tokens.surfaceRaised,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: tokens.border),
+      ),
+      onSelected: onSelected,
+      itemBuilder: (context) {
+        return [
+          for (final sort in CatalogSort.values)
+            PopupMenuItem(
+              value: sort,
+              child: Row(
+                children: [
+                  Icon(
+                    selectedSort == sort
+                        ? Icons.check_rounded
+                        : Icons.sort_rounded,
+                    color: selectedSort == sort
+                        ? tokens.primary
+                        : tokens.textSecondary,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(sort.label, overflow: TextOverflow.ellipsis),
+                  ),
+                ],
+              ),
+            ),
+        ];
+      },
+      child: _CatalogToolSurface(
+        icon: Icons.sort_rounded,
+        label: selectedSort.label,
+        trailingIcon: Icons.keyboard_arrow_down_rounded,
+      ),
+    );
+  }
+}
+
 class _CatalogToolButton extends StatelessWidget {
   const _CatalogToolButton({
     required this.icon,
     required this.label,
     required this.onTap,
+    super.key,
   });
 
   final IconData icon;
@@ -379,35 +525,171 @@ class _CatalogToolButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final tokens = theme.extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
-
     return InkWell(
       borderRadius: BorderRadius.circular(8),
       onTap: onTap,
-      child: Ink(
-        height: 56,
-        decoration: BoxDecoration(
-          color: tokens.surface,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: tokens.border),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Row(
-            children: [
-              Icon(icon, color: tokens.accent, size: 20),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+      child: _CatalogToolSurface(
+        icon: icon,
+        label: label,
+        trailingIcon: Icons.keyboard_arrow_down_rounded,
+      ),
+    );
+  }
+}
+
+class _CatalogToolSurface extends StatelessWidget {
+  const _CatalogToolSurface({
+    required this.icon,
+    required this.label,
+    required this.trailingIcon,
+  });
+
+  final IconData icon;
+  final String label;
+  final IconData trailingIcon;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tokens = theme.extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
+
+    return Ink(
+      height: 54,
+      decoration: BoxDecoration(
+        color: tokens.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: tokens.border),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Row(
+          children: [
+            Icon(icon, color: tokens.accent, size: 20),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
                 ),
               ),
+            ),
+            Icon(trailingIcon, color: tokens.textSecondary, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ActiveCatalogFilters extends StatelessWidget {
+  const _ActiveCatalogFilters({
+    required this.query,
+    required this.onSearchCleared,
+    required this.onSortReset,
+    required this.onFiltersChanged,
+    required this.onClear,
+  });
+
+  final CatalogQuery query;
+  final VoidCallback onSearchCleared;
+  final VoidCallback onSortReset;
+  final void Function(String? status, String? genre) onFiltersChanged;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final activeWidgets = <Widget>[
+      if (query.searchText.trim().isNotEmpty)
+        _ActiveFilterPill(
+          key: const ValueKey('catalog-active-filter-search'),
+          label: 'بحث: ${query.searchText.trim()}',
+          onClear: onSearchCleared,
+        ),
+      if (query.statusLabel case final status?)
+        _ActiveFilterPill(
+          key: const ValueKey('catalog-active-filter-status'),
+          label: 'الحالة: $status',
+          onClear: () => onFiltersChanged(null, query.genreName),
+        ),
+      if (query.genreName case final genre?)
+        _ActiveFilterPill(
+          key: const ValueKey('catalog-active-filter-genre'),
+          label: 'تصنيف: $genre',
+          onClear: () => onFiltersChanged(query.statusLabel, null),
+        ),
+      if (query.sort != CatalogSort.latest)
+        _ActiveFilterPill(
+          key: const ValueKey('catalog-active-sort'),
+          label: 'ترتيب: ${query.sort.label}',
+          onClear: onSortReset,
+        ),
+    ];
+
+    if (activeWidgets.isEmpty) {
+      return const SizedBox(height: 10);
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Wrap(spacing: 8, runSpacing: 8, children: activeWidgets),
+          ),
+          const SizedBox(width: 8),
+          TextButton.icon(
+            key: const ValueKey('catalog-clear-query'),
+            onPressed: onClear,
+            icon: const Icon(Icons.close_rounded, size: 18),
+            label: const Text('مسح'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActiveFilterPill extends StatelessWidget {
+  const _ActiveFilterPill({
+    required this.label,
+    required this.onClear,
+    super.key,
+  });
+
+  final String label;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tokens = theme.extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
+
+    return Material(
+      color: tokens.surfaceSoft,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onClear,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: tokens.textPrimary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Icon(Icons.close_rounded, color: tokens.textSecondary, size: 16),
             ],
           ),
         ),
@@ -644,4 +926,21 @@ class _CatalogMessage extends StatelessWidget {
       ),
     );
   }
+}
+
+int _catalogColumnCount(double width) {
+  if (width >= 720) {
+    return 5;
+  }
+  if (width >= 520) {
+    return 4;
+  }
+  return 3;
+}
+
+double _catalogTileExtent(double width, int columns, double spacing) {
+  final safeWidth = width.isFinite && width > 0 ? width : 360.0;
+  final tileWidth = (safeWidth - (columns - 1) * spacing) / columns;
+  final coverHeight = tileWidth / 0.70;
+  return (coverHeight + 78).clamp(226.0, 292.0).toDouble();
 }

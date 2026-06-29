@@ -604,6 +604,65 @@ void main() {
     expect(find.text('2 رواية'), findsOneWidget);
   });
 
+  testWidgets('catalog exposes active filters as compact chips', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      GalaxyNovelsApp(
+        homeRepository: _TestHomeRepository(_homeData),
+        catalogRepository: const _TestCatalogRepository(),
+        novelRepository: const _TestNovelRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('المكتبة'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('كل التصنيفات'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(
+        of: find.byType(FilterChip),
+        matching: find.text('مكتملة'),
+      ),
+    );
+    await tester.tap(find.text('تطبيق'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('catalog-active-filter-status')),
+      findsOneWidget,
+    );
+    expect(find.text('الحالة: مكتملة'), findsOneWidget);
+    expect(find.byKey(const ValueKey('catalog-clear-query')), findsOneWidget);
+  });
+
+  testWidgets('catalog uses a lazy sliver grid on narrow phones', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 720);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(
+      GalaxyNovelsApp(
+        homeRepository: _TestHomeRepository(_homeData),
+        catalogRepository: const _TestCatalogRepository(),
+        novelRepository: const _TestNovelRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('المكتبة'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('catalog-sliver-grid')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('catalog search filters results locally', (tester) async {
     await tester.pumpWidget(
       GalaxyNovelsApp(
