@@ -1074,6 +1074,67 @@ void main() {
     expect(find.textContaining('150 فصل'), findsOneWidget);
     expect(find.text('حارس النجوم'), findsNothing);
   });
+
+  testWidgets('rankings tab highlights the top three novels', (tester) async {
+    await tester.pumpWidget(
+      GalaxyNovelsApp(
+        homeRepository: _TestHomeRepository(_homeData),
+        catalogRepository: const _TestCatalogRepository(),
+        novelRepository: const _TestNovelRepository(),
+        rankingsRepository: const _TestRankingsRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('الترتيب'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('إحصاء الروايات'), findsOneWidget);
+    expect(find.text('هذا الشهر'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('rankings-featured-top-three')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('ranking-top-pick-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('ranking-top-pick-2')), findsOneWidget);
+    expect(find.byKey(const ValueKey('ranking-top-pick-3')), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('ranking-list-row-4')),
+      320,
+      scrollable: _verticalScrollable(),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('ranking-list-row-4')), findsOneWidget);
+  });
+
+  testWidgets('rankings tab fits a narrow phone without overflow', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 720);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(
+      GalaxyNovelsApp(
+        homeRepository: _TestHomeRepository(_homeData),
+        catalogRepository: const _TestCatalogRepository(),
+        novelRepository: const _TestNovelRepository(),
+        rankingsRepository: const _TestRankingsRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('الترتيب'));
+    await tester.pumpAndSettle();
+    await tester.drag(_verticalScrollable(), const Offset(0, -420));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+  });
 }
 
 Future<void> _pumpOpenedDetails(
@@ -1353,6 +1414,57 @@ class _TestRankingsRepository implements RankingsRepository {
           views: 15000,
           updatedAt: null,
           manifest: '/manifest/novel-77.json',
+        ),
+        CatalogNovel(
+          id: 78,
+          title: 'سيدة العوالم',
+          originalTitle: '',
+          url: '/novel/world-lady/',
+          coverThumbnail: '',
+          coverMedium: '',
+          statusKey: 'ongoing',
+          statusLabel: 'مستمرة',
+          genres: [CatalogGenre(id: 2, name: 'فانتازيا', slug: 'fantasy')],
+          chaptersCount: 98,
+          ratingAverage: 4.6,
+          ratingCount: 18,
+          views: 12000,
+          updatedAt: null,
+          manifest: '/manifest/novel-78.json',
+        ),
+        CatalogNovel(
+          id: 79,
+          title: 'بوابة الاختبار',
+          originalTitle: '',
+          url: '/novel/test-gate/',
+          coverThumbnail: '',
+          coverMedium: '',
+          statusKey: 'completed',
+          statusLabel: 'مكتملة',
+          genres: [CatalogGenre(id: 3, name: 'دراما', slug: 'drama')],
+          chaptersCount: 64,
+          ratingAverage: 4.3,
+          ratingCount: 12,
+          views: 9300,
+          updatedAt: null,
+          manifest: '/manifest/novel-79.json',
+        ),
+        CatalogNovel(
+          id: 80,
+          title: 'المرتبة الرابعة',
+          originalTitle: '',
+          url: '/novel/fourth-rank/',
+          coverThumbnail: '',
+          coverMedium: '',
+          statusKey: 'ongoing',
+          statusLabel: 'مستمرة',
+          genres: [CatalogGenre(id: 4, name: 'أكشن', slug: 'action')],
+          chaptersCount: 42,
+          ratingAverage: 4.1,
+          ratingCount: 9,
+          views: 8700,
+          updatedAt: null,
+          manifest: '/manifest/novel-80.json',
         ),
       ],
     );

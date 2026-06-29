@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/app_dependencies.dart';
-import '../../../data/models/catalog_data.dart';
 import '../../../data/models/rankings_data.dart';
 import '../../novel_details/presentation/novel_details_screen.dart';
-import '../../../shared/widgets/novel_list_row.dart';
-import '../../../shared/widgets/section_title.dart';
+import 'widgets/rankings_content.dart';
 
 class RankingsScreen extends StatefulWidget {
   const RankingsScreen({super.key});
@@ -47,33 +45,9 @@ class _RankingsScreenState extends State<RankingsScreen> {
           );
         }
 
-        return ListView.builder(
-          padding: const EdgeInsets.only(bottom: 24),
-          itemCount: rankings.items.length + 1,
-          itemBuilder: (context, index) {
-            if (index == 0) {
-              return const SectionTitle(
-                title: 'ترتيب الشهر',
-                leadingIcon: Icons.leaderboard,
-              );
-            }
-
-            final rank = index;
-            final novel = rankings.items[index - 1];
-            return NovelListRow(
-              leadingLabel: '#$rank',
-              title: novel.title,
-              subtitle: _subtitle(novel),
-              meta: _meta(novel),
-              imageUrl: novel.coverMedium.isNotEmpty
-                  ? novel.coverMedium
-                  : novel.coverThumbnail,
-              badgeLabel: novel.statusLabel,
-              onTap: novel.manifest.isEmpty
-                  ? null
-                  : () => _openNovelDetails(novel.manifest),
-            );
-          },
+        return RankingsContent(
+          rankings: rankings,
+          onOpenNovel: _openNovelDetails,
         );
       },
     );
@@ -123,30 +97,4 @@ class _RankingsMessage extends StatelessWidget {
       ),
     );
   }
-}
-
-String _subtitle(CatalogNovel novel) {
-  final genres = novel.genres.take(2).map((genre) => genre.name).join('، ');
-  if (genres.isNotEmpty) {
-    return genres;
-  }
-  return novel.statusLabel;
-}
-
-String _meta(CatalogNovel novel) {
-  final parts = <String>[
-    if (novel.chaptersCount > 0) '${novel.chaptersCount} فصل',
-    if (novel.views > 0) '${_compactNumber(novel.views)} مشاهدة',
-  ];
-  return parts.join(' • ');
-}
-
-String _compactNumber(int value) {
-  if (value >= 1000000) {
-    return '${(value / 1000000).toStringAsFixed(1)}M';
-  }
-  if (value >= 1000) {
-    return '${(value / 1000).toStringAsFixed(1)}K';
-  }
-  return value.toString();
 }
