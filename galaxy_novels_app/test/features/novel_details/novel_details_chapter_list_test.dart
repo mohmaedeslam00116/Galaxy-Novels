@@ -18,7 +18,6 @@ import 'package:galaxy_novels_app/features/comments/application/comments_reposit
 import 'package:galaxy_novels_app/features/comments/domain/comments_page.dart';
 import 'package:galaxy_novels_app/features/comments/domain/public_comment.dart';
 import 'package:galaxy_novels_app/features/novel_details/presentation/novel_details_screen.dart';
-import 'package:galaxy_novels_app/features/novel_details/presentation/widgets/novel_chapter_tile.dart';
 
 import '../../helpers/fake_reader_preferences_repository.dart';
 import '../../helpers/fake_auth_repository.dart';
@@ -28,7 +27,7 @@ import '../../helpers/fake_novel_engagement_repository.dart';
 import '../../helpers/fake_vip_repository.dart';
 
 void main() {
-  testWidgets('builds long chapter lists lazily and searches locally', (
+  testWidgets('shows fifty chapters in details and opens paginated full list', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(360, 800);
@@ -42,32 +41,49 @@ void main() {
     await tester.pumpWidget(_TestApp(repository: repository));
     await tester.pumpAndSettle();
 
-    final searchField = find.byKey(const ValueKey('chapter-search-field'));
+    final showAllButton = find.byKey(const ValueKey('show-all-chapters'));
     await tester.scrollUntilVisible(
-      searchField,
+      showAllButton,
       400,
       scrollable: _verticalScrollable(),
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('300 فصل'), findsOneWidget);
-    expect(
-      find.byType(NovelChapterTile, skipOffstage: false).evaluate().length,
-      lessThan(40),
+    expect(find.text('الفصل 50'), findsOneWidget);
+    expect(find.text('الفصل 51'), findsNothing);
+
+    await tester.tap(showAllButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('كل الفصول'), findsOneWidget);
+    expect(find.byKey(const ValueKey('chapter-page-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('chapter-page-6')), findsOneWidget);
+    expect(find.byKey(const ValueKey('chapter-page-previous')), findsOneWidget);
+    expect(find.byKey(const ValueKey('chapter-page-next')), findsOneWidget);
+    expect(find.text('الفصل 51'), findsNothing);
+
+    await tester.scrollUntilVisible(
+      find.text('الفصل 50'),
+      320,
+      scrollable: _verticalScrollable(),
     );
+    await tester.pumpAndSettle();
 
-    await tester.enterText(searchField, 'الفصل 250');
-    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('chapter-page-next')));
+    await tester.pumpAndSettle();
 
-    expect(find.text('1 نتيجة'), findsOneWidget);
-    expect(find.byType(NovelChapterTile), findsOneWidget);
-    expect(find.text('الفصل 250'), findsWidgets);
+    expect(find.text('الفصل 51'), findsOneWidget);
+    expect(find.text('الفصل 100'), findsNothing);
+    await tester.scrollUntilVisible(
+      find.text('الفصل 100'),
+      320,
+      scrollable: _verticalScrollable(),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('الفصل 100'), findsOneWidget);
+    expect(find.text('الفصل 101'), findsNothing);
     expect(repository.loadCalls, 1);
-
-    await tester.tap(find.byKey(const ValueKey('clear-chapter-search')));
-    await tester.pump();
-
-    expect(find.text('300 فصل'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -143,7 +159,7 @@ void main() {
     expect(find.text('ابدأ القراءة'), findsOneWidget);
   });
 
-  testWidgets('shows VIP tab for novels with a private schedule', (
+  testWidgets('keeps VIP chapters inside the chapters section, not a tab', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -151,22 +167,15 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final vipTab = find.byKey(
-      const ValueKey('novel-section-vip'),
-      skipOffstage: false,
-    );
     await tester.scrollUntilVisible(
-      vipTab,
+      find.byKey(const ValueKey('novel-section-chapters')),
       300,
       scrollable: _verticalScrollable(),
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(vipTab);
-    await tester.pumpAndSettle();
-
-    expect(find.text('فصول VIP'), findsOneWidget);
-    expect(find.textContaining('متاحة للمشتركين فقط'), findsOneWidget);
+    expect(find.byKey(const ValueKey('novel-section-vip')), findsNothing);
+    expect(find.text('الفصول'), findsWidgets);
   });
 }
 

@@ -8,19 +8,28 @@ import '../../../../data/repositories/novel_repository.dart';
 import '../../../../shared/widgets/section_title.dart';
 import '../../../downloads/application/download_manager.dart';
 import '../../../downloads/presentation/chapter_download_button.dart';
-import '../../domain/chapter_search_index.dart';
-import 'novel_chapter_tile.dart';
+import '../../../vip/application/vip_chapters_controller.dart';
+import '../../../vip/domain/vip_chapter.dart';
+import '../../domain/readable_chapter.dart';
+import '../all_chapters_screen.dart';
+import 'readable_chapter_tile.dart';
 
 class NovelChaptersSection extends StatefulWidget {
   const NovelChaptersSection({
     required this.result,
+    required this.vipController,
+    required this.canReadPrivate,
     required this.onRead,
+    required this.onOpenVipChapter,
     required this.onDownloadChapters,
     super.key,
   });
 
   final NovelDetailsLoadResult result;
+  final VipChaptersController vipController;
+  final bool canReadPrivate;
   final void Function(NovelChapter chapter, String novelTitle) onRead;
+  final void Function(String contentApi, String title) onOpenVipChapter;
   final VoidCallback onDownloadChapters;
 
   @override
@@ -28,112 +37,129 @@ class NovelChaptersSection extends StatefulWidget {
 }
 
 class _NovelChaptersSectionState extends State<NovelChaptersSection> {
-  final _searchController = TextEditingController();
-  late ChapterSearchIndex _searchIndex;
-  String _query = '';
-
   @override
   void initState() {
     super.initState();
-    _searchIndex = ChapterSearchIndex(widget.result.chapters);
+    _loadVipIfAllowed();
   }
 
   @override
   void didUpdateWidget(covariant NovelChaptersSection oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.result != widget.result) {
-      _searchIndex = ChapterSearchIndex(widget.result.chapters);
-      _searchController.clear();
-      _query = '';
+    if (oldWidget.vipController != widget.vipController ||
+        (!oldWidget.canReadPrivate && widget.canReadPrivate) ||
+        oldWidget.result.details.id != widget.result.details.id) {
+      _loadVipIfAllowed();
     }
   }
 
   @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final chapters = widget.result.chapters;
-    final filteredChapters = _searchIndex.search(_query);
+    return ValueListenableBuilder<VipChaptersState>(
+      valueListenable: widget.vipController,
+      builder: (context, vipState, _) {
+        final chapters = mergeReadableChapters(
+          publicChapters: widget.result.chapters,
+          vipChapters: _vipChaptersFor(vipState),
+        );
+        final previewChapters = chapterPageItems(chapters, 0);
+        final canShowAll =
+            chapters.length > chaptersPerPage ||
+            (widget.canReadPrivate &&
+                vipState.status == VipChaptersStatus.ready &&
+                vipState.hasMore);
 
-    return SliverMainAxisGroup(
-      slivers: [
-        SliverToBoxAdapter(
-          child: SectionTitle(
-            title: 'آخر الفصول',
-            leadingIcon: Icons.menu_book_outlined,
-            action: chapters.isEmpty
-                ? null
-                : TextButton.icon(
-                    onPressed: widget.onDownloadChapters,
-                    icon: const Icon(Icons.download_outlined),
-                    label: const Text('تحميل الفصول'),
-                  ),
-          ),
-        ),
-        if (widget.result.chaptersError != null)
-          SliverToBoxAdapter(
-            child: _InlineMessage(
-              title: 'تعذر تحميل الفصول الآن',
-              subtitle: widget.result.chaptersError,
-            ),
-          )
-        else if (chapters.isEmpty)
-          SliverToBoxAdapter(
-            child: _InlineMessage(
-              title: 'لا توجد فصول متاحة للعرض الآن',
-              subtitle: widget.result.details.chaptersCount > 0
-                  ? 'قد تكون الفصول غير منشورة في الفهرس العام بعد'
-                  : null,
-            ),
-          )
-        else ...[
-          SliverToBoxAdapter(
-            child: _ChapterSearchToolbar(
-              controller: _searchController,
-              resultCount: filteredChapters.length,
-              isFiltering: _query.trim().isNotEmpty,
-              onChanged: (value) => setState(() => _query = value),
-              onClear: _clearSearch,
-            ),
-          ),
-          if (filteredChapters.isEmpty)
-            const SliverToBoxAdapter(
-              child: _InlineMessage(
-                title: 'لا توجد فصول مطابقة',
-                subtitle: 'جرّب رقم فصل أو كلمة أخرى من العنوان',
+        return SliverMainAxisGroup(
+          slivers: [
+            SliverToBoxAdapter(
+              child: SectionTitle(
+                title: 'الفصول',
+                leadingIcon: Icons.menu_book_outlined,
+                action: widget.result.chapters.isEmpty
+                    ? null
+                    : TextButton.icon(
+                        onPressed: widget.onDownloadChapters,
+                        icon: const Icon(Icons.download_outlined),
+                        label: const Text('تحميل الفصول'),
+                      ),
               ),
-            )
-          else
-            _ChapterSliverList(
-              result: widget.result,
-              chapters: filteredChapters,
-              onRead: widget.onRead,
             ),
-        ],
-      ],
+            if (widget.result.chaptersError != null)
+              SliverToBoxAdapter(
+                child: _InlineMessage(
+                  title: 'تعذر تحميل الفصول الآن',
+                  subtitle: widget.result.chaptersError,
+                ),
+              )
+            else if (chapters.isEmpty)
+              SliverToBoxAdapter(
+                child: _InlineMessage(
+                  title: 'لا توجد فصول متاحة للعرض الآن',
+                  subtitle: widget.result.details.chaptersCount > 0
+                      ? 'قد تكون الفصول غير منشورة في الفهرس العام بعد'
+                      : null,
+                ),
+              )
+            else ...[
+              _PreviewChapterSliverList(
+                result: widget.result,
+                chapters: previewChapters,
+                onRead: widget.onRead,
+                onOpenVipChapter: widget.onOpenVipChapter,
+              ),
+              if (canShowAll)
+                SliverToBoxAdapter(
+                  child: _ShowAllChaptersButton(
+                    totalCount: chapters.length,
+                    onPressed: _openAllChapters,
+                  ),
+                ),
+            ],
+          ],
+        );
+      },
     );
   }
 
-  void _clearSearch() {
-    _searchController.clear();
-    setState(() => _query = '');
+  List<VipChapter> _vipChaptersFor(VipChaptersState state) {
+    if (!widget.canReadPrivate || state.status != VipChaptersStatus.ready) {
+      return const [];
+    }
+    return state.chapters;
+  }
+
+  void _openAllChapters() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => AllChaptersScreen(
+          result: widget.result,
+          vipController: widget.vipController,
+          canReadPrivate: widget.canReadPrivate,
+        ),
+      ),
+    );
+  }
+
+  void _loadVipIfAllowed() {
+    if (widget.canReadPrivate &&
+        widget.result.details.vipScheduleManifest.isNotEmpty) {
+      widget.vipController.loadInitial();
+    }
   }
 }
 
-class _ChapterSliverList extends StatelessWidget {
-  const _ChapterSliverList({
+class _PreviewChapterSliverList extends StatelessWidget {
+  const _PreviewChapterSliverList({
     required this.result,
     required this.chapters,
     required this.onRead,
+    required this.onOpenVipChapter,
   });
 
   final NovelDetailsLoadResult result;
-  final List<NovelChapter> chapters;
+  final List<ReadableChapter> chapters;
   final void Function(NovelChapter chapter, String novelTitle) onRead;
+  final void Function(String contentApi, String title) onOpenVipChapter;
 
   @override
   Widget build(BuildContext context) {
@@ -148,21 +174,17 @@ class _ChapterSliverList extends StatelessWidget {
           delegate: SliverChildBuilderDelegate(
             (context, index) {
               final chapter = chapters[index];
-              return NovelChapterTile(
+              return ReadableChapterTile(
                 chapter: chapter,
-                trailingAction: ChapterDownloadButton(
-                  isDownloaded: downloadsState.contains(
-                    chapter.effectiveContentApi,
-                  ),
-                  isEnabled: chapter.effectiveContentApi.isNotEmpty,
-                  onPressed: () =>
-                      _downloadChapter(context, downloadManager, chapter),
-                ),
-                onTap: () {
-                  if (chapter.effectiveContentApi.isNotEmpty) {
-                    onRead(chapter, result.details.title);
-                  }
-                },
+                trailingAction: chapter.isVip
+                    ? null
+                    : _downloadAction(
+                        context,
+                        downloadsState,
+                        downloadManager,
+                        chapter,
+                      ),
+                onTap: () => _openChapter(chapter),
               );
             },
             childCount: chapters.length,
@@ -170,6 +192,24 @@ class _ChapterSliverList extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+
+  Widget _downloadAction(
+    BuildContext context,
+    DownloadsState downloadsState,
+    DownloadManager downloadManager,
+    ReadableChapter chapter,
+  ) {
+    final publicChapter = chapter.publicChapter;
+    if (publicChapter == null) {
+      return const SizedBox.shrink();
+    }
+    return ChapterDownloadButton(
+      isDownloaded: downloadsState.contains(publicChapter.effectiveContentApi),
+      isEnabled: publicChapter.effectiveContentApi.isNotEmpty,
+      onPressed: () =>
+          _downloadChapter(context, downloadManager, publicChapter),
     );
   }
 
@@ -212,22 +252,27 @@ class _ChapterSliverList extends StatelessWidget {
       }
     }
   }
+
+  void _openChapter(ReadableChapter chapter) {
+    if (chapter.isVip) {
+      onOpenVipChapter(chapter.contentApi, chapter.label);
+      return;
+    }
+    final publicChapter = chapter.publicChapter;
+    if (publicChapter != null && publicChapter.effectiveContentApi.isNotEmpty) {
+      onRead(publicChapter, result.details.title);
+    }
+  }
 }
 
-class _ChapterSearchToolbar extends StatelessWidget {
-  const _ChapterSearchToolbar({
-    required this.controller,
-    required this.resultCount,
-    required this.isFiltering,
-    required this.onChanged,
-    required this.onClear,
+class _ShowAllChaptersButton extends StatelessWidget {
+  const _ShowAllChaptersButton({
+    required this.totalCount,
+    required this.onPressed,
   });
 
-  final TextEditingController controller;
-  final int resultCount;
-  final bool isFiltering;
-  final ValueChanged<String> onChanged;
-  final VoidCallback onClear;
+  final int totalCount;
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -235,48 +280,20 @@ class _ChapterSearchToolbar extends StatelessWidget {
     final tokens = theme.extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          TextField(
-            key: const ValueKey('chapter-search-field'),
-            controller: controller,
-            onChanged: onChanged,
-            textInputAction: TextInputAction.search,
-            decoration: InputDecoration(
-              hintText: 'ابحث برقم الفصل أو عنوانه',
-              prefixIcon: const Icon(Icons.search_rounded),
-              suffixIcon: isFiltering
-                  ? IconButton(
-                      key: const ValueKey('clear-chapter-search'),
-                      tooltip: 'مسح البحث',
-                      onPressed: onClear,
-                      icon: const Icon(Icons.close_rounded),
-                    )
-                  : null,
-              filled: true,
-              fillColor: tokens.surface,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: tokens.border),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: tokens.border),
-              ),
-            ),
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 18),
+      child: OutlinedButton.icon(
+        key: const ValueKey('show-all-chapters'),
+        onPressed: onPressed,
+        icon: const Icon(Icons.format_list_numbered_rtl_rounded),
+        label: Text('عرض كل الفصول ($totalCount)'),
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size.fromHeight(48),
+          foregroundColor: tokens.primary,
+          side: BorderSide(color: tokens.primary.withValues(alpha: 0.36)),
+          textStyle: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w900,
           ),
-          const SizedBox(height: 8),
-          Text(
-            isFiltering ? '$resultCount نتيجة' : '$resultCount فصل',
-            key: const ValueKey('chapter-search-count'),
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: tokens.textSecondary,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
