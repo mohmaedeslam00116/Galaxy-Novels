@@ -37,15 +37,19 @@ void main() {
             };
           case '/wp-content/uploads/wor-reader-cache/app/packs/rankings-hash.json':
             return {
-              'period': 'month',
-              'items': [
-                {
-                  'id': 7,
-                  'title': 'ترتيب الاختبار',
-                  'chapters_count': 90,
-                  'stats': {'views': 5000},
-                },
-              ],
+              'schema': 1,
+              'generated': 1782769592,
+              'data': {
+                'period': 'month',
+                'items': [
+                  {
+                    'id': 7,
+                    'title': 'ترتيب الاختبار',
+                    'chapters_count': 90,
+                    'stats': {'views': 5000},
+                  },
+                ],
+              },
             };
         }
 

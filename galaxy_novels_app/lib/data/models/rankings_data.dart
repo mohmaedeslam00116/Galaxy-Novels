@@ -4,9 +4,14 @@ class RankingsData {
   const RankingsData({required this.period, required this.items});
 
   factory RankingsData.fromJson(Map<String, dynamic> json) {
+    final data = _asMap(json['data']);
+    final source = data.isNotEmpty ? data : json;
+    final items = _asList(source['items']);
+    final fallbackItems = items.isEmpty ? _asList(source['novels']) : items;
+
     return RankingsData(
-      period: _asString(json['period']),
-      items: _asList(json['items'])
+      period: _asString(source['period']),
+      items: fallbackItems
           .map((item) => CatalogNovel.fromJson(_asMap(item)))
           .where((item) => item.title.isNotEmpty)
           .toList(growable: false),
