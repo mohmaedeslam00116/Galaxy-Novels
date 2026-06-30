@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 enum AppThemePreset {
   galaxyNoir,
@@ -150,29 +151,29 @@ class AppTheme {
   static const AppThemeTokens crimsonPagoda = AppThemeTokens(
     preset: AppThemePreset.crimsonPagoda,
     background: Color(0xFF070709),
-    surface: Color(0xFF4B2D2E),
-    surfaceRaised: Color(0xFF701C1A),
-    surfaceSoft: Color(0xFF824334),
-    primary: Color(0xFFF42C1D),
-    accent: Color(0xFFAE1918),
+    surface: Color(0xFF120B0D),
+    surfaceRaised: Color(0xFF211416),
+    surfaceSoft: Color(0xFF4B2D2E),
+    primary: Color(0xFFAE1918),
+    accent: Color(0xFFF42C1D),
     gold: Color(0xFFFFD2B8),
-    border: Color(0xFF701C1A),
+    border: Color(0xFF3A2021),
     textPrimary: Color(0xFFFFF4F1),
     textSecondary: Color(0xFFE6B8B1),
-    success: Color(0xFFF42C1D),
+    success: Color(0xFFFFD2B8),
     danger: Color(0xFFAE1918),
   );
 
   static const AppThemeTokens desertAstronaut = AppThemeTokens(
     preset: AppThemePreset.desertAstronaut,
-    background: Color(0xFFDDDDD8),
-    surface: Color(0xFFB9987C),
-    surfaceRaised: Color(0xFFD6C6B6),
+    background: Color(0xFFE9E5DE),
+    surface: Color(0xFFF4EFE7),
+    surfaceRaised: Color(0xFFE1D6CA),
     surfaceSoft: Color(0xFFB9987C),
     primary: Color(0xFF805539),
     accent: Color(0xFF3C2C1E),
     gold: Color(0xFFB9987C),
-    border: Color(0xFFB9987C),
+    border: Color(0xFFC6AD97),
     textPrimary: Color(0xFF3C2C1E),
     textSecondary: Color(0xFF5B5049),
     success: Color(0xFF805539),
@@ -182,13 +183,13 @@ class AppTheme {
   static const AppThemeTokens blueberryNebula = AppThemeTokens(
     preset: AppThemePreset.blueberryNebula,
     background: Color(0xFF111523),
-    surface: Color(0xFF0E1E40),
-    surfaceRaised: Color(0xFF15326D),
-    surfaceSoft: Color(0xFF255DAC),
+    surface: Color(0xFF101A2E),
+    surfaceRaised: Color(0xFF14233C),
+    surfaceSoft: Color(0xFF15326D),
     primary: Color(0xFF5C9FD9),
     accent: Color(0xFF255DAC),
     gold: Color(0xFFB9DCFF),
-    border: Color(0xFF15326D),
+    border: Color(0xFF24456F),
     textPrimary: Color(0xFFF4FAFF),
     textSecondary: Color(0xFFA8C8ED),
     success: Color(0xFF5C9FD9),
@@ -206,6 +207,26 @@ class AppTheme {
   static ThemeData desertAstronautTheme() => _base(tokens: desertAstronaut);
 
   static ThemeData blueberryNebulaTheme() => _base(tokens: blueberryNebula);
+
+  static SystemUiOverlayStyle systemOverlayStyleFor(ThemeData theme) {
+    final tokens = theme.extension<AppThemeTokens>();
+    final isLight = theme.brightness == Brightness.light;
+    final base = isLight
+        ? SystemUiOverlayStyle.dark
+        : SystemUiOverlayStyle.light;
+
+    return base.copyWith(
+      statusBarColor: tokens?.background ?? theme.scaffoldBackgroundColor,
+      systemNavigationBarColor: tokens?.surface ?? theme.colorScheme.surface,
+      systemNavigationBarDividerColor:
+          tokens?.border ?? theme.colorScheme.outline,
+      statusBarIconBrightness: isLight ? Brightness.dark : Brightness.light,
+      statusBarBrightness: isLight ? Brightness.light : Brightness.dark,
+      systemNavigationBarIconBrightness: isLight
+          ? Brightness.dark
+          : Brightness.light,
+    );
+  }
 
   static ThemeData _base({required AppThemeTokens tokens}) {
     final isDark =
@@ -267,6 +288,7 @@ class AppTheme {
         scrolledUnderElevation: 0,
         backgroundColor: tokens.background,
         foregroundColor: tokens.textPrimary,
+        systemOverlayStyle: systemOverlayStyleFor(baseTheme),
         titleTextStyle: textTheme.titleLarge?.copyWith(
           fontWeight: FontWeight.w900,
         ),

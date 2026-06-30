@@ -54,43 +54,110 @@ void main() {
     expect(tokens.textPrimary, const Color(0xFFFFFFFF));
   });
 
-  test('Crimson Pagoda exposes the red temple palette', () {
+  test('Crimson Pagoda keeps red as an accent, not a full-screen surface', () {
     final theme = AppTheme.crimsonPagodaTheme();
     final tokens = theme.extension<AppThemeTokens>();
 
     expect(tokens, isNotNull);
     expect(tokens!.preset, AppThemePreset.crimsonPagoda);
     expect(tokens.background, const Color(0xFF070709));
-    expect(tokens.surface, const Color(0xFF4B2D2E));
-    expect(tokens.surfaceSoft, const Color(0xFF824334));
-    expect(tokens.primary, const Color(0xFFF42C1D));
-    expect(tokens.accent, const Color(0xFFAE1918));
+    expect(tokens.surface, const Color(0xFF120B0D));
+    expect(tokens.surfaceRaised, const Color(0xFF211416));
+    expect(tokens.surfaceSoft, const Color(0xFF4B2D2E));
+    expect(tokens.primary, const Color(0xFFAE1918));
+    expect(tokens.accent, const Color(0xFFF42C1D));
   });
 
-  test('Desert Astronaut exposes the sand and suit palette', () {
-    final theme = AppTheme.desertAstronautTheme();
-    final tokens = theme.extension<AppThemeTokens>();
+  test(
+    'Desert Astronaut uses sand as identity without flattening surfaces',
+    () {
+      final theme = AppTheme.desertAstronautTheme();
+      final tokens = theme.extension<AppThemeTokens>();
 
-    expect(theme.brightness, Brightness.light);
-    expect(tokens, isNotNull);
-    expect(tokens!.preset, AppThemePreset.desertAstronaut);
-    expect(tokens.background, const Color(0xFFDDDDD8));
-    expect(tokens.surface, const Color(0xFFB9987C));
-    expect(tokens.surfaceRaised, const Color(0xFFD6C6B6));
-    expect(tokens.primary, const Color(0xFF805539));
-    expect(tokens.accent, const Color(0xFF3C2C1E));
+      expect(theme.brightness, Brightness.light);
+      expect(tokens, isNotNull);
+      expect(tokens!.preset, AppThemePreset.desertAstronaut);
+      expect(tokens.background, const Color(0xFFE9E5DE));
+      expect(tokens.surface, const Color(0xFFF4EFE7));
+      expect(tokens.surfaceRaised, const Color(0xFFE1D6CA));
+      expect(tokens.surfaceSoft, const Color(0xFFB9987C));
+      expect(tokens.primary, const Color(0xFF805539));
+      expect(tokens.accent, const Color(0xFF3C2C1E));
+    },
+  );
+
+  test(
+    'Blueberry Nebula keeps blue surfaces calm enough for long browsing',
+    () {
+      final theme = AppTheme.blueberryNebulaTheme();
+      final tokens = theme.extension<AppThemeTokens>();
+
+      expect(tokens, isNotNull);
+      expect(tokens!.preset, AppThemePreset.blueberryNebula);
+      expect(tokens.background, const Color(0xFF111523));
+      expect(tokens.surface, const Color(0xFF101A2E));
+      expect(tokens.surfaceRaised, const Color(0xFF14233C));
+      expect(tokens.surfaceSoft, const Color(0xFF15326D));
+      expect(tokens.primary, const Color(0xFF5C9FD9));
+      expect(tokens.accent, const Color(0xFF255DAC));
+    },
+  );
+
+  test('theme foreground pairs keep readable contrast', () {
+    final themes = [
+      AppTheme.dark(),
+      AppTheme.light(),
+      AppTheme.deepSpaceTheme(),
+      AppTheme.crimsonPagodaTheme(),
+      AppTheme.desertAstronautTheme(),
+      AppTheme.blueberryNebulaTheme(),
+    ];
+
+    for (final theme in themes) {
+      final tokens = theme.extension<AppThemeTokens>()!;
+      expect(
+        _contrastRatio(tokens.textPrimary, tokens.background),
+        greaterThanOrEqualTo(4.5),
+        reason: '${tokens.preset.name} primary text on background',
+      );
+      expect(
+        _contrastRatio(tokens.textPrimary, tokens.surface),
+        greaterThanOrEqualTo(4.5),
+        reason: '${tokens.preset.name} primary text on surface',
+      );
+      expect(
+        _contrastRatio(tokens.textSecondary, tokens.background),
+        greaterThanOrEqualTo(3),
+        reason: '${tokens.preset.name} secondary text on background',
+      );
+    }
   });
 
-  test('Blueberry Nebula exposes the blue palette', () {
-    final theme = AppTheme.blueberryNebulaTheme();
-    final tokens = theme.extension<AppThemeTokens>();
+  test('system bar icons follow theme brightness for readable chrome', () {
+    final lightTheme = AppTheme.desertAstronautTheme();
+    final lightTokens = lightTheme.extension<AppThemeTokens>()!;
+    final lightOverlay = AppTheme.systemOverlayStyleFor(lightTheme);
 
-    expect(tokens, isNotNull);
-    expect(tokens!.preset, AppThemePreset.blueberryNebula);
-    expect(tokens.background, const Color(0xFF111523));
-    expect(tokens.surface, const Color(0xFF0E1E40));
-    expect(tokens.surfaceRaised, const Color(0xFF15326D));
-    expect(tokens.primary, const Color(0xFF5C9FD9));
-    expect(tokens.accent, const Color(0xFF255DAC));
+    expect(lightOverlay.statusBarColor, lightTokens.background);
+    expect(lightOverlay.statusBarIconBrightness, Brightness.dark);
+    expect(lightOverlay.systemNavigationBarIconBrightness, Brightness.dark);
+
+    final darkTheme = AppTheme.crimsonPagodaTheme();
+    final darkTokens = darkTheme.extension<AppThemeTokens>()!;
+    final darkOverlay = AppTheme.systemOverlayStyleFor(darkTheme);
+
+    expect(darkOverlay.statusBarColor, darkTokens.background);
+    expect(darkOverlay.statusBarIconBrightness, Brightness.light);
+    expect(darkOverlay.systemNavigationBarIconBrightness, Brightness.light);
   });
+}
+
+double _contrastRatio(Color foreground, Color background) {
+  final lighter = foreground.computeLuminance() > background.computeLuminance()
+      ? foreground
+      : background;
+  final darker = identical(lighter, foreground) ? background : foreground;
+
+  return (lighter.computeLuminance() + 0.05) /
+      (darker.computeLuminance() + 0.05);
 }

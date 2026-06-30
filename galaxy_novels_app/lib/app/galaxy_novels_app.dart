@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter/services.dart';
 
 import '../core/config/app_config.dart';
 import '../core/network/file_system_public_cache_store.dart';
@@ -297,10 +298,15 @@ class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
               theme: _lightThemeFor(appThemeChoice),
               darkTheme: _darkThemeFor(appThemeChoice),
               themeMode: appThemeChoice.themeMode,
-              builder: (context, child) => DownloadActivityLayer(
-                manager: effectiveDownloadManager,
-                child: child ?? const SizedBox.shrink(),
-              ),
+              builder: (context, child) {
+                return AnnotatedRegion<SystemUiOverlayStyle>(
+                  value: AppTheme.systemOverlayStyleFor(Theme.of(context)),
+                  child: DownloadActivityLayer(
+                    manager: effectiveDownloadManager,
+                    child: child ?? const SizedBox.shrink(),
+                  ),
+                );
+              },
               home: const Directionality(
                 textDirection: TextDirection.rtl,
                 child: AppShell(),
