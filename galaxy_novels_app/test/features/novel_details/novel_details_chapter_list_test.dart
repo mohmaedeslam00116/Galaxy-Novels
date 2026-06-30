@@ -115,11 +115,7 @@ void main() {
 
     expect(commentsRepository.calls, isEmpty);
     final commentsTab = find.byKey(const ValueKey('novel-section-comments'));
-    await tester.scrollUntilVisible(
-      commentsTab,
-      300,
-      scrollable: _verticalScrollable(),
-    );
+    await _revealAboveBottomBar(tester, commentsTab);
     await tester.tap(commentsTab);
     await tester.pumpAndSettle();
 
@@ -147,11 +143,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final commentsTab = find.byKey(const ValueKey('novel-section-comments'));
-    await tester.scrollUntilVisible(
-      commentsTab,
-      300,
-      scrollable: _verticalScrollable(),
-    );
+    await _revealAboveBottomBar(tester, commentsTab);
     await tester.tap(commentsTab);
     await tester.pumpAndSettle();
 
@@ -184,6 +176,20 @@ Finder _verticalScrollable() {
     (widget) =>
         widget is Scrollable && widget.axisDirection == AxisDirection.down,
   );
+}
+
+Future<void> _revealAboveBottomBar(WidgetTester tester, Finder finder) async {
+  await tester.scrollUntilVisible(
+    finder,
+    300,
+    scrollable: _verticalScrollable(),
+  );
+  await Scrollable.ensureVisible(
+    tester.element(finder),
+    alignment: 0.38,
+    duration: Duration.zero,
+  );
+  await tester.pumpAndSettle();
 }
 
 class _TestApp extends StatelessWidget {

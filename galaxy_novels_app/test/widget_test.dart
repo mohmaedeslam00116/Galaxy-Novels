@@ -1028,7 +1028,7 @@ void main() {
     );
     await _revealPersonalState(tester);
 
-    await tester.tap(find.text('تقييمك'));
+    await tester.tap(find.byKey(const ValueKey('personal-rating-action')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('personal-rating-5')));
     await tester.tap(find.text('حفظ التقييم'));

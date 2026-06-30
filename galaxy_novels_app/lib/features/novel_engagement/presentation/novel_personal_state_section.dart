@@ -196,6 +196,7 @@ class _RatingAction extends StatelessWidget {
     final value = rating > 0 ? '$rating من 5' : 'لم تقيّم بعد';
 
     return OutlinedButton(
+      key: const ValueKey('personal-rating-action'),
       onPressed: onPressed,
       style: OutlinedButton.styleFrom(
         alignment: AlignmentDirectional.centerStart,

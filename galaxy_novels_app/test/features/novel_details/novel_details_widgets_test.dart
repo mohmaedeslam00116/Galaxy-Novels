@@ -25,6 +25,34 @@ void main() {
     expect(find.text('مشاهدة'), findsOneWidget);
   });
 
+  testWidgets(
+    'novel details header uses a rich hero panel with compact metadata',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Directionality(
+            textDirection: TextDirection.rtl,
+            child: Scaffold(
+              body: ListView(children: [NovelDetailsHeader(details: _details)]),
+            ),
+          ),
+        ),
+      );
+
+      expect(
+        find.byKey(const ValueKey('novel-details-hero-panel')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('novel-details-stats-strip')),
+        findsOneWidget,
+      );
+      expect(find.text('كاتب الاختبار'), findsOneWidget);
+      expect(find.text('الصينية'), findsOneWidget);
+      expect(find.text('5 تقييمات'), findsOneWidget);
+    },
+  );
+
   testWidgets('chapter tile calls onTap', (tester) async {
     var tapped = false;
 

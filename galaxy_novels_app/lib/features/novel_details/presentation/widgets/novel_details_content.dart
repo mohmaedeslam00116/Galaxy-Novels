@@ -304,15 +304,33 @@ class _SummarySectionState extends State<_SummarySection> {
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: tokens.surface,
+              color: tokens.surfaceRaised.withValues(alpha: 0.64),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: tokens.border),
+              border: Border.all(color: tokens.accent.withValues(alpha: 0.20)),
             ),
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.auto_stories_outlined,
+                        color: tokens.accent,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'ملخص القصة',
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          color: tokens.textPrimary,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
                   Text(
                     widget.summary,
                     maxLines: isLong && !_expanded ? 6 : null,
@@ -327,9 +345,14 @@ class _SummarySectionState extends State<_SummarySection> {
                   if (isLong)
                     Align(
                       alignment: Alignment.centerRight,
-                      child: TextButton(
+                      child: TextButton.icon(
                         onPressed: () => setState(() => _expanded = !_expanded),
-                        child: Text(_expanded ? 'عرض أقل' : 'عرض المزيد'),
+                        icon: Icon(
+                          _expanded
+                              ? Icons.keyboard_arrow_up_rounded
+                              : Icons.keyboard_arrow_down_rounded,
+                        ),
+                        label: Text(_expanded ? 'عرض أقل' : 'عرض المزيد'),
                       ),
                     ),
                 ],
@@ -363,13 +386,13 @@ class _DetailsBottomBar extends StatelessWidget {
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: tokens.background,
+        color: tokens.surface,
         border: Border(top: BorderSide(color: tokens.border)),
         boxShadow: [
           BoxShadow(
             color: tokens.primary.withValues(alpha: 0.08),
-            blurRadius: 12,
-            offset: const Offset(0, -4),
+            blurRadius: 10,
+            offset: const Offset(0, -3),
           ),
         ],
       ),
@@ -396,6 +419,21 @@ class _DetailsBottomBar extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(56),
+                      textStyle: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ),
+              ] else ...[
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: null,
+                    icon: const Icon(Icons.menu_book_outlined),
+                    label: const Text('لا يوجد فصل متاح'),
                     style: FilledButton.styleFrom(
                       minimumSize: const Size.fromHeight(56),
                       textStyle: theme.textTheme.titleMedium?.copyWith(
