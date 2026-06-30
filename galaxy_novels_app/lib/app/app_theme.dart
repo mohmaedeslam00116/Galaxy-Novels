@@ -1,6 +1,13 @@
 import 'package:flutter/material.dart';
 
-enum AppThemePreset { galaxyNoir, starlightPaper }
+enum AppThemePreset {
+  galaxyNoir,
+  starlightPaper,
+  deepSpace,
+  crimsonPagoda,
+  desertAstronaut,
+  blueberryNebula,
+}
 
 @immutable
 class AppThemeTokens extends ThemeExtension<AppThemeTokens> {
@@ -124,27 +131,98 @@ class AppTheme {
     danger: Color(0xFFC72552),
   );
 
+  static const AppThemeTokens deepSpace = AppThemeTokens(
+    preset: AppThemePreset.deepSpace,
+    background: Color(0xFF000000),
+    surface: Color(0xFF040911),
+    surfaceRaised: Color(0xFF0F1218),
+    surfaceSoft: Color(0xFF1E283A),
+    primary: Color(0xFF60A8F8),
+    accent: Color(0xFF70C0F0),
+    gold: Color(0xFFF8E8C8),
+    border: Color(0xFF172132),
+    textPrimary: Color(0xFFFFFFFF),
+    textSecondary: Color(0xFFB8C8D8),
+    success: Color(0xFF60A8F8),
+    danger: Color(0xFFE83F68),
+  );
+
+  static const AppThemeTokens crimsonPagoda = AppThemeTokens(
+    preset: AppThemePreset.crimsonPagoda,
+    background: Color(0xFF070709),
+    surface: Color(0xFF4B2D2E),
+    surfaceRaised: Color(0xFF701C1A),
+    surfaceSoft: Color(0xFF824334),
+    primary: Color(0xFFF42C1D),
+    accent: Color(0xFFAE1918),
+    gold: Color(0xFFFFD2B8),
+    border: Color(0xFF701C1A),
+    textPrimary: Color(0xFFFFF4F1),
+    textSecondary: Color(0xFFE6B8B1),
+    success: Color(0xFFF42C1D),
+    danger: Color(0xFFAE1918),
+  );
+
+  static const AppThemeTokens desertAstronaut = AppThemeTokens(
+    preset: AppThemePreset.desertAstronaut,
+    background: Color(0xFFDDDDD8),
+    surface: Color(0xFFB9987C),
+    surfaceRaised: Color(0xFFD6C6B6),
+    surfaceSoft: Color(0xFFB9987C),
+    primary: Color(0xFF805539),
+    accent: Color(0xFF3C2C1E),
+    gold: Color(0xFFB9987C),
+    border: Color(0xFFB9987C),
+    textPrimary: Color(0xFF3C2C1E),
+    textSecondary: Color(0xFF5B5049),
+    success: Color(0xFF805539),
+    danger: Color(0xFF5B5049),
+  );
+
+  static const AppThemeTokens blueberryNebula = AppThemeTokens(
+    preset: AppThemePreset.blueberryNebula,
+    background: Color(0xFF111523),
+    surface: Color(0xFF0E1E40),
+    surfaceRaised: Color(0xFF15326D),
+    surfaceSoft: Color(0xFF255DAC),
+    primary: Color(0xFF5C9FD9),
+    accent: Color(0xFF255DAC),
+    gold: Color(0xFFB9DCFF),
+    border: Color(0xFF15326D),
+    textPrimary: Color(0xFFF4FAFF),
+    textSecondary: Color(0xFFA8C8ED),
+    success: Color(0xFF5C9FD9),
+    danger: Color(0xFFE83F68),
+  );
+
   static ThemeData light() => _base(tokens: starlightPaper);
 
   static ThemeData dark() => _base(tokens: galaxyNoir);
 
+  static ThemeData deepSpaceTheme() => _base(tokens: deepSpace);
+
+  static ThemeData crimsonPagodaTheme() => _base(tokens: crimsonPagoda);
+
+  static ThemeData desertAstronautTheme() => _base(tokens: desertAstronaut);
+
+  static ThemeData blueberryNebulaTheme() => _base(tokens: blueberryNebula);
+
   static ThemeData _base({required AppThemeTokens tokens}) {
-    final brightness = tokens.preset == AppThemePreset.galaxyNoir
-        ? Brightness.dark
-        : Brightness.light;
+    final isDark =
+        tokens.preset != AppThemePreset.starlightPaper &&
+        tokens.preset != AppThemePreset.desertAstronaut;
+    final brightness = isDark ? Brightness.dark : Brightness.light;
+    final onPrimary = _readableForeground(tokens.primary);
+    final onSecondary = _readableForeground(tokens.accent);
     final colorScheme =
         ColorScheme.fromSeed(
           seedColor: tokens.primary,
           brightness: brightness,
         ).copyWith(
           primary: tokens.primary,
-          onPrimary: tokens.preset == AppThemePreset.galaxyNoir
-              ? const Color(0xFF181020)
-              : Colors.white,
+          onPrimary: onPrimary,
           secondary: tokens.accent,
-          onSecondary: tokens.preset == AppThemePreset.galaxyNoir
-              ? const Color(0xFF031416)
-              : Colors.white,
+          onSecondary: onSecondary,
           surface: tokens.surface,
           onSurface: tokens.textPrimary,
           surfaceContainerHighest: tokens.surfaceRaised,
@@ -283,12 +361,10 @@ class AppTheme {
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           backgroundColor: tokens.primary,
-          foregroundColor: tokens.preset == AppThemePreset.galaxyNoir
-              ? const Color(0xFF181020)
-              : Colors.white,
+          foregroundColor: onPrimary,
           minimumSize: const Size(48, 48),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          elevation: tokens.preset == AppThemePreset.galaxyNoir ? 1 : 0,
+          elevation: isDark ? 1 : 0,
           shadowColor: tokens.primary.withValues(alpha: 0.24),
           textStyle: const TextStyle(fontWeight: FontWeight.w800),
         ),
@@ -310,5 +386,12 @@ class AppTheme {
         ),
       ),
     );
+  }
+
+  static Color _readableForeground(Color background) {
+    final brightness = ThemeData.estimateBrightnessForColor(background);
+    return brightness == Brightness.dark
+        ? const Color(0xFFFFFFFF)
+        : const Color(0xFF03121E);
   }
 }

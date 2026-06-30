@@ -55,6 +55,7 @@ import '../features/vip/data/private_vip_repository.dart';
 import '../features/vip/data/vip_aware_reader_repository.dart';
 import 'app_dependencies.dart';
 import 'app_theme.dart';
+import 'app_theme_controller.dart';
 
 class GalaxyNovelsApp extends StatefulWidget {
   const GalaxyNovelsApp({
@@ -74,6 +75,7 @@ class GalaxyNovelsApp extends StatefulWidget {
     this.novelEngagementRepository,
     this.vipRepository,
     this.readingActivityRecorder,
+    this.appThemeController,
     super.key,
   }) : config = config ?? const AppConfig();
 
@@ -93,6 +95,7 @@ class GalaxyNovelsApp extends StatefulWidget {
   final NovelEngagementRepository? novelEngagementRepository;
   final VipRepository? vipRepository;
   final ReadingActivityRecorder? readingActivityRecorder;
+  final AppThemeController? appThemeController;
 
   @override
   State<GalaxyNovelsApp> createState() => _GalaxyNovelsAppState();
@@ -103,6 +106,8 @@ class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
   _defaultReaderPreferencesRepository = StoredReaderPreferencesRepository(
     store: SharedPreferencesReaderPreferencesStore(),
   );
+  late final StoredAppThemeController _defaultAppThemeController =
+      StoredAppThemeController(store: SharedPreferencesAppThemeStore());
   StoredDownloadsRepository? _defaultDownloadsRepository;
   DownloadsRepository? _downloadManagerRepository;
   DownloadManager? _downloadManager;
@@ -251,47 +256,58 @@ class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
     final effectiveReadingActivityRecorder =
         widget.readingActivityRecorder ??
         _defaultReadingActivityRepositoryFor(effectiveAuthRepository);
+    final effectiveAppThemeController =
+        widget.appThemeController ?? _defaultAppThemeController;
     unawaited(effectiveReaderPreferencesRepository.load());
+    unawaited(effectiveAppThemeController.load());
 
-    return AppDependencies(
-      config: widget.config,
-      homeRepository: effectiveHomeRepository,
-      catalogRepository: effectiveCatalogRepository,
-      novelRepository: effectiveNovelRepository,
-      readerRepository: effectiveReaderRepository,
-      rankingsRepository: effectiveRankingsRepository,
-      searchRepository: effectiveSearchRepository,
-      readingHistoryRepository: effectiveReadingHistoryRepository,
-      downloadsRepository: effectiveDownloadsRepository,
-      downloadManager: effectiveDownloadManager,
-      readerPreferencesRepository: effectiveReaderPreferencesRepository,
-      authRepository: effectiveAuthRepository,
-      commentsRepository: effectiveCommentsRepository,
-      favoritesRepository: effectiveFavoritesRepository,
-      novelEngagementRepository: effectiveNovelEngagementRepository,
-      vipRepository: effectiveVipRepository,
-      readingActivityRecorder: effectiveReadingActivityRecorder,
-      child: MaterialApp(
-        title: 'مجرة الروايات',
-        debugShowCheckedModeBanner: false,
-        locale: const Locale('ar'),
-        supportedLocales: const [Locale('ar')],
-        localizationsDelegates: const [
-          GlobalMaterialLocalizations.delegate,
-          GlobalCupertinoLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-        ],
-        theme: AppTheme.light(),
-        darkTheme: AppTheme.dark(),
-        themeMode: ThemeMode.system,
-        builder: (context, child) => DownloadActivityLayer(
-          manager: effectiveDownloadManager,
-          child: child ?? const SizedBox.shrink(),
-        ),
-        home: const Directionality(
-          textDirection: TextDirection.rtl,
-          child: AppShell(),
-        ),
+    return AppThemeControllerScope(
+      controller: effectiveAppThemeController,
+      child: ValueListenableBuilder<AppThemeChoice>(
+        valueListenable: effectiveAppThemeController,
+        builder: (context, appThemeChoice, child) {
+          return AppDependencies(
+            config: widget.config,
+            homeRepository: effectiveHomeRepository,
+            catalogRepository: effectiveCatalogRepository,
+            novelRepository: effectiveNovelRepository,
+            readerRepository: effectiveReaderRepository,
+            rankingsRepository: effectiveRankingsRepository,
+            searchRepository: effectiveSearchRepository,
+            readingHistoryRepository: effectiveReadingHistoryRepository,
+            downloadsRepository: effectiveDownloadsRepository,
+            downloadManager: effectiveDownloadManager,
+            readerPreferencesRepository: effectiveReaderPreferencesRepository,
+            authRepository: effectiveAuthRepository,
+            commentsRepository: effectiveCommentsRepository,
+            favoritesRepository: effectiveFavoritesRepository,
+            novelEngagementRepository: effectiveNovelEngagementRepository,
+            vipRepository: effectiveVipRepository,
+            readingActivityRecorder: effectiveReadingActivityRecorder,
+            child: MaterialApp(
+              title: 'مجرة الروايات',
+              debugShowCheckedModeBanner: false,
+              locale: const Locale('ar'),
+              supportedLocales: const [Locale('ar')],
+              localizationsDelegates: const [
+                GlobalMaterialLocalizations.delegate,
+                GlobalCupertinoLocalizations.delegate,
+                GlobalWidgetsLocalizations.delegate,
+              ],
+              theme: _lightThemeFor(appThemeChoice),
+              darkTheme: _darkThemeFor(appThemeChoice),
+              themeMode: appThemeChoice.themeMode,
+              builder: (context, child) => DownloadActivityLayer(
+                manager: effectiveDownloadManager,
+                child: child ?? const SizedBox.shrink(),
+              ),
+              home: const Directionality(
+                textDirection: TextDirection.rtl,
+                child: AppShell(),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -384,6 +400,30 @@ class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
     return _privateApiClient ??= PrivateApiClient(config: widget.config);
   }
 
+  ThemeData _lightThemeFor(AppThemeChoice choice) {
+    return switch (choice) {
+      AppThemeChoice.system => AppTheme.light(),
+      AppThemeChoice.deepSpace => AppTheme.deepSpaceTheme(),
+      AppThemeChoice.crimsonPagoda => AppTheme.crimsonPagodaTheme(),
+      AppThemeChoice.desertAstronaut => AppTheme.desertAstronautTheme(),
+      AppThemeChoice.blueberryNebula => AppTheme.blueberryNebulaTheme(),
+      AppThemeChoice.galaxyNoir => AppTheme.dark(),
+      AppThemeChoice.starlightPaper => AppTheme.light(),
+    };
+  }
+
+  ThemeData _darkThemeFor(AppThemeChoice choice) {
+    return switch (choice) {
+      AppThemeChoice.system => AppTheme.dark(),
+      AppThemeChoice.deepSpace => AppTheme.deepSpaceTheme(),
+      AppThemeChoice.crimsonPagoda => AppTheme.crimsonPagodaTheme(),
+      AppThemeChoice.desertAstronaut => AppTheme.desertAstronautTheme(),
+      AppThemeChoice.blueberryNebula => AppTheme.blueberryNebulaTheme(),
+      AppThemeChoice.galaxyNoir => AppTheme.dark(),
+      AppThemeChoice.starlightPaper => AppTheme.light(),
+    };
+  }
+
   @override
   void dispose() {
     final manager = _downloadManager;
@@ -396,6 +436,7 @@ class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
     _defaultAuthRepository?.dispose();
     _defaultLocalReadingHistoryRepository.dispose();
     _defaultReaderPreferencesRepository.dispose();
+    _defaultAppThemeController.dispose();
     super.dispose();
   }
 }

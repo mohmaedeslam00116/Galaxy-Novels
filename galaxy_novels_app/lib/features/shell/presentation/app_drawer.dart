@@ -4,9 +4,9 @@ import '../../../app/app_theme.dart';
 import '../../account/presentation/account_screen.dart';
 import '../../about/presentation/about_screen.dart';
 import '../../favorites/presentation/favorites_screen.dart';
-import '../../reader/presentation/reader_settings_screen.dart';
+import '../../settings/presentation/settings_screen.dart';
 
-enum _DrawerDestination { account, favorites, readerSettings, about }
+enum _DrawerDestination { account, favorites, settings, about }
 
 class AppDrawer extends StatelessWidget {
   const AppDrawer({super.key});
@@ -27,7 +27,7 @@ class AppDrawer extends StatelessWidget {
             final screen = switch (destination) {
               _DrawerDestination.account => const AccountScreen(),
               _DrawerDestination.favorites => const FavoritesScreen(),
-              _DrawerDestination.readerSettings => const ReaderSettingsScreen(),
+              _DrawerDestination.settings => const SettingsScreen(),
               _DrawerDestination.about => const AboutScreen(),
             };
             navigator.push(
@@ -48,7 +48,7 @@ class AppDrawer extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'حسابك وإعدادات القراءة',
+                    'حسابك ومكتبتك وإعدادات التطبيق',
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: tokens.textSecondary,
                     ),
@@ -67,9 +67,9 @@ class AppDrawer extends StatelessWidget {
               label: Text('المفضلة'),
             ),
             const NavigationDrawerDestination(
-              icon: Icon(Icons.tune),
-              selectedIcon: Icon(Icons.tune),
-              label: Text('إعدادات القراءة'),
+              icon: Icon(Icons.settings_outlined),
+              selectedIcon: Icon(Icons.settings),
+              label: Text('الإعدادات'),
             ),
             const Divider(height: 24),
             const NavigationDrawerDestination(

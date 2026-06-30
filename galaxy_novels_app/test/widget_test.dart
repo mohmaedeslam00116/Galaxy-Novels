@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:galaxy_novels_app/app/app_dependencies.dart';
+import 'package:galaxy_novels_app/app/app_theme.dart';
+import 'package:galaxy_novels_app/app/app_theme_controller.dart';
 import 'package:galaxy_novels_app/app/galaxy_novels_app.dart';
 import 'package:galaxy_novels_app/data/models/catalog_data.dart';
 import 'package:galaxy_novels_app/data/models/chapter_summary.dart';
@@ -285,6 +287,8 @@ void main() {
 
     expect(find.byType(NavigationDrawerDestination), findsNWidgets(4));
     expect(find.text('المفضلة'), findsOneWidget);
+    expect(find.text('الإعدادات'), findsOneWidget);
+    expect(find.text('إعدادات القراءة'), findsNothing);
     expect(find.text('الاشتراك و VIP'), findsNothing);
 
     await tester.tap(find.text('حول التطبيق'));
@@ -296,7 +300,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('reader settings stay shared after closing and reopening', (
+  testWidgets('settings screen keeps reader settings shared after reopening', (
     tester,
   ) async {
     final preferencesRepository = FakeReaderPreferencesRepository();
@@ -311,6 +315,20 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.byIcon(Icons.menu));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('الإعدادات'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('الإعدادات'), findsWidgets);
+    expect(find.text('إعدادات القراءة'), findsOneWidget);
+    expect(find.text('إعدادات التطبيق'), findsOneWidget);
+    expect(find.text('حجم الخط، تباعد الأسطر، ووضع القراءة'), findsOneWidget);
+
+    await tester.scrollUntilVisible(
+      find.text('إعدادات القراءة'),
+      120,
+      scrollable: _verticalScrollable(),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.text('إعدادات القراءة'));
     await tester.pumpAndSettle();
@@ -331,12 +349,197 @@ void main() {
       tester.element(find.byKey(const ValueKey('reader-settings-preview'))),
     ).pop();
     await tester.pumpAndSettle();
+
+    Navigator.of(tester.element(find.text('إعدادات التطبيق'))).pop();
+    await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.menu));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('الإعدادات'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('إعدادات القراءة'),
+      120,
+      scrollable: _verticalScrollable(),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.text('إعدادات القراءة'));
     await tester.pumpAndSettle();
 
     expect(find.text('110%'), findsOneWidget);
+  });
+
+  testWidgets('settings screen changes and applies app theme choice', (
+    tester,
+  ) async {
+    final appThemeController = _TestAppThemeController();
+    await tester.pumpWidget(
+      GalaxyNovelsApp(
+        homeRepository: _TestHomeRepository(_homeData),
+        catalogRepository: const _TestCatalogRepository(),
+        novelRepository: const _TestNovelRepository(),
+        appThemeController: appThemeController,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.menu));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('الإعدادات'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('مظهر التطبيق'), findsOneWidget);
+    expect(find.text('حسب النظام'), findsOneWidget);
+    expect(find.text('الفضاء السحيق / Deep Space'), findsOneWidget);
+    expect(find.text('Galaxy Noir'), findsOneWidget);
+    expect(find.text('Starlight Paper'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('theme-choice-card-system')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('theme-choice-card-deepSpace')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('theme-choice-palette-deepSpace')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('theme-choice-card-deepSpace')));
+    await tester.pumpAndSettle();
+
+    expect(appThemeController.value, AppThemeChoice.deepSpace);
+    final siteTokens = Theme.of(
+      tester.element(find.text('الفضاء السحيق / Deep Space')),
+    ).extension<AppThemeTokens>();
+    expect(siteTokens!.preset, AppThemePreset.deepSpace);
+    expect(siteTokens.background, const Color(0xFF000000));
+
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('theme-choice-card-starlightPaper')),
+      120,
+      scrollable: _verticalScrollable(),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('theme-choice-card-starlightPaper')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(appThemeController.value, AppThemeChoice.starlightPaper);
+    final lightTokens = Theme.of(
+      tester.element(find.text('Starlight Paper')),
+    ).extension<AppThemeTokens>();
+    expect(lightTokens!.preset, AppThemePreset.starlightPaper);
+
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('theme-choice-card-galaxyNoir')),
+      120,
+      scrollable: _verticalScrollable(),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('theme-choice-card-galaxyNoir')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(appThemeController.value, AppThemeChoice.galaxyNoir);
+    final darkTokens = Theme.of(
+      tester.element(find.text('Galaxy Noir')),
+    ).extension<AppThemeTokens>();
+    expect(darkTokens!.preset, AppThemePreset.galaxyNoir);
+
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('theme-choice-card-crimsonPagoda')),
+      120,
+      scrollable: _verticalScrollable(),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('theme-choice-card-crimsonPagoda')),
+      findsOneWidget,
+    );
+    expect(find.text('الكسوف القرمزي / Crimson Eclipse'), findsOneWidget);
+    expect(find.text('المعبد القرمزي / Crimson Pagoda'), findsNothing);
+
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('theme-choice-card-desertAstronaut')),
+      120,
+      scrollable: _verticalScrollable(),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('theme-choice-card-desertAstronaut')),
+      findsOneWidget,
+    );
+
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('theme-choice-card-blueberryNebula')),
+      120,
+      scrollable: _verticalScrollable(),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('theme-choice-palette-blueberryNebula')),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('theme-choice-card-blueberryNebula')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(appThemeController.value, AppThemeChoice.blueberryNebula);
+    final blueberryTokens = Theme.of(
+      tester.element(find.text('سديم التوت الأزرق / Blueberry Nebula')),
+    ).extension<AppThemeTokens>();
+    expect(blueberryTokens!.preset, AppThemePreset.blueberryNebula);
+  });
+
+  testWidgets('settings theme cards fit a narrow phone', (tester) async {
+    tester.view.physicalSize = const Size(360, 720);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(
+      GalaxyNovelsApp(
+        homeRepository: _TestHomeRepository(_homeData),
+        catalogRepository: const _TestCatalogRepository(),
+        novelRepository: const _TestNovelRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.menu));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('الإعدادات'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('theme-choice-card-deepSpace')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('theme-choice-palette-deepSpace')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('theme-choice-card-blueberryNebula')),
+      240,
+      scrollable: _verticalScrollable(),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('theme-choice-card-blueberryNebula')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('home screen renders repository-provided sections', (
@@ -1688,6 +1891,28 @@ class _TestReadingHistoryRepository extends ChangeNotifier
       for (final item in _items)
         if (item.novelId != progress.novelId) item,
     ];
+    notifyListeners();
+  }
+}
+
+class _TestAppThemeController extends ChangeNotifier
+    implements AppThemeController {
+  _TestAppThemeController();
+
+  AppThemeChoice _value = AppThemeChoice.system;
+
+  @override
+  AppThemeChoice get value => _value;
+
+  @override
+  Future<void> load() async {}
+
+  @override
+  Future<void> update(AppThemeChoice choice) async {
+    if (_value == choice) {
+      return;
+    }
+    _value = choice;
     notifyListeners();
   }
 }
