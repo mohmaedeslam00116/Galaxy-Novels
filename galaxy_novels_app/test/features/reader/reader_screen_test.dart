@@ -19,6 +19,7 @@ import 'package:galaxy_novels_app/features/comments/application/comments_reposit
 import 'package:galaxy_novels_app/features/comments/domain/comment_target.dart';
 import 'package:galaxy_novels_app/features/comments/domain/comments_page.dart';
 import 'package:galaxy_novels_app/features/comments/domain/public_comment.dart';
+import 'package:galaxy_novels_app/features/ads/application/reader_ad_repository.dart';
 import 'package:galaxy_novels_app/features/reading_activity/application/reading_activity_recorder.dart';
 import 'package:galaxy_novels_app/features/reader/presentation/reader_screen.dart';
 
@@ -42,8 +43,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('الفصل 1'), findsOneWidget);
-    expect(find.text('عنوان الفصل'), findsOneWidget);
+    expect(find.text('عنوان الفصل'), findsWidgets);
     expect(find.text('نص الفصل الأول'), findsOneWidget);
     expect(find.byTooltip('الفصل التالي'), findsNothing);
     expect(find.byType(CircularProgressIndicator), findsNothing);
@@ -56,8 +56,51 @@ void main() {
     await tester.tap(find.byTooltip('الفصل التالي'));
     await tester.pumpAndSettle();
 
-    expect(find.text('عنوان الفصل التالي'), findsOneWidget);
+    expect(find.text('عنوان الفصل التالي'), findsWidgets);
     expect(find.text('نص الفصل التالي'), findsOneWidget);
+  });
+
+  testWidgets('reader app bar follows the loaded chapter title', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _ReaderTestApp(
+        readerRepository: const _TestReaderRepository(),
+        child: const ReaderScreen(
+          contentApi: '/wp-json/wor-reader-app/v1/chapters/10',
+          chapterTitle: 'الفصل 1',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(
+        of: find.byType(AppBar),
+        matching: find.text('عنوان الفصل'),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('reader-content-tap-area')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('الفصل التالي'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(
+        of: find.byType(AppBar),
+        matching: find.text('عنوان الفصل التالي'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byType(AppBar),
+        matching: find.text('الفصل التالي'),
+      ),
+      findsNothing,
+    );
   });
 
   testWidgets('toggles floating controls when tapping reader content', (
@@ -85,6 +128,29 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byTooltip('الفصل التالي'), findsNothing);
+  });
+
+  testWidgets('floating controls expose labelled chapter navigation', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _ReaderTestApp(
+        readerRepository: const _TestReaderRepository(),
+        child: const ReaderScreen(
+          contentApi: '/wp-json/wor-reader-app/v1/chapters/10',
+          chapterTitle: 'الفصل 1',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('reader-content-tap-area')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('التالي'), findsOneWidget);
+    expect(find.text('السابق'), findsOneWidget);
+    expect(find.byTooltip('الفصل التالي'), findsOneWidget);
+    expect(find.byTooltip('الفصل السابق'), findsOneWidget);
   });
 
   testWidgets('opens reader settings and updates paragraph text size', (
@@ -169,6 +235,7 @@ void main() {
           contentApi: '/wp-json/wor-reader-app/v1/chapters/10',
           chapterTitle: 'الفصل 1',
           novelTitle: 'رواية الاختبار',
+          coverUrl: '/wp-content/uploads/covers/novel.jpg',
         ),
       ),
     );
@@ -179,6 +246,10 @@ void main() {
     expect(historyRepository.records.single.novelTitle, 'رواية الاختبار');
     expect(historyRepository.records.single.chapterId, 10);
     expect(historyRepository.records.single.chapterTitle, 'عنوان الفصل');
+    expect(
+      historyRepository.records.single.coverUrl,
+      '/wp-content/uploads/covers/novel.jpg',
+    );
     expect(historyRepository.records.single.chapterPosition, 1);
     expect(historyRepository.records.single.chaptersTotal, 2);
   });
@@ -378,6 +449,32 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('reader banner can be hidden for the current chapter only', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _ReaderTestApp(
+        readerAdRepository: const _TestReaderAdRepository(),
+        child: const ReaderScreen(contentApi: '/chapters/10'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('إعلان القارئ'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('reader-ad-close-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('إعلان القارئ'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('reader-content-tap-area')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('الفصل التالي'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('إعلان القارئ'), findsOneWidget);
+  });
 }
 
 class _ReaderTestApp extends StatelessWidget {
@@ -387,6 +484,7 @@ class _ReaderTestApp extends StatelessWidget {
     this.readingHistoryRepository,
     this.downloadsRepository,
     this.commentsRepository,
+    this.readerAdRepository = const NoopReaderAdRepository(),
     this.readingActivityRecorder = const NoopReadingActivityRecorder(),
   });
 
@@ -395,6 +493,7 @@ class _ReaderTestApp extends StatelessWidget {
   final ReadingHistoryRepository? readingHistoryRepository;
   final DownloadsRepository? downloadsRepository;
   final CommentsRepository? commentsRepository;
+  final ReaderAdRepository readerAdRepository;
   final ReadingActivityRecorder readingActivityRecorder;
 
   @override
@@ -421,11 +520,28 @@ class _ReaderTestApp extends StatelessWidget {
       favoritesRepository: FakeFavoritesRepository(),
       novelEngagementRepository: FakeNovelEngagementRepository(),
       vipRepository: const FakeVipRepository(),
+      readerAdRepository: readerAdRepository,
       readingActivityRecorder: readingActivityRecorder,
       child: MaterialApp(
         locale: const Locale('ar'),
         home: Directionality(textDirection: TextDirection.rtl, child: child),
       ),
+    );
+  }
+}
+
+class _TestReaderAdRepository implements ReaderAdRepository {
+  const _TestReaderAdRepository();
+
+  @override
+  Future<void> initialize() async {}
+
+  @override
+  Widget? buildReaderBanner(BuildContext context) {
+    return Container(
+      alignment: Alignment.center,
+      color: Colors.white,
+      child: const Text('إعلان القارئ'),
     );
   }
 }

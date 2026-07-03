@@ -31,9 +31,16 @@ import '../data/repositories/stored_reading_history_repository.dart';
 import '../features/account/application/auth_repository.dart';
 import '../features/account/data/secure_auth_session_store.dart';
 import '../features/account/data/session_auth_repository.dart';
+import '../features/account/domain/auth_session.dart';
+import '../features/ads/application/reader_ad_repository.dart';
+import '../features/ads/application/rewarded_ad_repository.dart';
+import '../features/ads/data/admob_reader_ad_repository.dart';
+import '../features/ads/data/admob_rewarded_ad_repository.dart';
 import '../features/comments/application/comments_repository.dart';
 import '../features/comments/data/public_comments_repository.dart';
 import '../features/downloads/application/download_manager.dart';
+import '../features/downloads/application/download_progress_notifier.dart';
+import '../features/downloads/data/method_channel_download_progress_notifier.dart';
 import '../features/downloads/presentation/download_activity_layer.dart';
 import '../features/favorites/application/favorites_repository.dart';
 import '../features/favorites/data/favorites_remote_service.dart';
@@ -50,6 +57,7 @@ import '../features/reading_activity/data/synced_reading_activity_repository.dar
 import '../features/reader/application/reader_preferences_repository.dart';
 import '../features/reader/data/shared_preferences_reader_preferences_store.dart';
 import '../features/reader/data/stored_reader_preferences_repository.dart';
+import '../features/rewards/data/stored_reader_rewards_repository.dart';
 import '../features/shell/presentation/app_shell.dart';
 import '../features/vip/application/vip_repository.dart';
 import '../features/vip/data/private_vip_repository.dart';
@@ -69,12 +77,16 @@ class GalaxyNovelsApp extends StatefulWidget {
     this.searchRepository,
     this.readingHistoryRepository,
     this.downloadsRepository,
+    this.downloadProgressNotifier,
     this.readerPreferencesRepository,
     this.authRepository,
     this.commentsRepository,
     this.favoritesRepository,
     this.novelEngagementRepository,
     this.vipRepository,
+    this.readerAdRepository,
+    this.rewardedAdRepository,
+    this.readerRewardsRepository,
     this.readingActivityRecorder,
     this.appThemeController,
     super.key,
@@ -89,12 +101,16 @@ class GalaxyNovelsApp extends StatefulWidget {
   final SearchRepository? searchRepository;
   final ReadingHistoryRepository? readingHistoryRepository;
   final DownloadsRepository? downloadsRepository;
+  final DownloadProgressNotifier? downloadProgressNotifier;
   final ReaderPreferencesRepository? readerPreferencesRepository;
   final AuthRepository? authRepository;
   final CommentsRepository? commentsRepository;
   final FavoritesRepository? favoritesRepository;
   final NovelEngagementRepository? novelEngagementRepository;
   final VipRepository? vipRepository;
+  final ReaderAdRepository? readerAdRepository;
+  final RewardedAdRepository? rewardedAdRepository;
+  final ReaderRewardsRepository? readerRewardsRepository;
   final ReadingActivityRecorder? readingActivityRecorder;
   final AppThemeController? appThemeController;
 
@@ -111,6 +127,8 @@ class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
       StoredAppThemeController(store: SharedPreferencesAppThemeStore());
   StoredDownloadsRepository? _defaultDownloadsRepository;
   DownloadsRepository? _downloadManagerRepository;
+  ReaderRewardsRepository? _downloadManagerRewardsRepository;
+  DownloadProgressNotifier? _downloadManagerProgressNotifier;
   DownloadManager? _downloadManager;
   SessionAuthRepository? _defaultAuthRepository;
   SyncedFavoritesRepository? _defaultFavoritesRepository;
@@ -123,7 +141,16 @@ class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
   AccountReadingHistoryRepository? _defaultAccountReadingHistoryRepository;
   SyncedReadingActivityRepository? _defaultReadingActivityRepository;
   PrivateVipRepository? _defaultVipRepository;
+  late final AdMobReaderAdRepository _defaultReaderAdRepository =
+      AdMobReaderAdRepository();
+  late final AdMobRewardedAdRepository _defaultRewardedAdRepository =
+      AdMobRewardedAdRepository();
+  late final StoredReaderRewardsRepository _defaultReaderRewardsRepository =
+      StoredReaderRewardsRepository();
+  late final MethodChannelDownloadProgressNotifier
+  _defaultDownloadProgressNotifier = MethodChannelDownloadProgressNotifier();
   PrivateApiClient? _privateApiClient;
+  AuthRepository? _startupRestoredAuthRepository;
 
   @override
   void didUpdateWidget(covariant GalaxyNovelsApp oldWidget) {
@@ -223,8 +250,14 @@ class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
     final effectiveDownloadsRepository =
         widget.downloadsRepository ??
         _defaultDownloadsRepositoryFor(effectiveReaderRepository);
+    final effectiveReaderRewardsRepository =
+        widget.readerRewardsRepository ?? _defaultReaderRewardsRepository;
+    final effectiveDownloadProgressNotifier =
+        widget.downloadProgressNotifier ?? _defaultDownloadProgressNotifier;
     final effectiveDownloadManager = _downloadManagerFor(
       effectiveDownloadsRepository,
+      effectiveReaderRewardsRepository,
+      effectiveDownloadProgressNotifier,
     );
     final effectiveRankingsRepository =
         widget.rankingsRepository ??
@@ -243,6 +276,7 @@ class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
         _defaultReaderPreferencesRepository;
     final effectiveAuthRepository =
         widget.authRepository ?? _defaultAuthRepositoryFor();
+    _restoreAuthSessionOnStartup(effectiveAuthRepository);
     final effectiveReadingHistoryRepository =
         widget.readingHistoryRepository ??
         _defaultReadingHistoryRepositoryFor(effectiveAuthRepository);
@@ -257,9 +291,16 @@ class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
     final effectiveReadingActivityRecorder =
         widget.readingActivityRecorder ??
         _defaultReadingActivityRepositoryFor(effectiveAuthRepository);
+    final effectiveReaderAdRepository =
+        widget.readerAdRepository ?? _defaultReaderAdRepository;
+    final effectiveRewardedAdRepository =
+        widget.rewardedAdRepository ?? _defaultRewardedAdRepository;
     final effectiveAppThemeController =
         widget.appThemeController ?? _defaultAppThemeController;
     unawaited(effectiveReaderPreferencesRepository.load());
+    unawaited(effectiveReaderRewardsRepository.load());
+    unawaited(effectiveReaderAdRepository.initialize());
+    unawaited(effectiveRewardedAdRepository.initialize());
     unawaited(effectiveAppThemeController.load());
 
     return AppThemeControllerScope(
@@ -278,12 +319,16 @@ class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
             readingHistoryRepository: effectiveReadingHistoryRepository,
             downloadsRepository: effectiveDownloadsRepository,
             downloadManager: effectiveDownloadManager,
+            downloadProgressNotifier: effectiveDownloadProgressNotifier,
             readerPreferencesRepository: effectiveReaderPreferencesRepository,
             authRepository: effectiveAuthRepository,
             commentsRepository: effectiveCommentsRepository,
             favoritesRepository: effectiveFavoritesRepository,
             novelEngagementRepository: effectiveNovelEngagementRepository,
             vipRepository: effectiveVipRepository,
+            readerAdRepository: effectiveReaderAdRepository,
+            rewardedAdRepository: effectiveRewardedAdRepository,
+            readerRewardsRepository: effectiveReaderRewardsRepository,
             readingActivityRecorder: effectiveReadingActivityRecorder,
             child: MaterialApp(
               title: 'مجرة الروايات',
@@ -329,8 +374,15 @@ class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
     );
   }
 
-  DownloadManager _downloadManagerFor(DownloadsRepository repository) {
-    if (_downloadManagerRepository == repository && _downloadManager != null) {
+  DownloadManager _downloadManagerFor(
+    DownloadsRepository repository,
+    ReaderRewardsRepository rewardsRepository,
+    DownloadProgressNotifier progressNotifier,
+  ) {
+    if (_downloadManagerRepository == repository &&
+        _downloadManagerRewardsRepository == rewardsRepository &&
+        _downloadManagerProgressNotifier == progressNotifier &&
+        _downloadManager != null) {
       return _downloadManager!;
     }
 
@@ -339,7 +391,13 @@ class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
       unawaited(previousManager.dispose());
     }
     _downloadManagerRepository = repository;
-    return _downloadManager = DownloadManager(repository: repository);
+    _downloadManagerRewardsRepository = rewardsRepository;
+    _downloadManagerProgressNotifier = progressNotifier;
+    return _downloadManager = DownloadManager(
+      repository: repository,
+      rewardsRepository: rewardsRepository,
+      progressNotifier: progressNotifier,
+    );
   }
 
   SessionAuthRepository _defaultAuthRepositoryFor() {
@@ -347,6 +405,23 @@ class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
       client: _privateApiClientFor(),
       sessionStore: SecureAuthSessionStore(),
     );
+  }
+
+  void _restoreAuthSessionOnStartup(AuthRepository authRepository) {
+    if (identical(_startupRestoredAuthRepository, authRepository)) {
+      return;
+    }
+    _startupRestoredAuthRepository = authRepository;
+    if (authRepository.value.status == AuthSessionStatus.idle) {
+      scheduleMicrotask(() {
+        if (!mounted ||
+            !identical(_startupRestoredAuthRepository, authRepository) ||
+            authRepository.value.status != AuthSessionStatus.idle) {
+          return;
+        }
+        unawaited(authRepository.restoreSession());
+      });
+    }
   }
 
   SyncedFavoritesRepository _defaultFavoritesRepositoryFor(
@@ -443,6 +518,7 @@ class _GalaxyNovelsAppState extends State<GalaxyNovelsApp> {
     _defaultLocalReadingHistoryRepository.dispose();
     _defaultReaderPreferencesRepository.dispose();
     _defaultAppThemeController.dispose();
+    _defaultReaderRewardsRepository.dispose();
     super.dispose();
   }
 }

@@ -6,6 +6,7 @@ class ReadingProgress {
     required this.chapterTitle,
     required this.contentApi,
     required this.updatedAt,
+    this.coverUrl = '',
     this.chapterPosition = 0,
     this.chaptersTotal = 0,
   });
@@ -17,6 +18,7 @@ class ReadingProgress {
       chapterId: _asInt(json['chapterId']),
       chapterTitle: _asString(json['chapterTitle']),
       contentApi: _asString(json['contentApi']),
+      coverUrl: _bestCoverFromJson(json),
       chapterPosition: _asInt(json['chapterPosition']),
       chaptersTotal: _asInt(json['chaptersTotal']),
       updatedAt:
@@ -30,6 +32,7 @@ class ReadingProgress {
   final int chapterId;
   final String chapterTitle;
   final String contentApi;
+  final String coverUrl;
   final DateTime updatedAt;
   final int chapterPosition;
   final int chaptersTotal;
@@ -38,6 +41,7 @@ class ReadingProgress {
     String? novelTitle,
     String? chapterTitle,
     String? contentApi,
+    String? coverUrl,
     DateTime? updatedAt,
     int? chapterPosition,
     int? chaptersTotal,
@@ -48,6 +52,7 @@ class ReadingProgress {
       chapterId: chapterId,
       chapterTitle: chapterTitle ?? this.chapterTitle,
       contentApi: contentApi ?? this.contentApi,
+      coverUrl: coverUrl ?? this.coverUrl,
       updatedAt: updatedAt ?? this.updatedAt,
       chapterPosition: chapterPosition ?? this.chapterPosition,
       chaptersTotal: chaptersTotal ?? this.chaptersTotal,
@@ -78,6 +83,7 @@ class ReadingProgress {
       'chapterId': chapterId,
       'chapterTitle': chapterTitle,
       'contentApi': contentApi,
+      'coverUrl': coverUrl,
       'chapterPosition': chapterPosition,
       'chaptersTotal': chaptersTotal,
       'updatedAt': updatedAt.toUtc().toIso8601String(),
@@ -92,6 +98,38 @@ class ReadingProgress {
 }
 
 String _asString(Object? value) => value?.toString() ?? '';
+
+String _bestCoverFromJson(Map<String, dynamic> json) {
+  final cover = json['cover'];
+  if (cover is Map) {
+    final map = cover.map((key, value) => MapEntry(key.toString(), value));
+    return _firstNonEmptyString([
+      map['medium'],
+      map['large'],
+      map['thumbnail'],
+      map['url'],
+    ]);
+  }
+
+  return _firstNonEmptyString([
+    json['coverUrl'],
+    json['cover_url'],
+    json['coverMedium'],
+    json['cover_medium'],
+    json['coverThumbnail'],
+    json['cover_thumbnail'],
+  ]);
+}
+
+String _firstNonEmptyString(List<Object?> values) {
+  for (final value in values) {
+    final text = _asString(value);
+    if (text.isNotEmpty) {
+      return text;
+    }
+  }
+  return '';
+}
 
 int _asInt(Object? value) {
   if (value is int) {

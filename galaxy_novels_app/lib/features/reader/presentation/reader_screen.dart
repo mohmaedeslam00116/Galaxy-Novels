@@ -9,6 +9,7 @@ import '../../../data/repositories/downloads_repository.dart';
 import '../../../data/repositories/reader_repository.dart';
 import '../../../data/repositories/reading_history_repository.dart';
 import '../../reading_activity/application/reading_activity_recorder.dart';
+import '../../ads/presentation/reader_banner_ad_slot.dart';
 import '../../comments/domain/comment_target.dart';
 import '../../comments/presentation/chapter_comments_sheet.dart';
 import '../application/reader_preferences_repository.dart';
@@ -21,12 +22,14 @@ class ReaderScreen extends StatefulWidget {
     required this.contentApi,
     this.chapterTitle,
     this.novelTitle,
+    this.coverUrl = '',
     super.key,
   });
 
   final String contentApi;
   final String? chapterTitle;
   final String? novelTitle;
+  final String coverUrl;
 
   @override
   State<ReaderScreen> createState() => _ReaderScreenState();
@@ -116,13 +119,29 @@ class _ReaderScreenState extends State<ReaderScreen>
             );
           }
 
-          return NativeReaderContent(
-            content: snapshot.data!,
-            preferences: _preferences,
-            onOpenChapter: _openChapter,
-            onOpenSettings: _openReaderSettings,
-            onOpenComments: () => _openChapterComments(snapshot.data!),
-            onReadingActivity: _recordReadingActivity,
+          final readerAd = AppDependencies.of(
+            context,
+          ).readerAdRepository.buildReaderBanner(context);
+
+          return Column(
+            children: [
+              if (readerAd != null)
+                ReaderBannerAdSlot(
+                  contentKey: _contentApi,
+                  height: ReaderBannerAdSlot.readerHeight,
+                  child: readerAd,
+                ),
+              Expanded(
+                child: NativeReaderContent(
+                  content: snapshot.data!,
+                  preferences: _preferences,
+                  onOpenChapter: _openChapter,
+                  onOpenSettings: _openReaderSettings,
+                  onOpenComments: () => _openChapterComments(snapshot.data!),
+                  onReadingActivity: _recordReadingActivity,
+                ),
+              ),
+            ],
           );
         },
       ),
@@ -185,7 +204,16 @@ class _ReaderScreenState extends State<ReaderScreen>
     if (!mounted || contentApi != _contentApi) {
       return;
     }
+    _syncLoadedChapterTitle(content);
     _startActivitySession(content);
+  }
+
+  void _syncLoadedChapterTitle(ReaderChapterContent content) {
+    final title = content.effectiveTitle;
+    if (title.isEmpty || title == _chapterTitle) {
+      return;
+    }
+    setState(() => _chapterTitle = title);
   }
 
   Future<void> _recordProgress(
@@ -204,6 +232,7 @@ class _ReaderScreenState extends State<ReaderScreen>
         chapterId: content.id,
         chapterTitle: content.effectiveTitle,
         contentApi: contentApi,
+        coverUrl: widget.coverUrl,
         chapterPosition: content.position,
         chaptersTotal: content.total,
         updatedAt: DateTime.now().toUtc(),

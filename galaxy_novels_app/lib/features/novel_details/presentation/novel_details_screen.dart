@@ -8,6 +8,7 @@ import '../../../data/repositories/downloads_repository.dart';
 import '../../../data/repositories/novel_repository.dart';
 import '../../downloads/application/download_manager.dart';
 import '../../downloads/presentation/download_chapters_sheet.dart';
+import '../../rewards/application/reader_rewards_repository.dart';
 import '../../account/application/auth_repository.dart';
 import '../../account/domain/auth_session.dart';
 import '../../account/presentation/account_screen.dart';
@@ -22,7 +23,7 @@ import '../../vip/application/vip_chapters_controller.dart';
 import '../../vip/application/vip_repository.dart';
 import 'widgets/novel_details_content.dart';
 
-const _isVipNativeReaderAvailable = true;
+const _isVipDirectContentRouteAvailable = true;
 
 class NovelDetailsScreen extends StatefulWidget {
   const NovelDetailsScreen({required this.manifestPath, super.key});
@@ -47,6 +48,7 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
   VipChaptersController? _vipChaptersController;
   int? _loadedNovelId;
   String _loadedNovelTitle = '';
+  String _loadedNovelCover = '';
 
   @override
   void didChangeDependencies() {
@@ -130,7 +132,7 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
                 commentsRepository: _commentsRepository!,
                 authRepository: _authRepository!,
                 vipController: _vipChaptersController!,
-                isVipNativeReaderAvailable: _isVipNativeReaderAvailable,
+                isVipNativeReaderAvailable: _isVipDirectContentRouteAvailable,
                 onRead: _openReader,
                 onOpenVipChapter: _openVipReader,
                 onDownloadChapters: () => _openDownloadSheet(snapshot.data!),
@@ -161,6 +163,7 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
     if (mounted && identical(_repository, repository)) {
       _loadedNovelId = novelLoad.details.id;
       _loadedNovelTitle = novelLoad.details.title;
+      _loadedNovelCover = novelLoad.details.bestCover;
       _recreateVipController(novelLoad.details.id);
       unawaited(_novelEngagementController?.loadNovel(novelLoad.details.id));
     }
@@ -275,6 +278,7 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
           contentApi: chapter.effectiveContentApi,
           chapterTitle: chapter.label,
           novelTitle: novelTitle,
+          coverUrl: _loadedNovelCover,
         ),
       ),
     );
@@ -287,6 +291,7 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
           contentApi: contentApi,
           chapterTitle: title,
           novelTitle: _loadedNovelTitle,
+          coverUrl: _loadedNovelCover,
         ),
       ),
     );
@@ -324,11 +329,19 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
         return ValueListenableBuilder<DownloadsState>(
           valueListenable: repository.state,
           builder: (context, downloadsState, _) {
-            return DownloadChaptersSheet(
-              details: result.details,
-              chapters: result.chapters,
-              downloadsState: downloadsState,
-              onStart: (chapters) => _startBatchDownload(result, chapters),
+            return ValueListenableBuilder<ReaderRewardsState>(
+              valueListenable: AppDependencies.of(
+                context,
+              ).readerRewardsRepository.state,
+              builder: (context, rewardsState, _) {
+                return DownloadChaptersSheet(
+                  details: result.details,
+                  chapters: result.chapters,
+                  downloadsState: downloadsState,
+                  rewardsState: rewardsState,
+                  onStart: (chapters) => _startBatchDownload(result, chapters),
+                );
+              },
             );
           },
         );
@@ -362,6 +375,10 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('يوجد تنزيل جار بالفعل')));
+    } on InsufficientDownloadPointsException {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('رصيد النقاط لا يكفي لتحميل هذه الفصول')),
+      );
     }
   }
 

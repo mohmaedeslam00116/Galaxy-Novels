@@ -10,12 +10,16 @@ import '../data/repositories/rankings_repository.dart';
 import '../data/repositories/reading_history_repository.dart';
 import '../data/repositories/search_repository.dart';
 import '../features/account/application/auth_repository.dart';
+import '../features/ads/application/reader_ad_repository.dart';
+import '../features/ads/application/rewarded_ad_repository.dart';
 import '../features/comments/application/comments_repository.dart';
 import '../features/downloads/application/download_manager.dart';
+import '../features/downloads/application/download_progress_notifier.dart';
 import '../features/favorites/application/favorites_repository.dart';
 import '../features/novel_engagement/application/novel_engagement_repository.dart';
 import '../features/reading_activity/application/reading_activity_recorder.dart';
 import '../features/reader/application/reader_preferences_repository.dart';
+import '../features/rewards/application/reader_rewards_repository.dart';
 import '../features/vip/application/vip_repository.dart';
 
 class AppDependencies extends InheritedWidget {
@@ -30,12 +34,16 @@ class AppDependencies extends InheritedWidget {
     required this.readingHistoryRepository,
     required this.downloadsRepository,
     required this.downloadManager,
+    this.downloadProgressNotifier = const NoopDownloadProgressNotifier(),
     required this.readerPreferencesRepository,
     required this.authRepository,
     required this.commentsRepository,
     required this.favoritesRepository,
     required this.novelEngagementRepository,
     required this.vipRepository,
+    this.readerAdRepository = const NoopReaderAdRepository(),
+    this.rewardedAdRepository = const NoopRewardedAdRepository(),
+    this.readerRewardsRepository = const NoopReaderRewardsRepository(),
     this.readingActivityRecorder = const NoopReadingActivityRecorder(),
     required super.child,
     super.key,
@@ -51,12 +59,16 @@ class AppDependencies extends InheritedWidget {
   final ReadingHistoryRepository readingHistoryRepository;
   final DownloadsRepository downloadsRepository;
   final DownloadManager downloadManager;
+  final DownloadProgressNotifier downloadProgressNotifier;
   final ReaderPreferencesRepository readerPreferencesRepository;
   final AuthRepository authRepository;
   final CommentsRepository commentsRepository;
   final FavoritesRepository favoritesRepository;
   final NovelEngagementRepository novelEngagementRepository;
   final VipRepository vipRepository;
+  final ReaderAdRepository readerAdRepository;
+  final RewardedAdRepository rewardedAdRepository;
+  final ReaderRewardsRepository readerRewardsRepository;
   final ReadingActivityRecorder readingActivityRecorder;
 
   static AppDependencies of(BuildContext context) {
@@ -79,12 +91,16 @@ class AppDependencies extends InheritedWidget {
         readingHistoryRepository != oldWidget.readingHistoryRepository ||
         downloadsRepository != oldWidget.downloadsRepository ||
         downloadManager != oldWidget.downloadManager ||
+        downloadProgressNotifier != oldWidget.downloadProgressNotifier ||
         readerPreferencesRepository != oldWidget.readerPreferencesRepository ||
         authRepository != oldWidget.authRepository ||
         commentsRepository != oldWidget.commentsRepository ||
         favoritesRepository != oldWidget.favoritesRepository ||
         novelEngagementRepository != oldWidget.novelEngagementRepository ||
         vipRepository != oldWidget.vipRepository ||
+        readerAdRepository != oldWidget.readerAdRepository ||
+        rewardedAdRepository != oldWidget.rewardedAdRepository ||
+        readerRewardsRepository != oldWidget.readerRewardsRepository ||
         readingActivityRecorder != oldWidget.readingActivityRecorder;
   }
 }

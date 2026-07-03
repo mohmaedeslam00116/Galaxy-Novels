@@ -106,8 +106,8 @@ ReaderChapterContent _readerContentFromVipNext(Map<String, dynamic> json) {
     total: int.tryParse(attrs['data-total'] ?? '') ?? 0,
     contentHtml: contentHtml,
     navigation: ReaderChapterNavigation(
-      previousApi: previousId > 0 ? VipReaderRequest.chapter(previousId) : '',
-      nextApi: nextId > 0 ? VipReaderRequest.chapter(nextId) : '',
+      previousApi: '',
+      nextApi: nextId > 0 ? VipReaderRequest.nextAfter(chapterId) : '',
       previousId: previousId,
       nextId: nextId,
     ),

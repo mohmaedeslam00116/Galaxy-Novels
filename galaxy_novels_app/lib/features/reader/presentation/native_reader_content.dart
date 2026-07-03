@@ -288,36 +288,128 @@ class _ReaderFloatingControls extends StatelessWidget {
               ),
               const SizedBox(height: 10),
             ],
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                IconButton(
-                  tooltip: 'الفصل السابق',
-                  onPressed: hasPrevious ? onPrevious : null,
-                  icon: const Icon(Icons.chevron_right_rounded),
-                ),
-                IconButton.filledTonal(
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final isCompact = constraints.maxWidth < 330;
+                final commentsButton = IconButton.filledTonal(
                   key: const ValueKey('reader-comments-button'),
                   tooltip: 'تعليقات الفصل',
                   onPressed: onComments,
                   icon: const Icon(Icons.forum_outlined),
-                ),
-                IconButton.filledTonal(
+                );
+                final settingsButton = IconButton.filledTonal(
                   key: const ValueKey('reader-settings-button'),
                   tooltip: 'إعدادات القراءة',
                   onPressed: onSettings,
                   icon: const Icon(Icons.tune_rounded),
-                ),
-                IconButton(
-                  tooltip: 'الفصل التالي',
-                  onPressed: hasNext ? onNext : null,
-                  icon: const Icon(Icons.chevron_left_rounded),
-                ),
-              ],
+                );
+
+                if (isCompact) {
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _ReaderNavButton(
+                              tooltip: 'الفصل التالي',
+                              label: 'التالي',
+                              icon: Icons.chevron_left_rounded,
+                              onPressed: hasNext ? onNext : null,
+                              isPrimary: true,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _ReaderNavButton(
+                              tooltip: 'الفصل السابق',
+                              label: 'السابق',
+                              icon: Icons.chevron_right_rounded,
+                              onPressed: hasPrevious ? onPrevious : null,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          commentsButton,
+                          const SizedBox(width: 10),
+                          settingsButton,
+                        ],
+                      ),
+                    ],
+                  );
+                }
+
+                return Row(
+                  children: [
+                    Expanded(
+                      child: _ReaderNavButton(
+                        tooltip: 'الفصل التالي',
+                        label: 'التالي',
+                        icon: Icons.chevron_left_rounded,
+                        onPressed: hasNext ? onNext : null,
+                        isPrimary: true,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    commentsButton,
+                    const SizedBox(width: 8),
+                    settingsButton,
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _ReaderNavButton(
+                        tooltip: 'الفصل السابق',
+                        label: 'السابق',
+                        icon: Icons.chevron_right_rounded,
+                        onPressed: hasPrevious ? onPrevious : null,
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _ReaderNavButton extends StatelessWidget {
+  const _ReaderNavButton({
+    required this.tooltip,
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+    this.isPrimary = false,
+  });
+
+  final String tooltip;
+  final String label;
+  final IconData icon;
+  final VoidCallback? onPressed;
+  final bool isPrimary;
+
+  @override
+  Widget build(BuildContext context) {
+    final child = isPrimary
+        ? FilledButton.icon(
+            onPressed: onPressed,
+            icon: Icon(icon),
+            label: Text(label, overflow: TextOverflow.ellipsis),
+          )
+        : FilledButton.tonalIcon(
+            onPressed: onPressed,
+            icon: Icon(icon),
+            label: Text(label, overflow: TextOverflow.ellipsis),
+          );
+
+    return Tooltip(
+      message: tooltip,
+      child: SizedBox(height: 46, child: child),
     );
   }
 }

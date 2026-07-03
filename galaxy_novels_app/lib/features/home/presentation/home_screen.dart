@@ -152,6 +152,7 @@ class _HomeScreenState extends State<HomeScreen> {
           contentApi: progress.contentApi,
           chapterTitle: progress.chapterTitle,
           novelTitle: progress.novelTitle,
+          coverUrl: progress.coverUrl,
         ),
       ),
     );
@@ -178,6 +179,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ? chapter.label
               : chapter.title,
           novelTitle: chapter.novelTitle,
+          coverUrl: chapter.coverUrl,
         ),
       ),
     );

@@ -4,6 +4,7 @@ import 'package:galaxy_novels_app/data/models/downloaded_chapter.dart';
 import 'package:galaxy_novels_app/data/models/novel_details_data.dart';
 import 'package:galaxy_novels_app/data/repositories/downloads_repository.dart';
 import 'package:galaxy_novels_app/features/downloads/presentation/download_chapters_sheet.dart';
+import 'package:galaxy_novels_app/features/rewards/application/reader_rewards_repository.dart';
 
 void main() {
   testWidgets('selects the latest ten chapters for batch download', (
@@ -29,7 +30,104 @@ void main() {
     await tester.tap(find.text('تحميل 10 فصل'));
     await tester.pumpAndSettle();
 
-    expect(selected, hasLength(10));
+    expect(selected.map((chapter) => chapter.id), [
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+    ]);
+  });
+
+  testWidgets('selects the latest fifty chapters for large batches', (
+    tester,
+  ) async {
+    List<NovelChapter> selected = const [];
+    await tester.pumpWidget(
+      _TestApp(
+        child: DownloadChaptersSheet(
+          details: _details,
+          chapters: _chapters(60),
+          downloadsState: DownloadsState(),
+          onStart: (chapters) => selected = chapters,
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('آخر 50 فصل'));
+    await tester.pump();
+
+    expect(find.text('50 محدد'), findsOneWidget);
+    await tester.tap(find.text('تحميل 50 فصل'));
+    await tester.pumpAndSettle();
+
+    expect(selected.map((chapter) => chapter.id).first, 11);
+    expect(selected.map((chapter) => chapter.id).last, 60);
+    expect(selected, hasLength(50));
+  });
+
+  testWidgets('shows points balance and safe downloadable count', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _TestApp(
+        child: DownloadChaptersSheet(
+          details: _details,
+          chapters: _chapters(80),
+          downloadsState: DownloadsState(),
+          rewardsState: const ReaderRewardsState(points: 25),
+          onStart: (_) {},
+        ),
+      ),
+    );
+
+    expect(find.text('رصيدك: 25 نقطة'), findsOneWidget);
+    expect(find.text('يمكنك تحميل 25 فصل الآن'), findsOneWidget);
+  });
+
+  testWidgets('selects a numeric chapter range for batch download', (
+    tester,
+  ) async {
+    List<NovelChapter> selected = const [];
+    await tester.pumpWidget(
+      _TestApp(
+        child: DownloadChaptersSheet(
+          details: _details,
+          chapters: _chapters(220),
+          downloadsState: DownloadsState(),
+          onStart: (chapters) => selected = chapters,
+        ),
+      ),
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey('download-range-from')),
+      '158',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('download-range-to')),
+      '203',
+    );
+    await tester.tap(find.byKey(const ValueKey('download-range-apply')));
+    await tester.pump();
+
+    expect(find.text('46 محدد'), findsOneWidget);
+    expect(
+      find.text('تم تحديد 46 فصل من الفصل 158 إلى الفصل 203'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('تحميل 46 فصل'));
+    await tester.pumpAndSettle();
+
+    expect(selected, hasLength(46));
+    expect(selected.first.id, 158);
+    expect(selected.last.id, 203);
   });
 
   testWidgets('disables starting when selection exceeds remaining limit', (

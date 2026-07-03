@@ -77,6 +77,54 @@ void main() {
       'الفصل 127',
     ]);
   });
+
+  test('does not open VIP chapters through the wrong public next fallback', () {
+    final chapters = mergeReadableChapters(
+      publicChapters: [_publicChapter(274)],
+      vipChapters: [_vipChapter(275)],
+    );
+
+    expect(
+      readableChapterOpenContentApi(
+        chapters,
+        1,
+        directVipChapterRouteAvailable: false,
+      ),
+      isEmpty,
+    );
+  });
+
+  test('keeps direct VIP content APIs when the direct route is available', () {
+    final chapters = mergeReadableChapters(
+      publicChapters: [_publicChapter(274)],
+      vipChapters: [_vipChapter(275)],
+    );
+
+    expect(
+      readableChapterOpenContentApi(
+        chapters,
+        1,
+        directVipChapterRouteAvailable: true,
+      ),
+      '/wp-json/wor-reader-app/v1/vip/chapters/1275',
+    );
+  });
+
+  test('cannot open the first VIP chapter without a previous chapter fallback', () {
+    final chapters = mergeReadableChapters(
+      publicChapters: const [],
+      vipChapters: [_vipChapter(1)],
+    );
+
+    expect(
+      readableChapterOpenContentApi(
+        chapters,
+        0,
+        directVipChapterRouteAvailable: false,
+      ),
+      isEmpty,
+    );
+  });
 }
 
 NovelChapter _publicChapter(int number) {

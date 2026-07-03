@@ -14,6 +14,7 @@ import 'package:galaxy_novels_app/data/repositories/reader_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/reading_history_repository.dart';
 import 'package:galaxy_novels_app/features/downloads/application/download_manager.dart';
 import 'package:galaxy_novels_app/features/history/presentation/history_screen.dart';
+import 'package:galaxy_novels_app/shared/widgets/novel_cover.dart';
 
 import '../../helpers/fake_reader_preferences_repository.dart';
 import '../../helpers/fake_auth_repository.dart';
@@ -81,12 +82,69 @@ void main() {
     expect(find.text('60%'), findsNothing);
     expect(find.text('موضع محفوظ'), findsOneWidget);
   });
+
+  testWidgets('renders novel covers for history entries when available', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _HistoryTestApp(
+        readingHistoryRepository: _TestReadingHistoryRepository([
+          ReadingProgress(
+            novelId: 99,
+            novelTitle: 'رواية بغلاف',
+            chapterId: 10,
+            chapterTitle: 'الفصل 10',
+            contentApi: '/wp-json/wor-reader-app/v1/chapters/10',
+            coverUrl: '/wp-content/uploads/covers/history.jpg',
+            updatedAt: DateTime.utc(2026, 6, 20, 10),
+          ),
+        ]),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(NovelCover), findsWidgets);
+  });
+
+  testWidgets('opens VIP history entries with their private content API', (
+    tester,
+  ) async {
+    final readerRepository = _RecordingReaderRepository();
+    await tester.pumpWidget(
+      _HistoryTestApp(
+        readerRepository: readerRepository,
+        readingHistoryRepository: _TestReadingHistoryRepository([
+          ReadingProgress(
+            novelId: 99,
+            novelTitle: 'رواية VIP',
+            chapterId: 275,
+            chapterTitle: 'الفصل 275',
+            contentApi: '/wp-json/wor-reader-app/v1/vip/chapters/275',
+            updatedAt: DateTime.utc(2026, 6, 20, 10),
+          ),
+        ]),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('رواية VIP'));
+    await tester.pumpAndSettle();
+
+    expect(
+      readerRepository.loadedApis,
+      contains('/wp-json/wor-reader-app/v1/vip/chapters/275'),
+    );
+  });
 }
 
 class _HistoryTestApp extends StatelessWidget {
-  const _HistoryTestApp({required this.readingHistoryRepository});
+  const _HistoryTestApp({
+    required this.readingHistoryRepository,
+    this.readerRepository = const _TestReaderRepository(),
+  });
 
   final ReadingHistoryRepository readingHistoryRepository;
+  final ReaderRepository readerRepository;
 
   @override
   Widget build(BuildContext context) {
@@ -96,7 +154,7 @@ class _HistoryTestApp extends StatelessWidget {
       homeRepository: const FakeHomeRepository(),
       catalogRepository: const FakeCatalogRepository(),
       novelRepository: const FakeNovelRepository(result: null),
-      readerRepository: const _TestReaderRepository(),
+      readerRepository: readerRepository,
       rankingsRepository: const FakeRankingsRepository(),
       searchRepository: const FakeSearchRepository(),
       readingHistoryRepository: readingHistoryRepository,
@@ -153,6 +211,31 @@ class _TestReaderRepository implements ReaderRepository {
       position: 1,
       total: 1,
       contentHtml: '<p>نص الفصل</p>',
+      navigation: ReaderChapterNavigation(
+        previousApi: '',
+        nextApi: '',
+        previousId: 0,
+        nextId: 0,
+      ),
+    );
+  }
+}
+
+class _RecordingReaderRepository implements ReaderRepository {
+  final loadedApis = <String>[];
+
+  @override
+  Future<ReaderChapterContent> loadChapter(String contentApi) async {
+    loadedApis.add(contentApi);
+    return const ReaderChapterContent(
+      id: 275,
+      novelId: 99,
+      label: 'الفصل 275',
+      title: '',
+      displayTitle: 'الفصل 275',
+      position: 275,
+      total: 360,
+      contentHtml: '<p>نص VIP</p>',
       navigation: ReaderChapterNavigation(
         previousApi: '',
         nextApi: '',

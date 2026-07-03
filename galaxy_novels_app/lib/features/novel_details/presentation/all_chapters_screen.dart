@@ -2,15 +2,18 @@ import 'package:flutter/material.dart';
 
 import '../../../app/app_dependencies.dart';
 import '../../../app/app_theme.dart';
+import '../../../core/text/arabic_search_normalizer.dart';
 import '../../../data/models/novel_details_data.dart';
 import '../../../data/repositories/downloads_repository.dart';
 import '../../../data/repositories/novel_repository.dart';
 import '../../downloads/application/download_manager.dart';
 import '../../downloads/presentation/chapter_download_button.dart';
 import '../../reader/presentation/reader_screen.dart';
+import '../../rewards/application/reader_rewards_repository.dart';
 import '../../vip/application/vip_chapters_controller.dart';
 import '../../vip/domain/vip_chapter.dart';
 import '../domain/readable_chapter.dart';
+import 'visible_chapter_count.dart';
 import 'widgets/readable_chapter_tile.dart';
 
 class AllChaptersScreen extends StatefulWidget {
@@ -18,12 +21,14 @@ class AllChaptersScreen extends StatefulWidget {
     required this.result,
     required this.vipController,
     required this.canReadPrivate,
+    required this.isVipDirectContentRouteAvailable,
     super.key,
   });
 
   final NovelDetailsLoadResult result;
   final VipChaptersController vipController;
   final bool canReadPrivate;
+  final bool isVipDirectContentRouteAvailable;
 
   @override
   State<AllChaptersScreen> createState() => _AllChaptersScreenState();
@@ -31,7 +36,9 @@ class AllChaptersScreen extends StatefulWidget {
 
 class _AllChaptersScreenState extends State<AllChaptersScreen> {
   final ScrollController _listController = ScrollController();
+  final TextEditingController _searchController = TextEditingController();
   int _pageIndex = 0;
+  String _searchQuery = '';
 
   @override
   void initState() {
@@ -51,6 +58,7 @@ class _AllChaptersScreenState extends State<AllChaptersScreen> {
   @override
   void dispose() {
     _listController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -70,11 +78,19 @@ class _AllChaptersScreenState extends State<AllChaptersScreen> {
               publicChapters: widget.result.chapters,
               vipChapters: _vipChaptersFor(vipState),
             );
-            final pageCount = chapterPageCount(chapters);
+            final filteredChapters = _filteredChapters(chapters);
+            final hasSearchQuery = _searchQuery.trim().isNotEmpty;
+            final visibleTotalCount = visibleNovelChapterCount(
+              publicChapterCount: widget.result.details.chaptersCount,
+              loadedPublicChapterCount: widget.result.chapters.length,
+              canReadPrivate: widget.canReadPrivate,
+              vipState: vipState,
+            );
+            final pageCount = chapterPageCount(filteredChapters);
             final pageIndex = pageCount == 0
                 ? 0
                 : _pageIndex.clamp(0, pageCount - 1);
-            final pageItems = chapterPageItems(chapters, pageIndex);
+            final pageItems = chapterPageItems(filteredChapters, pageIndex);
 
             return ValueListenableBuilder<DownloadsState>(
               valueListenable: downloadsRepository.state,
@@ -88,38 +104,51 @@ class _AllChaptersScreenState extends State<AllChaptersScreen> {
                     _ChapterPager(
                       pageIndex: pageIndex,
                       pageCount: pageCount,
-                      totalCount: chapters.length,
+                      totalCount: hasSearchQuery
+                          ? filteredChapters.length
+                          : visibleTotalCount,
+                      isFiltered: hasSearchQuery,
                       onSelected: _selectPage,
                     ),
+                    _ChapterSearchField(
+                      controller: _searchController,
+                      query: _searchQuery,
+                      onChanged: _changeSearchQuery,
+                      onClear: _clearSearchQuery,
+                    ),
                     Expanded(
-                      child: ListView.builder(
-                        controller: _listController,
-                        padding: const EdgeInsets.only(bottom: 16),
-                        itemCount:
-                            pageItems.length + _moreVipButtonCount(vipState),
-                        itemBuilder: (context, index) {
-                          if (index == pageItems.length) {
-                            return _LoadMoreVipButton(
-                              isLoading: vipState.isLoadingMore,
-                              onPressed: widget.vipController.loadMore,
-                            );
-                          }
+                      child: pageItems.isEmpty
+                          ? _NoChapterSearchResultsView(query: _searchQuery)
+                          : ListView.builder(
+                              controller: _listController,
+                              padding: const EdgeInsets.only(bottom: 16),
+                              itemCount:
+                                  pageItems.length +
+                                  _moreVipButtonCount(vipState),
+                              itemBuilder: (context, index) {
+                                if (index == pageItems.length) {
+                                  return _LoadMoreVipButton(
+                                    isLoading: vipState.isLoadingMore,
+                                    onPressed: widget.vipController.loadMore,
+                                  );
+                                }
 
-                          final chapter = pageItems[index];
-                          return ReadableChapterTile(
-                            chapter: chapter,
-                            trailingAction: chapter.isVip
-                                ? null
-                                : _downloadAction(
-                                    context,
-                                    downloadsState,
-                                    downloadManager,
-                                    chapter,
-                                  ),
-                            onTap: () => _openChapter(chapter),
-                          );
-                        },
-                      ),
+                                final chapter = pageItems[index];
+                                return ReadableChapterTile(
+                                  chapter: chapter,
+                                  trailingAction: chapter.isVip
+                                      ? null
+                                      : _downloadAction(
+                                          context,
+                                          downloadsState,
+                                          downloadManager,
+                                          chapter,
+                                        ),
+                                  onTap: () =>
+                                      _openChapter(filteredChapters, chapter),
+                                );
+                              },
+                            ),
                     ),
                   ],
                 );
@@ -147,6 +176,41 @@ class _AllChaptersScreenState extends State<AllChaptersScreen> {
         curve: Curves.easeOutCubic,
       );
     });
+  }
+
+  void _changeSearchQuery(String value) {
+    setState(() {
+      _searchQuery = value;
+      _pageIndex = 0;
+    });
+    _jumpListToTop();
+  }
+
+  void _clearSearchQuery() {
+    if (_searchQuery.isEmpty) {
+      return;
+    }
+    _searchController.clear();
+    _changeSearchQuery('');
+  }
+
+  void _jumpListToTop() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_listController.hasClients) {
+        return;
+      }
+      _listController.jumpTo(0);
+    });
+  }
+
+  List<ReadableChapter> _filteredChapters(List<ReadableChapter> chapters) {
+    final query = _normalizeChapterSearchText(_searchQuery);
+    if (query.isEmpty) {
+      return chapters;
+    }
+    return List.unmodifiable(
+      chapters.where((chapter) => _chapterMatchesQuery(chapter, query)),
+    );
   }
 
   List<VipChapter> _vipChaptersFor(VipChaptersState state) {
@@ -214,6 +278,12 @@ class _AllChaptersScreenState extends State<AllChaptersScreen> {
           const SnackBar(content: Text('وصلت إلى حد 100 فصل محمل')),
         );
       }
+    } on InsufficientDownloadPointsException {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('رصيد النقاط لا يكفي لتحميل هذا الفصل')),
+        );
+      }
     } catch (_) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -223,16 +293,30 @@ class _AllChaptersScreenState extends State<AllChaptersScreen> {
     }
   }
 
-  void _openChapter(ReadableChapter chapter) {
-    if (chapter.contentApi.isEmpty) {
+  void _openChapter(List<ReadableChapter> chapters, ReadableChapter chapter) {
+    final index = chapters.indexOf(chapter);
+    final contentApi = readableChapterOpenContentApi(
+      chapters,
+      index,
+      directVipChapterRouteAvailable: widget.isVipDirectContentRouteAvailable,
+    );
+    if (contentApi.isEmpty) {
+      if (chapter.isVip) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('قراءة هذا الفصل تحتاج تحديث مسار VIP في السيرفر.'),
+          ),
+        );
+      }
       return;
     }
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (context) => ReaderScreen(
-          contentApi: chapter.contentApi,
+          contentApi: contentApi,
           chapterTitle: chapter.label,
           novelTitle: widget.result.details.title,
+          coverUrl: widget.result.details.bestCover,
         ),
       ),
     );
@@ -251,12 +335,14 @@ class _ChapterPager extends StatelessWidget {
     required this.pageIndex,
     required this.pageCount,
     required this.totalCount,
+    required this.isFiltered,
     required this.onSelected,
   });
 
   final int pageIndex;
   final int pageCount;
   final int totalCount;
+  final bool isFiltered;
   final ValueChanged<int> onSelected;
 
   @override
@@ -285,7 +371,9 @@ class _ChapterPager extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'الفصول $startNumber-$endNumber من $totalCount',
+                        isFiltered
+                            ? 'نتائج البحث $startNumber-$endNumber من $totalCount'
+                            : 'الفصول $startNumber-$endNumber من $totalCount',
                         style: theme.textTheme.titleSmall?.copyWith(
                           color: tokens.textPrimary,
                           fontWeight: FontWeight.w900,
@@ -337,6 +425,61 @@ class _ChapterPager extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ChapterSearchField extends StatelessWidget {
+  const _ChapterSearchField({
+    required this.controller,
+    required this.query,
+    required this.onChanged,
+    required this.onClear,
+  });
+
+  final TextEditingController controller;
+  final String query;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens =
+        Theme.of(context).extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+      child: TextField(
+        key: const ValueKey('chapter-search-field'),
+        controller: controller,
+        onChanged: onChanged,
+        textInputAction: TextInputAction.search,
+        decoration: InputDecoration(
+          hintText: 'ابحث برقم الفصل أو العنوان',
+          prefixIcon: const Icon(Icons.search_rounded),
+          suffixIcon: query.isEmpty
+              ? null
+              : IconButton(
+                  tooltip: 'مسح البحث',
+                  onPressed: onClear,
+                  icon: const Icon(Icons.close_rounded),
+                ),
+          filled: true,
+          fillColor: tokens.surface,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide(color: tokens.border),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide(color: tokens.border),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide(color: tokens.primary),
+          ),
         ),
       ),
     );
@@ -460,6 +603,48 @@ class _LoadMoreVipButton extends StatelessWidget {
   }
 }
 
+class _NoChapterSearchResultsView extends StatelessWidget {
+  const _NoChapterSearchResultsView({required this.query});
+
+  final String query;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tokens = theme.extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.search_off_rounded, color: tokens.textSecondary),
+            const SizedBox(height: 10),
+            Text(
+              'لا توجد فصول مطابقة',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleSmall?.copyWith(
+                color: tokens.textPrimary,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              'جرّب رقم فصل أو كلمة من العنوان.',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: tokens.textSecondary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _EmptyChaptersView extends StatelessWidget {
   const _EmptyChaptersView();
 
@@ -482,4 +667,21 @@ class _EmptyChaptersView extends StatelessWidget {
       ),
     );
   }
+}
+
+bool _chapterMatchesQuery(ReadableChapter chapter, String query) {
+  final searchable = _normalizeChapterSearchText(
+    [
+      chapter.number,
+      chapter.label,
+      chapter.title,
+      chapter.dateLabel,
+      chapter.isVip ? 'vip' : '',
+    ].join(' '),
+  );
+  return searchable.contains(query);
+}
+
+String _normalizeChapterSearchText(String value) {
+  return normalizeArabicSearch(value);
 }

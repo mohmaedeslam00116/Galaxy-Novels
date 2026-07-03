@@ -94,7 +94,7 @@ void main() {
     expect(openedPath, 'vip:chapter:1');
   });
 
-  testWidgets('opens a server-provided VIP content_api when present', (
+  testWidgets('guards server-provided direct VIP content_api when unavailable', (
     tester,
   ) async {
     String? openedPath;
@@ -119,8 +119,10 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('الفصل 1'));
+    await tester.pump();
 
-    expect(openedPath, '/wp-json/wor-reader-app/v1/vip/chapters/1');
+    expect(openedPath, isNull);
+    expect(find.textContaining('تنتظر تحديث السيرفر'), findsOneWidget);
   });
 }
 

@@ -10,6 +10,7 @@ class HomeContinueReadingEntry {
     required this.chapterTitle,
     required this.completionPercent,
     required this.contentApi,
+    this.coverUrl = '',
   });
 
   factory HomeContinueReadingEntry.fromHome(ReadingProgress progress) {
@@ -18,6 +19,7 @@ class HomeContinueReadingEntry {
       chapterTitle: progress.chapterLabel,
       completionPercent: progress.progress,
       contentApi: '',
+      coverUrl: '',
     );
   }
 
@@ -29,6 +31,7 @@ class HomeContinueReadingEntry {
       chapterTitle: progress.displayChapterTitle,
       completionPercent: progress.completionPercent,
       contentApi: progress.contentApi,
+      coverUrl: progress.coverUrl,
     );
   }
 
@@ -36,6 +39,7 @@ class HomeContinueReadingEntry {
   final String chapterTitle;
   final int? completionPercent;
   final String contentApi;
+  final String coverUrl;
 
   String get leadingLabel =>
       completionPercent == null ? 'متابعة' : '$completionPercent%';

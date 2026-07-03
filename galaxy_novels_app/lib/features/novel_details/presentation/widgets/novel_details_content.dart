@@ -15,6 +15,7 @@ import '../../../account/application/auth_repository.dart';
 import '../../../novel_engagement/application/novel_engagement_controller.dart';
 import '../../../novel_engagement/presentation/novel_personal_state_section.dart';
 import '../../../vip/application/vip_chapters_controller.dart';
+import '../visible_chapter_count.dart';
 import 'favorite_toggle_button.dart';
 import 'novel_chapters_section.dart';
 import 'novel_details_header.dart';
@@ -62,6 +63,12 @@ class _NovelDetailsContentState extends State<NovelDetailsContent> {
   CommentsController? _commentsController;
 
   @override
+  void initState() {
+    super.initState();
+    _loadVipIfAllowed();
+  }
+
+  @override
   void didUpdateWidget(covariant NovelDetailsContent oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.loadResult.details.id != widget.loadResult.details.id ||
@@ -69,6 +76,12 @@ class _NovelDetailsContentState extends State<NovelDetailsContent> {
       _commentsController?.dispose();
       _commentsController = null;
       _section = _NovelDetailsSection.chapters;
+    }
+    if (oldWidget.vipController != widget.vipController ||
+        oldWidget.loadResult.details.id != widget.loadResult.details.id ||
+        oldWidget.engagementState.userState?.vip.canReadPrivate !=
+            widget.engagementState.userState?.vip.canReadPrivate) {
+      _loadVipIfAllowed();
     }
   }
 
@@ -88,7 +101,28 @@ class _NovelDetailsContentState extends State<NovelDetailsContent> {
       children: [
         CustomScrollView(
           slivers: [
-            SliverToBoxAdapter(child: NovelDetailsHeader(details: details)),
+            SliverToBoxAdapter(
+              child: ValueListenableBuilder<VipChaptersState>(
+                valueListenable: widget.vipController,
+                builder: (context, vipState, _) {
+                  return NovelDetailsHeader(
+                    details: details,
+                    chaptersCount: visibleNovelChapterCount(
+                      publicChapterCount: details.chaptersCount,
+                      loadedPublicChapterCount: loadResult.chapters.length,
+                      canReadPrivate:
+                          widget
+                              .engagementState
+                              .userState
+                              ?.vip
+                              .canReadPrivate ??
+                          false,
+                      vipState: vipState,
+                    ),
+                  );
+                },
+              ),
+            ),
             SliverToBoxAdapter(
               child: NovelPersonalStateSection(
                 state: widget.engagementState,
@@ -114,6 +148,8 @@ class _NovelDetailsContentState extends State<NovelDetailsContent> {
                 canReadPrivate:
                     widget.engagementState.userState?.vip.canReadPrivate ??
                     false,
+                isVipDirectContentRouteAvailable:
+                    widget.isVipNativeReaderAvailable,
                 onRead: widget.onRead,
                 onOpenVipChapter: widget.onOpenVipChapter,
                 onDownloadChapters: widget.onDownloadChapters,
@@ -166,6 +202,15 @@ class _NovelDetailsContentState extends State<NovelDetailsContent> {
   void dispose() {
     _commentsController?.dispose();
     super.dispose();
+  }
+
+  void _loadVipIfAllowed() {
+    final canReadPrivate =
+        widget.engagementState.userState?.vip.canReadPrivate ?? false;
+    if (canReadPrivate &&
+        widget.loadResult.details.vipScheduleManifest.isNotEmpty) {
+      unawaited(widget.vipController.loadInitial());
+    }
   }
 }
 

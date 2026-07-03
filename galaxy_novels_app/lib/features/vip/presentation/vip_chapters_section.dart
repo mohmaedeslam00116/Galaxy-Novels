@@ -128,7 +128,7 @@ class _VipChaptersSectionState extends State<VipChaptersSection> {
     final contentApi = chapter.contentApi.isNotEmpty
         ? chapter.contentApi
         : VipReaderRequest.chapter(chapter.id);
-    if (!widget.nativeReaderAvailable && chapter.contentApi.isEmpty) {
+    if (!widget.nativeReaderAvailable && _isDirectVipChapterApi(contentApi)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('قراءة فصول VIP داخل التطبيق تنتظر تحديث السيرفر.'),
@@ -138,6 +138,11 @@ class _VipChaptersSectionState extends State<VipChaptersSection> {
     }
 
     widget.onOpenVipChapter(contentApi, chapter.displayLabel);
+  }
+
+  bool _isDirectVipChapterApi(String contentApi) {
+    final request = VipReaderRequest.tryParse(contentApi);
+    return request?.kind == VipReaderRequestKind.chapter;
   }
 }
 

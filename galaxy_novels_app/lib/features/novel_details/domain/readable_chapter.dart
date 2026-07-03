@@ -1,4 +1,5 @@
 import '../../../data/models/novel_details_data.dart';
+import '../../vip/data/vip_reader_request.dart';
 import '../../vip/domain/vip_chapter.dart';
 
 const chaptersPerPage = 50;
@@ -135,4 +136,31 @@ List<ReadableChapter> chapterPageItems(
 
   final end = (start + chaptersPerPage).clamp(0, chapters.length);
   return List.unmodifiable(chapters.sublist(start, end));
+}
+
+String readableChapterOpenContentApi(
+  List<ReadableChapter> chapters,
+  int index, {
+  required bool directVipChapterRouteAvailable,
+}) {
+  if (index < 0 || index >= chapters.length) {
+    return '';
+  }
+
+  final chapter = chapters[index];
+  if (!chapter.isVip) {
+    return chapter.contentApi;
+  }
+
+  final directApi = chapter.contentApi;
+  if (directVipChapterRouteAvailable || !_isDirectVipChapterApi(directApi)) {
+    return directApi;
+  }
+
+  return '';
+}
+
+bool _isDirectVipChapterApi(String contentApi) {
+  final request = VipReaderRequest.tryParse(contentApi);
+  return request?.kind == VipReaderRequestKind.chapter;
 }

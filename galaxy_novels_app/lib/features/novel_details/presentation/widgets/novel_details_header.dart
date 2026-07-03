@@ -6,15 +6,21 @@ import '../../../../shared/widgets/novel_cover.dart';
 import '../../../../shared/widgets/status_badge.dart';
 
 class NovelDetailsHeader extends StatelessWidget {
-  const NovelDetailsHeader({required this.details, super.key});
+  const NovelDetailsHeader({
+    required this.details,
+    this.chaptersCount,
+    super.key,
+  });
 
   final NovelDetails details;
+  final int? chaptersCount;
 
   @override
   Widget build(BuildContext context) {
     final tokens =
         Theme.of(context).extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
     final countryLabel = _countryLabel(details.country);
+    final visibleChaptersCount = chaptersCount ?? details.chaptersCount;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
@@ -61,7 +67,10 @@ class NovelDetailsHeader extends StatelessWidget {
                     info,
                   ],
                   const SizedBox(height: 16),
-                  _HeroStatsStrip(details: details),
+                  _HeroStatsStrip(
+                    details: details,
+                    chaptersCount: visibleChaptersCount,
+                  ),
                 ],
               );
             },
@@ -208,9 +217,10 @@ class _CoverShowcase extends StatelessWidget {
 }
 
 class _HeroStatsStrip extends StatelessWidget {
-  const _HeroStatsStrip({required this.details});
+  const _HeroStatsStrip({required this.details, required this.chaptersCount});
 
   final NovelDetails details;
+  final int chaptersCount;
 
   @override
   Widget build(BuildContext context) {
@@ -234,7 +244,7 @@ class _HeroStatsStrip extends StatelessWidget {
             Expanded(
               child: _HeroStatItem(
                 icon: Icons.menu_book_outlined,
-                value: details.chaptersCount.toString(),
+                value: chaptersCount.toString(),
                 label: 'فصل',
                 color: tokens.accent,
               ),

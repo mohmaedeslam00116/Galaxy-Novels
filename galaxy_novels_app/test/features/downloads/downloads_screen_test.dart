@@ -16,6 +16,7 @@ import 'package:galaxy_novels_app/data/repositories/reader_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/reading_history_repository.dart';
 import 'package:galaxy_novels_app/features/downloads/application/download_manager.dart';
 import 'package:galaxy_novels_app/features/downloads/presentation/downloads_screen.dart';
+import 'package:galaxy_novels_app/features/rewards/data/stored_reader_rewards_repository.dart';
 
 import '../../helpers/fake_reader_preferences_repository.dart';
 import '../../helpers/fake_auth_repository.dart';
@@ -76,16 +77,56 @@ void main() {
 
     expect(openedLibrary, isTrue);
   });
+
+  testWidgets('shows the downloads command center and local points balance', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _DownloadsTestApp(
+        downloadsRepository: FakeDownloadsRepository(),
+        readerRewardsRepository: StoredReaderRewardsRepository.memory(
+          initialPoints: 75,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('مركز التنزيلات'), findsOneWidget);
+    expect(find.text('75 نقطة'), findsOneWidget);
+    expect(find.textContaining('قريبا سنضيف طرقا جديدة'), findsOneWidget);
+  });
+
+  testWidgets('downloads command center fits a narrow phone', (tester) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      _DownloadsTestApp(
+        downloadsRepository: FakeDownloadsRepository(),
+        readerRewardsRepository: StoredReaderRewardsRepository.memory(
+          initialPoints: 25,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('مركز التنزيلات'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 class _DownloadsTestApp extends StatelessWidget {
   const _DownloadsTestApp({
     required this.downloadsRepository,
     this.onOpenLibrary,
+    this.readerRewardsRepository = const NoopReaderRewardsRepository(),
   });
 
   final DownloadsRepository downloadsRepository;
   final VoidCallback? onOpenLibrary;
+  final ReaderRewardsRepository readerRewardsRepository;
 
   @override
   Widget build(BuildContext context) {
@@ -100,6 +141,7 @@ class _DownloadsTestApp extends StatelessWidget {
       readingHistoryRepository: const _TestReadingHistoryRepository(),
       downloadsRepository: downloadsRepository,
       downloadManager: DownloadManager(repository: downloadsRepository),
+      readerRewardsRepository: readerRewardsRepository,
       readerPreferencesRepository: FakeReaderPreferencesRepository(),
       authRepository: FakeAuthRepository(),
       commentsRepository: FakeCommentsRepository.empty(),

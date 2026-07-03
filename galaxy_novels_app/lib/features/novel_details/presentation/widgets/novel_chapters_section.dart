@@ -8,10 +8,12 @@ import '../../../../data/repositories/novel_repository.dart';
 import '../../../../shared/widgets/section_title.dart';
 import '../../../downloads/application/download_manager.dart';
 import '../../../downloads/presentation/chapter_download_button.dart';
+import '../../../rewards/application/reader_rewards_repository.dart';
 import '../../../vip/application/vip_chapters_controller.dart';
 import '../../../vip/domain/vip_chapter.dart';
 import '../../domain/readable_chapter.dart';
 import '../all_chapters_screen.dart';
+import '../visible_chapter_count.dart';
 import 'readable_chapter_tile.dart';
 
 class NovelChaptersSection extends StatefulWidget {
@@ -19,6 +21,7 @@ class NovelChaptersSection extends StatefulWidget {
     required this.result,
     required this.vipController,
     required this.canReadPrivate,
+    required this.isVipDirectContentRouteAvailable,
     required this.onRead,
     required this.onOpenVipChapter,
     required this.onDownloadChapters,
@@ -28,6 +31,7 @@ class NovelChaptersSection extends StatefulWidget {
   final NovelDetailsLoadResult result;
   final VipChaptersController vipController;
   final bool canReadPrivate;
+  final bool isVipDirectContentRouteAvailable;
   final void Function(NovelChapter chapter, String novelTitle) onRead;
   final void Function(String contentApi, String title) onOpenVipChapter;
   final VoidCallback onDownloadChapters;
@@ -61,6 +65,12 @@ class _NovelChaptersSectionState extends State<NovelChaptersSection> {
         final chapters = mergeReadableChapters(
           publicChapters: widget.result.chapters,
           vipChapters: _vipChaptersFor(vipState),
+        );
+        final visibleTotalCount = visibleNovelChapterCount(
+          publicChapterCount: widget.result.details.chaptersCount,
+          loadedPublicChapterCount: widget.result.chapters.length,
+          canReadPrivate: widget.canReadPrivate,
+          vipState: vipState,
         );
         final previewChapters = chapterPageItems(chapters, 0);
         final canShowAll =
@@ -104,13 +114,15 @@ class _NovelChaptersSectionState extends State<NovelChaptersSection> {
               _PreviewChapterSliverList(
                 result: widget.result,
                 chapters: previewChapters,
+                isVipDirectContentRouteAvailable:
+                    widget.isVipDirectContentRouteAvailable,
                 onRead: widget.onRead,
                 onOpenVipChapter: widget.onOpenVipChapter,
               ),
               if (canShowAll)
                 SliverToBoxAdapter(
                   child: _ShowAllChaptersButton(
-                    totalCount: chapters.length,
+                    totalCount: visibleTotalCount,
                     onPressed: _openAllChapters,
                   ),
                 ),
@@ -135,6 +147,8 @@ class _NovelChaptersSectionState extends State<NovelChaptersSection> {
           result: widget.result,
           vipController: widget.vipController,
           canReadPrivate: widget.canReadPrivate,
+          isVipDirectContentRouteAvailable:
+              widget.isVipDirectContentRouteAvailable,
         ),
       ),
     );
@@ -152,12 +166,14 @@ class _PreviewChapterSliverList extends StatelessWidget {
   const _PreviewChapterSliverList({
     required this.result,
     required this.chapters,
+    required this.isVipDirectContentRouteAvailable,
     required this.onRead,
     required this.onOpenVipChapter,
   });
 
   final NovelDetailsLoadResult result;
   final List<ReadableChapter> chapters;
+  final bool isVipDirectContentRouteAvailable;
   final void Function(NovelChapter chapter, String novelTitle) onRead;
   final void Function(String contentApi, String title) onOpenVipChapter;
 
@@ -184,7 +200,7 @@ class _PreviewChapterSliverList extends StatelessWidget {
                         downloadManager,
                         chapter,
                       ),
-                onTap: () => _openChapter(chapter),
+                onTap: () => _openChapter(context, index),
               );
             },
             childCount: chapters.length,
@@ -244,6 +260,12 @@ class _PreviewChapterSliverList extends StatelessWidget {
           const SnackBar(content: Text('وصلت إلى حد 100 فصل محمل')),
         );
       }
+    } on InsufficientDownloadPointsException {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('رصيد النقاط لا يكفي لتحميل هذا الفصل')),
+        );
+      }
     } catch (_) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -253,9 +275,23 @@ class _PreviewChapterSliverList extends StatelessWidget {
     }
   }
 
-  void _openChapter(ReadableChapter chapter) {
+  void _openChapter(BuildContext context, int index) {
+    final chapter = chapters[index];
     if (chapter.isVip) {
-      onOpenVipChapter(chapter.contentApi, chapter.label);
+      final contentApi = readableChapterOpenContentApi(
+        chapters,
+        index,
+        directVipChapterRouteAvailable: isVipDirectContentRouteAvailable,
+      );
+      if (contentApi.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('قراءة هذا الفصل تحتاج تحديث مسار VIP في السيرفر.'),
+          ),
+        );
+        return;
+      }
+      onOpenVipChapter(contentApi, chapter.label);
       return;
     }
     final publicChapter = chapter.publicChapter;

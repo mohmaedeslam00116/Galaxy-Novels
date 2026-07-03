@@ -26,6 +26,7 @@ import 'package:galaxy_novels_app/features/about/presentation/about_screen.dart'
 import 'package:galaxy_novels_app/features/account/domain/auth_session.dart';
 import 'package:galaxy_novels_app/features/novel_engagement/application/novel_engagement_repository.dart';
 import 'package:galaxy_novels_app/features/novel_engagement/domain/novel_user_state.dart';
+import 'package:galaxy_novels_app/features/rewards/data/stored_reader_rewards_repository.dart';
 import 'package:galaxy_novels_app/features/shell/presentation/app_shell.dart';
 
 import 'helpers/fake_auth_repository.dart';
@@ -114,6 +115,27 @@ void main() {
 
     final shellContext = tester.element(find.byType(AppShell));
     expect(AppDependencies.of(shellContext).vipRepository, same(vipRepository));
+  });
+
+  testWidgets('restores the saved account session when the app starts', (
+    tester,
+  ) async {
+    final authRepository = _StartupRestoringAuthRepository(
+      restoredState: const AuthSessionState.authenticated(_testVipAuthUser),
+    );
+    await tester.pumpWidget(
+      GalaxyNovelsApp(
+        homeRepository: _TestHomeRepository(_homeData),
+        catalogRepository: const _TestCatalogRepository(),
+        novelRepository: const _TestNovelRepository(),
+        authRepository: authRepository,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(authRepository.restoreCalls, 1);
+    expect(authRepository.value.status, AuthSessionStatus.authenticated);
+    expect(authRepository.value.user?.vip.active, isTrue);
   });
 
   testWidgets('opens account screen and submits login credentials', (
@@ -1108,6 +1130,9 @@ void main() {
         novelRepository: const _TestNovelRepository(),
         readerRepository: const _TestReaderRepository(),
         downloadsRepository: downloadsRepository,
+        readerRewardsRepository: StoredReaderRewardsRepository.memory(
+          initialPoints: 10,
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -1173,6 +1198,9 @@ void main() {
         novelRepository: const _TestNovelRepository(),
         readerRepository: const _TestReaderRepository(),
         downloadsRepository: downloadsRepository,
+        readerRewardsRepository: StoredReaderRewardsRepository.memory(
+          initialPoints: 10,
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -1194,7 +1222,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('download-chapter-1')));
     await tester.pump();
-    await tester.tap(find.text('تحميل 1 فصل'));
+    await tester.tap(find.text('تحميل 1 فصل • 1 نقطة'));
     await tester.pumpAndSettle();
 
     expect(find.text('اكتمل التنزيل'), findsOneWidget);
@@ -1534,6 +1562,34 @@ const _testAuthUser = AuthUser(
     rank: AuthRank(level: 2, display: 'مستكشف'),
   ),
 );
+
+const _testVipAuthUser = AuthUser(
+  id: 8,
+  displayName: 'قارئ VIP',
+  avatar: null,
+  vip: AuthVip(active: true, tier: 'max', label: 'VIP Max', expiresAt: null),
+  xp: AuthXp(
+    total: 120,
+    today: 10,
+    secondsTotal: 600,
+    chaptersTotal: 8,
+    rank: AuthRank(level: 2, display: 'مستكشف'),
+  ),
+);
+
+class _StartupRestoringAuthRepository extends FakeAuthRepository {
+  _StartupRestoringAuthRepository({required this.restoredState})
+    : super(initialState: const AuthSessionState.idle());
+
+  final AuthSessionState restoredState;
+  int restoreCalls = 0;
+
+  @override
+  Future<void> restoreSession() async {
+    restoreCalls += 1;
+    value = restoredState;
+  }
+}
 
 class _TestHomeRepository implements HomeRepository {
   const _TestHomeRepository(this.data);

@@ -96,6 +96,7 @@ class _DownloadedNovelScreenState extends State<DownloadedNovelScreen> {
           contentApi: chapter.contentApi,
           chapterTitle: chapter.chapterLabel,
           novelTitle: chapter.novelTitle,
+          coverUrl: chapter.novelCover,
         ),
       ),
     );
