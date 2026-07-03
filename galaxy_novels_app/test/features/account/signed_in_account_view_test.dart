@@ -103,6 +103,33 @@ void main() {
     expect(find.textContaining('ينتهي'), findsOneWidget);
     expect(find.textContaining('2026'), findsOneWidget);
   });
+
+  testWidgets('offers a profile refresh action backed by the account API', (
+    tester,
+  ) async {
+    var refreshCount = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Directionality(
+          textDirection: TextDirection.rtl,
+          child: Scaffold(
+            body: SignedInAccountView(
+              user: _user,
+              isSigningOut: false,
+              onLogout: () async {},
+              onRefreshProfile: () async => refreshCount += 1,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('account-refresh-profile')));
+    await tester.pump();
+
+    expect(refreshCount, 1);
+  });
 }
 
 const _user = _TestAuthUser(

@@ -45,6 +45,7 @@ class AccountSessionView extends StatelessWidget {
             noticeMessage: state.noticeMessage,
             isSigningOut: state.status == AuthSessionStatus.signingOut,
             onLogout: repository.logout,
+            onRefreshProfile: repository.refreshProfile,
             onOpenFavorites: onOpenFavorites,
             onOpenHistory: onOpenHistory,
             onOpenDownloads: onOpenDownloads,

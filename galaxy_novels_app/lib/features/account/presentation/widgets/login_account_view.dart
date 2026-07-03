@@ -55,7 +55,9 @@ class _LoginAccountViewState extends State<LoginAccountView> {
                 color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 16),
+            const _LoginScopeNotice(),
+            const SizedBox(height: 22),
             TextFormField(
               key: const ValueKey('login-username'),
               controller: _usernameController,
@@ -162,6 +164,43 @@ class _LoginAccountViewState extends State<LoginAccountView> {
     _usernameController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+}
+
+class _LoginScopeNotice extends StatelessWidget {
+  const _LoginScopeNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: colors.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+        child: Row(
+          children: [
+            Icon(Icons.verified_user_outlined, color: colors.secondary),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'استخدم حساب موقع مجرة الروايات الحالي للدخول.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colors.onSurfaceVariant,
+                  fontWeight: FontWeight.w800,
+                  height: 1.35,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

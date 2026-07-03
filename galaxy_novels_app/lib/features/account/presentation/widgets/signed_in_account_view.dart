@@ -12,6 +12,7 @@ class SignedInAccountView extends StatelessWidget {
     required this.isSigningOut,
     required this.onLogout,
     this.noticeMessage,
+    this.onRefreshProfile,
     this.onOpenFavorites,
     this.onOpenHistory,
     this.onOpenDownloads,
@@ -23,6 +24,7 @@ class SignedInAccountView extends StatelessWidget {
   final bool isSigningOut;
   final String? noticeMessage;
   final Future<void> Function() onLogout;
+  final Future<void> Function()? onRefreshProfile;
   final VoidCallback? onOpenFavorites;
   final VoidCallback? onOpenHistory;
   final VoidCallback? onOpenDownloads;
@@ -53,7 +55,13 @@ class SignedInAccountView extends StatelessWidget {
                       AccountHeroPanel(user: user),
                       const SizedBox(height: 18),
                       ReadingStatsGrid(user: user),
-                      const SizedBox(height: 22),
+                      if (onRefreshProfile != null) ...[
+                        const SizedBox(height: 8),
+                        _AccountSessionTools(
+                          onRefreshProfile: onRefreshProfile!,
+                        ),
+                      ],
+                      const SizedBox(height: 16),
                       const AccountSectionTitle(title: 'لوحة القارئ'),
                       const SizedBox(height: 10),
                       AccountShortcutGrid(
@@ -66,7 +74,7 @@ class SignedInAccountView extends StatelessWidget {
                         const SizedBox(height: 18),
                         AccountNotice(message: message),
                       ],
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 16),
                       LogoutButton(
                         isSigningOut: isSigningOut,
                         onLogout: onLogout,
@@ -78,6 +86,54 @@ class SignedInAccountView extends StatelessWidget {
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+class _AccountSessionTools extends StatelessWidget {
+  const _AccountSessionTools({required this.onRefreshProfile});
+
+  final Future<void> Function() onRefreshProfile;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: colors.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        child: Row(
+          children: [
+            Icon(Icons.sync_rounded, color: colors.secondary, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'بيانات الحساب تأتي من الموقع ويمكن تحديثها عند الحاجة.',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colors.onSurfaceVariant,
+                  fontWeight: FontWeight.w800,
+                  height: 1.35,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            OutlinedButton.icon(
+              key: const ValueKey('account-refresh-profile'),
+              onPressed: onRefreshProfile,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('تحديث'),
+            ),
+          ],
+        ),
       ),
     );
   }
