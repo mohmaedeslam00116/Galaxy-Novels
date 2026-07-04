@@ -18,12 +18,14 @@ class CommentsSliverSection extends StatefulWidget {
   const CommentsSliverSection({
     required this.controller,
     this.authRepository,
+    this.onSignIn,
     this.showTitle = true,
     super.key,
   });
 
   final CommentsController controller;
   final AuthRepository? authRepository;
+  final VoidCallback? onSignIn;
   final bool showTitle;
 
   @override
@@ -67,6 +69,7 @@ class _CommentsSliverSectionState extends State<CommentsSliverSection> {
               child: CommentComposer(
                 controller: widget.controller,
                 authRepository: widget.authRepository,
+                onSignIn: widget.onSignIn,
                 replyTarget: _replyTarget,
                 onCancelReply: () => setState(() => _replyTarget = null),
                 onSubmitted: () => setState(() => _replyTarget = null),

@@ -1,4 +1,5 @@
 import '../../../core/network/private_api_client.dart';
+import '../../../core/session/session_messages.dart';
 
 String commentsMessageFor(Object error) {
   if (error is PrivateApiException) {
@@ -17,8 +18,8 @@ String commentsMessageFor(Object error) {
 
 String commentSubmitMessageFor(Object error) {
   if (error is PrivateApiException) {
-    if (error.statusCode == 401 || error.statusCode == 403) {
-      return 'سجل الدخول لكتابة تعليق.';
+    if (isSessionExpiredStatus(error.statusCode)) {
+      return sessionExpiredMessage;
     }
     if (error.statusCode == 404) {
       return 'لم تعد هذه التعليقات متاحة.';
@@ -35,8 +36,8 @@ String commentSubmitMessageFor(Object error) {
 
 String commentInteractionMessageFor(Object error) {
   if (error is PrivateApiException) {
-    if (error.statusCode == 401 || error.statusCode == 403) {
-      return 'سجل الدخول للتفاعل.';
+    if (isSessionExpiredStatus(error.statusCode)) {
+      return sessionExpiredMessage;
     }
     if (error.statusCode == 404) {
       return 'لم يعد هذا التفاعل متاحًا.';

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:galaxy_novels_app/core/network/private_api_client.dart';
 import 'package:galaxy_novels_app/features/account/domain/auth_session.dart';
 import 'package:galaxy_novels_app/features/comments/application/comments_controller.dart';
 import 'package:galaxy_novels_app/features/comments/domain/comment_interaction.dart';
@@ -154,6 +155,31 @@ void main() {
     expect(outcome.status, CommentSubmitStatus.signInRequired);
     expect(repository.submitCalls, isEmpty);
     expect(controller.value.submitErrorMessage, 'سجل الدخول لكتابة تعليق.');
+  });
+
+  test('expired submit session shows a clear sign-in message', () async {
+    final repository = FakeCommentsRepository(
+      handler: (_, sort, _) =>
+          Future.value(_page(target: CommentTarget.novel(42), sort: sort)),
+      submitHandler: (_, _, _, _) => Future.error(
+        const PrivateApiException(statusCode: 401, message: 'expired'),
+      ),
+    );
+    final controller = CommentsController(
+      repository: repository,
+      target: CommentTarget.novel(42),
+      authRepository: FakeAuthRepository(
+        initialState: const AuthSessionState.authenticated(_user),
+      ),
+    );
+    addTearDown(controller.dispose);
+    await controller.loadInitial();
+
+    final outcome = await controller.submitComment(content: 'تعليق');
+
+    expect(outcome.status, CommentSubmitStatus.failed);
+    expect(outcome.errorMessage, 'انتهت الجلسة، سجل الدخول مرة أخرى للمتابعة.');
+    expect(controller.value.submitErrorMessage, outcome.errorMessage);
   });
 
   test('authenticated submit inserts a reply under its root comment', () async {

@@ -103,6 +103,10 @@ void main() {
       harness.authRepository.value.status,
       AuthSessionStatus.authenticated,
     );
+    expect(
+      harness.repository.value.errorMessage,
+      'انتهت الجلسة، سجل الدخول مرة أخرى للمتابعة.',
+    );
     expect(authRepository.restoreCalls, 0);
   });
 

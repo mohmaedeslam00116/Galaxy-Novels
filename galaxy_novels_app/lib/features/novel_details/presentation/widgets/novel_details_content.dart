@@ -157,6 +157,7 @@ class _NovelDetailsContentState extends State<NovelDetailsContent> {
               _NovelDetailsSection.comments => CommentsSliverSection(
                 controller: _commentsController!,
                 authRepository: widget.authRepository,
+                onSignIn: widget.onSignIn,
               ),
             },
             const SliverToBoxAdapter(child: SizedBox(height: 118)),

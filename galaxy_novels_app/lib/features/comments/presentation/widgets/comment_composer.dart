@@ -13,6 +13,7 @@ class CommentComposer extends StatefulWidget {
     required this.controller,
     required this.authRepository,
     this.replyTarget,
+    this.onSignIn,
     this.onSubmitted,
     this.onCancelReply,
     super.key,
@@ -21,6 +22,7 @@ class CommentComposer extends StatefulWidget {
   final CommentsController controller;
   final AuthRepository? authRepository;
   final PublicComment? replyTarget;
+  final VoidCallback? onSignIn;
   final VoidCallback? onSubmitted;
   final VoidCallback? onCancelReply;
 
@@ -97,6 +99,14 @@ class _CommentComposerState extends State<CommentComposer> {
                         ),
                       ),
                     ),
+                    if (widget.onSignIn != null) ...[
+                      const SizedBox(width: 10),
+                      OutlinedButton(
+                        key: const ValueKey('comments-open-account'),
+                        onPressed: widget.onSignIn,
+                        child: const Text('فتح حسابي'),
+                      ),
+                    ],
                   ],
                 ),
         ),

@@ -192,6 +192,7 @@ void main() {
     final outcome = await controller.submitRating(3);
 
     expect(outcome.status, RatingSubmitStatus.failed);
+    expect(outcome.errorMessage, 'انتهت الجلسة، سجل الدخول مرة أخرى للمتابعة.');
     expect(auth.restoreCalls, 1);
   });
 }

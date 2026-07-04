@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../../../core/session/session_messages.dart';
 import '../domain/vip_chapter.dart';
 import 'vip_repository.dart';
 
@@ -126,7 +127,9 @@ class VipChaptersController extends ValueNotifier<VipChaptersState> {
             VipChaptersStatus.subscriptionRequired,
           VipAccessReason.unavailable => VipChaptersStatus.failure,
         },
-        errorMessage: error.message,
+        errorMessage: error.reason == VipAccessReason.loginRequired
+            ? sessionExpiredMessage
+            : error.message,
       );
     } catch (_) {
       value = const VipChaptersState(

@@ -1,8 +1,9 @@
 import '../../../core/network/private_api_client.dart';
+import '../../../core/session/session_messages.dart';
 
 String novelEngagementMessageFor(PrivateApiException error) {
-  if (error.statusCode == 401 || error.statusCode == 403) {
-    return 'انتهت الجلسة. سجّل الدخول وحاول مجددًا.';
+  if (isSessionExpiredStatus(error.statusCode)) {
+    return sessionExpiredMessage;
   }
   if (error.statusCode == 429) {
     return 'محاولات كثيرة. حاول لاحقًا.';

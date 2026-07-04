@@ -92,6 +92,35 @@ void main() {
     expect(find.text('إعادة المحاولة'), findsOneWidget);
   });
 
+  testWidgets('guest comment composer offers opening account screen', (
+    tester,
+  ) async {
+    var openedAccount = false;
+    final target = CommentTarget.novel(42);
+    final controller = CommentsController(
+      repository: FakeCommentsRepository.empty(),
+      target: target,
+      authRepository: FakeAuthRepository(),
+    );
+    addTearDown(controller.dispose);
+    await controller.loadInitial();
+
+    await tester.pumpWidget(
+      _surface(
+        controller,
+        authRepository: FakeAuthRepository(),
+        onSignIn: () => openedAccount = true,
+      ),
+    );
+
+    expect(find.text('سجل الدخول لكتابة تعليق.'), findsOneWidget);
+    expect(find.text('فتح حسابي'), findsOneWidget);
+
+    await tester.tap(find.text('فتح حسابي'));
+
+    expect(openedAccount, isTrue);
+  });
+
   testWidgets('authenticated reader writes a new root comment', (tester) async {
     final target = CommentTarget.novel(42);
     final repository = FakeCommentsRepository(
@@ -240,14 +269,24 @@ const _user = AuthUser(
   ),
 );
 
-Widget _surface(CommentsController controller) {
+Widget _surface(
+  CommentsController controller, {
+  FakeAuthRepository? authRepository,
+  VoidCallback? onSignIn,
+}) {
   return MaterialApp(
     theme: AppTheme.dark(),
     home: Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
         body: CustomScrollView(
-          slivers: [CommentsSliverSection(controller: controller)],
+          slivers: [
+            CommentsSliverSection(
+              controller: controller,
+              authRepository: authRepository,
+              onSignIn: onSignIn,
+            ),
+          ],
         ),
       ),
     ),

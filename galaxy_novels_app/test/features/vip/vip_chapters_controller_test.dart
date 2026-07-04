@@ -110,6 +110,23 @@ void main() {
     expect(controller.value.status, VipChaptersStatus.subscriptionRequired);
     expect(controller.value.errorMessage, 'اشتراك VIP مطلوب');
   });
+
+  test('maps login errors into the shared expired-session message', () async {
+    final controller = VipChaptersController(
+      repository: const _FailingVipRepository(
+        VipAccessException(VipAccessReason.loginRequired, 'expired'),
+      ),
+      novelId: 9,
+    );
+
+    await controller.loadInitial();
+
+    expect(controller.value.status, VipChaptersStatus.loginRequired);
+    expect(
+      controller.value.errorMessage,
+      'انتهت الجلسة، سجل الدخول مرة أخرى للمتابعة.',
+    );
+  });
 }
 
 class _FakeVipRepository implements VipRepository {
