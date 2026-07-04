@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:galaxy_novels_app/app/app_dependencies.dart';
@@ -16,6 +19,7 @@ import 'package:galaxy_novels_app/data/repositories/reader_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/reading_history_repository.dart';
 import 'package:galaxy_novels_app/features/downloads/application/download_manager.dart';
 import 'package:galaxy_novels_app/features/downloads/presentation/downloads_screen.dart';
+import 'package:galaxy_novels_app/features/ads/application/rewarded_ad_repository.dart';
 import 'package:galaxy_novels_app/features/rewards/data/stored_reader_rewards_repository.dart';
 
 import '../../helpers/fake_reader_preferences_repository.dart';
@@ -93,7 +97,57 @@ void main() {
 
     expect(find.text('مركز التنزيلات'), findsOneWidget);
     expect(find.text('75 نقطة'), findsOneWidget);
+    expect(find.textContaining('إذا فشل تنزيل فصل'), findsOneWidget);
     expect(find.textContaining('قريبا سنضيف طرقا جديدة'), findsOneWidget);
+  });
+
+  testWidgets('prevents duplicate rewarded ad requests while one is pending', (
+    tester,
+  ) async {
+    final rewardedAds = _PendingRewardedAdRepository();
+    final rewards = StoredReaderRewardsRepository.memory();
+    addTearDown(rewards.dispose);
+
+    await tester.pumpWidget(
+      _DownloadsTestApp(
+        downloadsRepository: FakeDownloadsRepository(),
+        readerRewardsRepository: rewards,
+        rewardedAdRepository: rewardedAds,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final button = find.byKey(const ValueKey('download-rewarded-ad-button'));
+    await tester.tap(button);
+    await tester.tap(button);
+
+    expect(rewardedAds.showCount, 1);
+
+    await tester.pump();
+    expect(find.text('جاري فتح الإعلان'), findsOneWidget);
+
+    rewardedAds.complete(RewardedAdOutcome.earnedReward);
+    await tester.pumpAndSettle();
+
+    expect(rewards.state.value.points, 25);
+  });
+
+  testWidgets('clamps an invalid daily ad count in the visible limit copy', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _DownloadsTestApp(
+        downloadsRepository: FakeDownloadsRepository(),
+        readerRewardsRepository: _FixedRewardsRepository(
+          const ReaderRewardsState(points: 20, rewardedAdsWatchedToday: 99),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('شاهدت 6 / 6 اليوم'), findsOneWidget);
+    expect(find.text('تم الحد اليومي'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('downloads command center fits a narrow phone', (tester) async {
@@ -122,11 +176,13 @@ class _DownloadsTestApp extends StatelessWidget {
     required this.downloadsRepository,
     this.onOpenLibrary,
     this.readerRewardsRepository = const NoopReaderRewardsRepository(),
+    this.rewardedAdRepository = const NoopRewardedAdRepository(),
   });
 
   final DownloadsRepository downloadsRepository;
   final VoidCallback? onOpenLibrary;
   final ReaderRewardsRepository readerRewardsRepository;
+  final RewardedAdRepository rewardedAdRepository;
 
   @override
   Widget build(BuildContext context) {
@@ -142,6 +198,7 @@ class _DownloadsTestApp extends StatelessWidget {
       downloadsRepository: downloadsRepository,
       downloadManager: DownloadManager(repository: downloadsRepository),
       readerRewardsRepository: readerRewardsRepository,
+      rewardedAdRepository: rewardedAdRepository,
       readerPreferencesRepository: FakeReaderPreferencesRepository(),
       authRepository: FakeAuthRepository(),
       commentsRepository: FakeCommentsRepository.empty(),
@@ -158,6 +215,49 @@ class _DownloadsTestApp extends StatelessWidget {
       ),
     );
   }
+}
+
+class _PendingRewardedAdRepository implements RewardedAdRepository {
+  final Completer<RewardedAdOutcome> _completer =
+      Completer<RewardedAdOutcome>();
+  int showCount = 0;
+
+  @override
+  Future<void> initialize() async {}
+
+  @override
+  Future<RewardedAdOutcome> showRewardedAd() {
+    showCount++;
+    return _completer.future;
+  }
+
+  void complete(RewardedAdOutcome outcome) {
+    if (!_completer.isCompleted) {
+      _completer.complete(outcome);
+    }
+  }
+}
+
+class _FixedRewardsRepository implements ReaderRewardsRepository {
+  _FixedRewardsRepository(ReaderRewardsState state)
+    : _state = ValueNotifier(state);
+
+  final ValueNotifier<ReaderRewardsState> _state;
+
+  @override
+  ValueListenable<ReaderRewardsState> get state => _state;
+
+  @override
+  Future<void> load() async {}
+
+  @override
+  void grantRewardedAdPoints() {}
+
+  @override
+  void spendForDownload(int chapterCount) {}
+
+  @override
+  void refundDownloadPoints(int chapterCount) {}
 }
 
 DownloadedChapter _downloadedChapter({

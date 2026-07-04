@@ -230,7 +230,7 @@ class _DownloadPointsBannerState extends State<_DownloadPointsBanner> {
     return ValueListenableBuilder<ReaderRewardsState>(
       valueListenable: widget.rewardsRepository.state,
       builder: (context, rewardsState, _) {
-        final watched = rewardsState.rewardedAdsWatchedToday;
+        final watched = rewardsState.clampedRewardedAdsWatchedToday;
         final max = ReaderRewardsState.maxRewardedAdsPerDay;
         final canWatch = rewardsState.canWatchRewardedAd && !_isShowingAd;
 
@@ -268,7 +268,8 @@ class _DownloadPointsBannerState extends State<_DownloadPointsBanner> {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  'كل فيديو يمنحك 25 نقطة. كل فصل يكلف نقطة واحدة.',
+                  'كل فيديو يمنحك 25 نقطة. كل فصل يكلف نقطة واحدة. '
+                  'إذا فشل تنزيل فصل، ترجع نقطته تلقائيا.',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: colors.onSurfaceVariant,
                     fontWeight: FontWeight.w700,
@@ -280,7 +281,7 @@ class _DownloadPointsBannerState extends State<_DownloadPointsBanner> {
                   borderRadius: BorderRadius.circular(999),
                   child: LinearProgressIndicator(
                     minHeight: 5,
-                    value: watched / max,
+                    value: rewardsState.rewardedAdsProgress,
                     backgroundColor: colors.surface,
                     color: colors.tertiary,
                   ),
@@ -290,7 +291,9 @@ class _DownloadPointsBannerState extends State<_DownloadPointsBanner> {
                   builder: (context, constraints) {
                     final isCompact = constraints.maxWidth < 330;
                     final limitText = Text(
-                      'شاهدت $watched / $max اليوم. قريبا سنضيف طرقا جديدة لزيادة نقاطك.',
+                      'شاهدت $watched / $max اليوم. المتبقي '
+                      '${rewardsState.remainingRewardedAdsToday} فيديو. '
+                      'قريبا سنضيف طرقا جديدة لزيادة نقاطك.',
                       maxLines: isCompact ? 3 : 2,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.labelSmall?.copyWith(
@@ -300,6 +303,7 @@ class _DownloadPointsBannerState extends State<_DownloadPointsBanner> {
                       ),
                     );
                     final action = FilledButton.tonalIcon(
+                      key: const ValueKey('download-rewarded-ad-button'),
                       onPressed: canWatch ? _watchRewardedAd : null,
                       icon: _isShowingAd
                           ? const SizedBox.square(
@@ -308,7 +312,9 @@ class _DownloadPointsBannerState extends State<_DownloadPointsBanner> {
                             )
                           : const Icon(Icons.play_circle_outline_rounded),
                       label: Text(
-                        rewardsState.canWatchRewardedAd
+                        _isShowingAd
+                            ? 'جاري فتح الإعلان'
+                            : rewardsState.canWatchRewardedAd
                             ? (isCompact ? 'فيديو +25' : 'شاهد فيديو +25')
                             : (isCompact ? 'تم الحد' : 'تم الحد اليومي'),
                       ),
@@ -346,6 +352,9 @@ class _DownloadPointsBannerState extends State<_DownloadPointsBanner> {
   }
 
   Future<void> _watchRewardedAd() async {
+    if (_isShowingAd) {
+      return;
+    }
     setState(() => _isShowingAd = true);
     final messenger = ScaffoldMessenger.of(context);
     try {

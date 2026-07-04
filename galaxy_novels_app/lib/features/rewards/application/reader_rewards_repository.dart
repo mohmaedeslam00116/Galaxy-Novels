@@ -15,12 +15,26 @@ class ReaderRewardsState {
   final int rewardedAdsWatchedToday;
   final String rewardedAdsDayKey;
 
+  int get clampedRewardedAdsWatchedToday {
+    if (rewardedAdsWatchedToday < 0) {
+      return 0;
+    }
+    if (rewardedAdsWatchedToday > maxRewardedAdsPerDay) {
+      return maxRewardedAdsPerDay;
+    }
+    return rewardedAdsWatchedToday;
+  }
+
   int get remainingRewardedAdsToday {
-    final remaining = maxRewardedAdsPerDay - rewardedAdsWatchedToday;
+    final remaining = maxRewardedAdsPerDay - clampedRewardedAdsWatchedToday;
     return remaining < 0 ? 0 : remaining;
   }
 
   bool get canWatchRewardedAd => remainingRewardedAdsToday > 0;
+
+  double get rewardedAdsProgress {
+    return clampedRewardedAdsWatchedToday / maxRewardedAdsPerDay;
+  }
 
   bool canSpend(int chapterCount) {
     return chapterCount <= 0 ||
