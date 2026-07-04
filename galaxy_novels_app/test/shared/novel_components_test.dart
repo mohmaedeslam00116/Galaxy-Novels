@@ -69,4 +69,33 @@ void main() {
       greaterThanOrEqualTo(24),
     );
   });
+
+  testWidgets('StatusBadge maps novel states to semantic colors', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Directionality(
+          textDirection: TextDirection.rtl,
+          child: Scaffold(
+            body: Column(
+              children: [
+                StatusBadge(label: 'مستمرة'),
+                StatusBadge(label: 'مكتملة'),
+                StatusBadge(label: 'متوقفة'),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(_badgeTextColor(tester, 'مستمرة'), const Color(0xFF22C55E));
+    expect(_badgeTextColor(tester, 'مكتملة'), const Color(0xFFEF4444));
+    expect(_badgeTextColor(tester, 'متوقفة'), const Color(0xFFA855F7));
+  });
+}
+
+Color? _badgeTextColor(WidgetTester tester, String label) {
+  return tester.widget<Text>(find.text(label)).style?.color;
 }
