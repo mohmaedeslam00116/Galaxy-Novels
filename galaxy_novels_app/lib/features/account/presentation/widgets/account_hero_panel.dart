@@ -66,8 +66,6 @@ class AccountHeroPanel extends StatelessWidget {
                   _LevelPill(level: user.xp.rank.level),
               ],
             ),
-            const SizedBox(height: 16),
-            _VipStatusStrip(vip: user.vip),
           ],
         ),
       ),
@@ -135,72 +133,5 @@ class _LevelPill extends StatelessWidget {
         ),
       ),
     );
-  }
-}
-
-class _VipStatusStrip extends StatelessWidget {
-  const _VipStatusStrip({required this.vip});
-
-  final AuthVip vip;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final tokens = theme.extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
-    final activeTitle = vip.label.isEmpty ? 'عضو VIP' : vip.label;
-    final title = vip.active ? activeTitle : 'العضوية العادية';
-    final subtitle = vip.active
-        ? _vipExpiryText(context, vip.expiresAt)
-        : 'اقرأ الفصول العامة وتابع تقدمك من هنا';
-    final color = vip.active ? tokens.gold : tokens.textSecondary;
-
-    return Row(
-      children: [
-        Icon(
-          vip.active
-              ? Icons.workspace_premium_outlined
-              : Icons.person_outline_rounded,
-          color: color,
-          size: 22,
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.titleSmall?.copyWith(
-                  color: vip.active ? tokens.gold : tokens.textPrimary,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                subtitle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: tokens.textSecondary,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  String _vipExpiryText(BuildContext context, DateTime? expiresAt) {
-    if (expiresAt == null) {
-      return 'فعال حاليا';
-    }
-    final date = MaterialLocalizations.of(
-      context,
-    ).formatCompactDate(expiresAt.toLocal());
-    return 'ينتهي في $date';
   }
 }

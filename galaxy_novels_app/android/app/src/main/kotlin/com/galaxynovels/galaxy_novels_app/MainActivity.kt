@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.view.WindowManager
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.plugin.common.MethodChannel
@@ -32,6 +33,24 @@ class MainActivity : FlutterActivity() {
                 }
                 "clear" -> {
                     startDownloadService(DownloadForegroundService.ACTION_CLEAR, args)
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "galaxy_novels/reader_display"
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "setScreenBrightness" -> {
+                    val args = call.arguments as? Map<*, *>
+                    val value = floatArg(args, "value").coerceIn(0.2f, 1.0f)
+                    setReaderScreenBrightness(value)
+                    result.success(null)
+                }
+                "clearScreenBrightness" -> {
+                    setReaderScreenBrightness(WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE)
                     result.success(null)
                 }
                 else -> result.notImplemented()
@@ -77,5 +96,17 @@ class MainActivity : FlutterActivity() {
 
     private fun boolArg(args: Map<*, *>?, key: String): Boolean {
         return args?.get(key) as? Boolean ?: false
+    }
+
+    private fun floatArg(args: Map<*, *>?, key: String): Float {
+        return (args?.get(key) as? Number)?.toFloat() ?: WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+    }
+
+    private fun setReaderScreenBrightness(value: Float) {
+        runOnUiThread {
+            val params = window.attributes
+            params.screenBrightness = value
+            window.attributes = params
+        }
     }
 }

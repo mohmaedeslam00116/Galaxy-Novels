@@ -44,9 +44,9 @@ class AccountShortcutGrid extends StatelessWidget {
             onTap: onOpenDownloads,
           ),
           _ShortcutData(
-            icon: Icons.tune_rounded,
-            title: 'إعدادات القراءة',
-            subtitle: 'الخط والثيم',
+            icon: Icons.settings_outlined,
+            title: 'الإعدادات',
+            subtitle: 'الثيمات والقراءة',
             onTap: onOpenReaderSettings,
           ),
         ];

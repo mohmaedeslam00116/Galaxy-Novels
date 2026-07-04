@@ -38,10 +38,14 @@ void main() {
     expect(find.text('10'), findsOneWidget);
     expect(find.text('4'), findsOneWidget);
     expect(find.text('2س 1د'), findsOneWidget);
+    expect(find.text('حالة العضوية'), findsOneWidget);
+    expect(find.text('عضوية عادية'), findsOneWidget);
+    expect(find.textContaining('الفصول العامة'), findsOneWidget);
     expect(find.text('المفضلة'), findsOneWidget);
     expect(find.text('السجل'), findsOneWidget);
     expect(find.text('التنزيلات'), findsOneWidget);
-    expect(find.text('إعدادات القراءة'), findsOneWidget);
+    expect(find.text('الإعدادات'), findsOneWidget);
+    expect(find.text('إعدادات القراءة'), findsNothing);
   });
 
   testWidgets('opens account shortcuts from the dashboard tiles', (
@@ -71,7 +75,7 @@ void main() {
     await tester.tap(find.text('المفضلة'));
     await tester.tap(find.text('السجل'));
     await tester.tap(find.text('التنزيلات'));
-    await tester.tap(find.text('إعدادات القراءة'));
+    await tester.tap(find.text('الإعدادات'));
 
     expect(opened, ['favorites', 'history', 'downloads', 'settings']);
   });
@@ -100,6 +104,8 @@ void main() {
     );
 
     expect(find.text('VIP ذهبي'), findsOneWidget);
+    expect(find.text('حالة العضوية'), findsOneWidget);
+    expect(find.text('VIP مفعل'), findsOneWidget);
     expect(find.textContaining('ينتهي'), findsOneWidget);
     expect(find.textContaining('2026'), findsOneWidget);
   });

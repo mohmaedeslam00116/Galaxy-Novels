@@ -6,7 +6,7 @@ import '../../../app/app_dependencies.dart';
 import '../../downloads/presentation/downloads_screen.dart';
 import '../../favorites/presentation/favorites_screen.dart';
 import '../../history/presentation/history_screen.dart';
-import '../../reader/presentation/reader_settings_screen.dart';
+import '../../settings/presentation/settings_screen.dart';
 import '../application/auth_repository.dart';
 import '../domain/auth_session.dart';
 import 'widgets/account_session_view.dart';
@@ -53,7 +53,7 @@ class _AccountScreenState extends State<AccountScreen> {
         onOpenFavorites: _openFavorites,
         onOpenHistory: _openHistory,
         onOpenDownloads: _openDownloads,
-        onOpenReaderSettings: _openReaderSettings,
+        onOpenReaderSettings: _openSettings,
       ),
     );
   }
@@ -72,10 +72,10 @@ class _AccountScreenState extends State<AccountScreen> {
     _openStandaloneShellPage(title: 'التنزيلات', body: const DownloadsScreen());
   }
 
-  void _openReaderSettings() {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => const ReaderSettingsScreen()),
-    );
+  void _openSettings() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const SettingsScreen()));
   }
 
   void _openStandaloneShellPage({required String title, required Widget body}) {

@@ -72,6 +72,9 @@ class _NativeReaderContentState extends State<NativeReaderContent> {
     final blocks = parseChapterHtml(content.contentHtml);
     final hasPrevious = content.navigation.previousApi.isNotEmpty;
     final hasNext = content.navigation.nextApi.isNotEmpty;
+    final horizontalPadding = _readerHorizontalPadding(
+      widget.preferences.textWidth,
+    );
     final headingStyle = _readerTextStyle(
       theme.textTheme.titleLarge,
       fallbackSize: 22,
@@ -102,7 +105,12 @@ class _NativeReaderContentState extends State<NativeReaderContent> {
               child: ListView(
                 key: ValueKey(content.id),
                 controller: _scrollController,
-                padding: const EdgeInsets.fromLTRB(20, 18, 20, 110),
+                padding: EdgeInsets.fromLTRB(
+                  horizontalPadding,
+                  18,
+                  horizontalPadding,
+                  110,
+                ),
                 children: [
                   if (content.effectiveTitle.isNotEmpty) ...[
                     Text(
@@ -212,6 +220,14 @@ class _NativeReaderContentState extends State<NativeReaderContent> {
         : ((viewedExtent / totalExtent) * 100).round().clamp(0, 100);
     widget.onReadingActivity(progress);
   }
+}
+
+double _readerHorizontalPadding(ReaderTextWidth width) {
+  return switch (width) {
+    ReaderTextWidth.compact => 32,
+    ReaderTextWidth.comfortable => 20,
+    ReaderTextWidth.wide => 12,
+  };
 }
 
 class _ReaderFloatingControls extends StatelessWidget {

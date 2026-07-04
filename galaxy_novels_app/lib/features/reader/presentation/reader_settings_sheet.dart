@@ -9,6 +9,7 @@ Future<void> showReaderSettingsSheet({
 }) {
   return showModalBottomSheet<void>(
     context: context,
+    isScrollControlled: true,
     showDragHandle: true,
     builder: (context) {
       return ReaderSettingsSheet(
@@ -45,12 +46,17 @@ class _ReaderSettingsSheetState extends State<ReaderSettingsSheet> {
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-        child: ReaderSettingsControls(
-          key: const ValueKey('reader-settings-sheet'),
-          preferences: _preferences,
-          onChanged: _update,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.84,
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+          child: ReaderSettingsControls(
+            key: const ValueKey('reader-settings-sheet'),
+            preferences: _preferences,
+            onChanged: _update,
+          ),
         ),
       ),
     );
@@ -110,7 +116,82 @@ class ReaderSettingsControls extends StatelessWidget {
         ),
         const SizedBox(height: 18),
         Text(
-          'وضع القراءة',
+          'ألوان القراءة',
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 10),
+        _ReaderPaletteGrid(
+          preferences: preferences,
+          onChanged: (paletteMode) {
+            onChanged(preferences.copyWith(paletteMode: paletteMode));
+          },
+        ),
+        const SizedBox(height: 18),
+        Text(
+          'عرض النص',
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 10),
+        _TextWidthSelector(
+          selected: preferences.textWidth,
+          onChanged: (textWidth) {
+            onChanged(preferences.copyWith(textWidth: textWidth));
+          },
+        ),
+        const SizedBox(height: 18),
+        SwitchListTile(
+          key: const ValueKey('reader-immersive-toggle'),
+          contentPadding: EdgeInsets.zero,
+          value: preferences.immersiveMode,
+          title: const Text('الوضع الغامر'),
+          subtitle: const Text('إخفاء أشرطة النظام أثناء القراءة'),
+          secondary: const Icon(Icons.fullscreen_rounded),
+          onChanged: (enabled) {
+            onChanged(preferences.copyWith(immersiveMode: enabled));
+          },
+        ),
+        const SizedBox(height: 8),
+        _BrightnessControls(preferences: preferences, onChanged: onChanged),
+        const SizedBox(height: 16),
+        Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: OutlinedButton.icon(
+            key: const ValueKey('reader-settings-reset'),
+            onPressed: preferences == ReaderPreferences.defaults
+                ? null
+                : () => onChanged(ReaderPreferences.defaults),
+            icon: const Icon(Icons.restart_alt_rounded),
+            label: const Text('إعادة الافتراضي'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _BrightnessControls extends StatelessWidget {
+  const _BrightnessControls({
+    required this.preferences,
+    required this.onChanged,
+  });
+
+  final ReaderPreferences preferences;
+  final ValueChanged<ReaderPreferences> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final manual = preferences.brightnessMode == ReaderBrightnessMode.manual;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'سطوع الشاشة',
           style: theme.textTheme.titleSmall?.copyWith(
             fontWeight: FontWeight.w800,
           ),
@@ -118,30 +199,240 @@ class ReaderSettingsControls extends StatelessWidget {
         const SizedBox(height: 10),
         SizedBox(
           width: double.infinity,
-          child: SegmentedButton<ReaderPaletteMode>(
+          child: SegmentedButton<ReaderBrightnessMode>(
             segments: const [
               ButtonSegment(
-                value: ReaderPaletteMode.system,
-                label: Text('النظام', key: ValueKey('reader-palette-system')),
+                value: ReaderBrightnessMode.system,
+                label: Text(
+                  'النظام',
+                  key: ValueKey('reader-brightness-system'),
+                ),
+                icon: Icon(Icons.brightness_auto_outlined),
               ),
               ButtonSegment(
-                value: ReaderPaletteMode.light,
-                label: Text('فاتح', key: ValueKey('reader-palette-light')),
-              ),
-              ButtonSegment(
-                value: ReaderPaletteMode.dark,
-                label: Text('داكن', key: ValueKey('reader-palette-dark')),
+                value: ReaderBrightnessMode.manual,
+                label: Text('يدوي', key: ValueKey('reader-brightness-manual')),
+                icon: Icon(Icons.wb_sunny_outlined),
               ),
             ],
-            selected: {preferences.paletteMode},
+            selected: {preferences.brightnessMode},
             onSelectionChanged: (selection) {
-              onChanged(preferences.copyWith(paletteMode: selection.single));
+              onChanged(preferences.copyWith(brightnessMode: selection.single));
             },
           ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            const Icon(Icons.brightness_low_rounded, size: 20),
+            Expanded(
+              child: Slider(
+                key: const ValueKey('reader-brightness-slider'),
+                value: preferences.screenBrightness,
+                min: 0.2,
+                max: 1,
+                divisions: 8,
+                label: '${(preferences.screenBrightness * 100).round()}%',
+                onChanged: manual
+                    ? (value) {
+                        onChanged(
+                          preferences.copyWith(
+                            brightnessMode: ReaderBrightnessMode.manual,
+                            screenBrightness: value,
+                          ),
+                        );
+                      }
+                    : null,
+              ),
+            ),
+            const Icon(Icons.brightness_high_rounded, size: 20),
+          ],
         ),
       ],
     );
   }
+}
+
+class _ReaderPaletteGrid extends StatelessWidget {
+  const _ReaderPaletteGrid({
+    required this.preferences,
+    required this.onChanged,
+  });
+
+  final ReaderPreferences preferences;
+  final ValueChanged<ReaderPaletteMode> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const spacing = 8.0;
+        final columns = constraints.maxWidth >= 520 ? 3 : 2;
+        final itemWidth =
+            (constraints.maxWidth - (spacing * (columns - 1))) / columns;
+
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: [
+            for (final mode in ReaderPaletteMode.values)
+              SizedBox(
+                width: itemWidth,
+                child: _ReaderPaletteCard(
+                  mode: mode,
+                  selected: preferences.paletteMode == mode,
+                  onTap: () => onChanged(mode),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _ReaderPaletteCard extends StatelessWidget {
+  const _ReaderPaletteCard({
+    required this.mode,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final ReaderPaletteMode mode;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = ReaderPreferences.defaults
+        .copyWith(paletteMode: mode)
+        .colorSchemeFor(context);
+    final borderColor = selected
+        ? scheme.primary
+        : theme.colorScheme.outlineVariant;
+
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: _paletteLabel(mode),
+      child: Material(
+        color: selected
+            ? scheme.primary.withValues(alpha: 0.12)
+            : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.36),
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+          side: BorderSide(color: borderColor, width: selected ? 1.5 : 1),
+        ),
+        child: InkWell(
+          key: ValueKey('reader-palette-${mode.name}'),
+          borderRadius: BorderRadius.circular(8),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Row(
+              children: [
+                _PaletteSwatch(scheme: scheme),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _paletteLabel(mode),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Icon(
+                  selected
+                      ? Icons.check_circle_rounded
+                      : Icons.radio_button_unchecked_rounded,
+                  size: 18,
+                  color: selected ? scheme.primary : theme.colorScheme.outline,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PaletteSwatch extends StatelessWidget {
+  const _PaletteSwatch({required this.scheme});
+
+  final ColorScheme scheme;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border.all(color: scheme.outlineVariant),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: SizedBox(
+          width: 38,
+          height: 28,
+          child: Row(
+            children: [
+              Expanded(child: ColoredBox(color: scheme.surface)),
+              Expanded(child: ColoredBox(color: scheme.primary)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TextWidthSelector extends StatelessWidget {
+  const _TextWidthSelector({required this.selected, required this.onChanged});
+
+  final ReaderTextWidth selected;
+  final ValueChanged<ReaderTextWidth> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SegmentedButton<ReaderTextWidth>(
+      segments: const [
+        ButtonSegment(
+          value: ReaderTextWidth.compact,
+          label: Text('مركز', key: ValueKey('reader-width-compact')),
+          icon: Icon(Icons.format_indent_increase_rounded),
+        ),
+        ButtonSegment(
+          value: ReaderTextWidth.comfortable,
+          label: Text('مريح', key: ValueKey('reader-width-comfortable')),
+          icon: Icon(Icons.view_stream_outlined),
+        ),
+        ButtonSegment(
+          value: ReaderTextWidth.wide,
+          label: Text('واسع', key: ValueKey('reader-width-wide')),
+          icon: Icon(Icons.format_indent_decrease_rounded),
+        ),
+      ],
+      selected: {selected},
+      onSelectionChanged: (selection) => onChanged(selection.single),
+    );
+  }
+}
+
+String _paletteLabel(ReaderPaletteMode mode) {
+  return switch (mode) {
+    ReaderPaletteMode.system => 'النظام',
+    ReaderPaletteMode.light => 'نهاري',
+    ReaderPaletteMode.dark => 'ليلي',
+    ReaderPaletteMode.paper => 'ورق هادئ',
+    ReaderPaletteMode.sepia => 'بني دافئ',
+    ReaderPaletteMode.nightBlue => 'أزرق ليلي',
+    ReaderPaletteMode.amoled => 'أسود AMOLED',
+  };
 }
 
 class _StepperRow extends StatelessWidget {

@@ -15,12 +15,20 @@ void main() {
     final preferences = ReaderPreferences.fromJson({
       'font_scale': 4,
       'line_height': 0.5,
-      'palette_mode': 'dark',
+      'palette_mode': 'nightBlue',
+      'text_width': 'compact',
+      'immersive_mode': true,
+      'brightness_mode': 'manual',
+      'screen_brightness': 4,
     });
 
     expect(preferences.fontScale, 1.35);
     expect(preferences.lineHeight, 1.75);
-    expect(preferences.paletteMode, ReaderPaletteMode.dark);
+    expect(preferences.paletteMode, ReaderPaletteMode.nightBlue);
+    expect(preferences.textWidth, ReaderTextWidth.compact);
+    expect(preferences.immersiveMode, isTrue);
+    expect(preferences.brightnessMode, ReaderBrightnessMode.manual);
+    expect(preferences.screenBrightness, 1);
     expect(ReaderPreferences.fromJson(preferences.toJson()), preferences);
   });
 
@@ -30,7 +38,13 @@ void main() {
     final updated = ReaderPreferences.defaults
         .increaseFont()
         .increaseLineHeight()
-        .copyWith(paletteMode: ReaderPaletteMode.light);
+        .copyWith(
+          paletteMode: ReaderPaletteMode.sepia,
+          textWidth: ReaderTextWidth.wide,
+          immersiveMode: true,
+          brightnessMode: ReaderBrightnessMode.manual,
+          screenBrightness: 0.42,
+        );
 
     await repository.update(updated);
 

@@ -21,6 +21,7 @@ import 'package:galaxy_novels_app/features/comments/domain/comments_page.dart';
 import 'package:galaxy_novels_app/features/comments/domain/public_comment.dart';
 import 'package:galaxy_novels_app/features/ads/application/reader_ad_repository.dart';
 import 'package:galaxy_novels_app/features/reading_activity/application/reading_activity_recorder.dart';
+import 'package:galaxy_novels_app/features/reader/domain/reader_preferences.dart';
 import 'package:galaxy_novels_app/features/reader/presentation/reader_screen.dart';
 
 import '../../helpers/fake_reader_preferences_repository.dart';
@@ -220,6 +221,137 @@ void main() {
       ).surface,
       background.color,
     );
+  });
+
+  testWidgets(
+    'reader settings exposes richer palettes and text width controls',
+    (tester) async {
+      final preferencesRepository = FakeReaderPreferencesRepository();
+
+      await tester.pumpWidget(
+        _ReaderTestApp(
+          readerRepository: const _TestReaderRepository(),
+          readerPreferencesRepository: preferencesRepository,
+          child: const ReaderScreen(
+            contentApi: '/wp-json/wor-reader-app/v1/chapters/10',
+            chapterTitle: 'الفصل 1',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('reader-content-tap-area')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('reader-settings-button')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('ألوان القراءة'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('reader-palette-paper')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('reader-palette-sepia')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('reader-palette-nightBlue')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('reader-palette-amoled')),
+        findsOneWidget,
+      );
+      expect(find.text('عرض النص'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('reader-palette-nightBlue')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('reader-width-compact')));
+      await tester.pumpAndSettle();
+
+      expect(
+        preferencesRepository.value.paletteMode,
+        ReaderPaletteMode.nightBlue,
+      );
+      expect(preferencesRepository.value.textWidth, ReaderTextWidth.compact);
+
+      final background = tester.widget<ColoredBox>(
+        find.byKey(const ValueKey('reader-background')),
+      );
+      expect(background.color, const Color(0xFF07111F));
+
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('reader-settings-reset')),
+        160,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('reader-settings-reset')));
+      await tester.pumpAndSettle();
+
+      expect(preferencesRepository.value, ReaderPreferences.defaults);
+    },
+  );
+
+  testWidgets('reader settings controls immersive mode and screen brightness', (
+    tester,
+  ) async {
+    final preferencesRepository = FakeReaderPreferencesRepository();
+
+    await tester.pumpWidget(
+      _ReaderTestApp(
+        readerRepository: const _TestReaderRepository(),
+        readerPreferencesRepository: preferencesRepository,
+        child: const ReaderScreen(
+          contentApi: '/wp-json/wor-reader-app/v1/chapters/10',
+          chapterTitle: 'الفصل 1',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('reader-content-tap-area')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('reader-settings-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('الوضع الغامر'), findsOneWidget);
+    expect(find.text('سطوع الشاشة'), findsOneWidget);
+
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('reader-immersive-toggle')),
+      160,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('reader-immersive-toggle')));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('reader-brightness-manual')),
+      160,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('reader-brightness-manual')));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('reader-brightness-slider')),
+      160,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pumpAndSettle();
+    await tester.drag(
+      find.byKey(const ValueKey('reader-brightness-slider')),
+      const Offset(90, 0),
+    );
+    await tester.pumpAndSettle();
+
+    expect(preferencesRepository.value.immersiveMode, isTrue);
+    expect(
+      preferencesRepository.value.brightnessMode,
+      ReaderBrightnessMode.manual,
+    );
+    expect(preferencesRepository.value.screenBrightness, greaterThan(0.65));
   });
 
   testWidgets('records reading progress when chapter content loads', (
@@ -484,6 +616,7 @@ class _ReaderTestApp extends StatelessWidget {
     this.readingHistoryRepository,
     this.downloadsRepository,
     this.commentsRepository,
+    this.readerPreferencesRepository,
     this.readerAdRepository = const NoopReaderAdRepository(),
     this.readingActivityRecorder = const NoopReadingActivityRecorder(),
   });
@@ -493,6 +626,7 @@ class _ReaderTestApp extends StatelessWidget {
   final ReadingHistoryRepository? readingHistoryRepository;
   final DownloadsRepository? downloadsRepository;
   final CommentsRepository? commentsRepository;
+  final FakeReaderPreferencesRepository? readerPreferencesRepository;
   final ReaderAdRepository readerAdRepository;
   final ReadingActivityRecorder readingActivityRecorder;
 
@@ -514,7 +648,8 @@ class _ReaderTestApp extends StatelessWidget {
       downloadManager: DownloadManager(
         repository: effectiveDownloadsRepository,
       ),
-      readerPreferencesRepository: FakeReaderPreferencesRepository(),
+      readerPreferencesRepository:
+          readerPreferencesRepository ?? FakeReaderPreferencesRepository(),
       authRepository: FakeAuthRepository(),
       commentsRepository: commentsRepository ?? FakeCommentsRepository.empty(),
       favoritesRepository: FakeFavoritesRepository(),

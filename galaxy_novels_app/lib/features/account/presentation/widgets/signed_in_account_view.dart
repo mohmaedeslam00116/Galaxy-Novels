@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../domain/auth_session.dart';
 import 'account_common_widgets.dart';
 import 'account_hero_panel.dart';
+import 'account_membership_card.dart';
 import 'account_shortcuts.dart';
 import 'account_stats_grid.dart';
 
@@ -53,7 +54,9 @@ class SignedInAccountView extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       AccountHeroPanel(user: user),
-                      const SizedBox(height: 18),
+                      const SizedBox(height: 12),
+                      AccountMembershipCard(vip: user.vip),
+                      const SizedBox(height: 14),
                       ReadingStatsGrid(user: user),
                       if (onRefreshProfile != null) ...[
                         const SizedBox(height: 8),

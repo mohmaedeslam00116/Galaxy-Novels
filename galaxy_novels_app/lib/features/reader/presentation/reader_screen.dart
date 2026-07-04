@@ -12,6 +12,7 @@ import '../../reading_activity/application/reading_activity_recorder.dart';
 import '../../ads/presentation/reader_banner_ad_slot.dart';
 import '../../comments/domain/comment_target.dart';
 import '../../comments/presentation/chapter_comments_sheet.dart';
+import '../application/reader_display_controller.dart';
 import '../application/reader_preferences_repository.dart';
 import 'native_reader_content.dart';
 import 'reader_preferences.dart';
@@ -47,6 +48,8 @@ class _ReaderScreenState extends State<ReaderScreen>
   ReaderPreferencesRepository? _preferencesRepository;
   ReadingActivityRecorder? _activityRecorder;
   ReadingActivitySession? _activitySession;
+  final ReaderDisplayController _displayController =
+      const ReaderDisplayController();
   bool _activityPaused = false;
 
   @override
@@ -83,6 +86,7 @@ class _ReaderScreenState extends State<ReaderScreen>
       _preferencesRepository?.removeListener(_syncPreferences);
       _preferencesRepository = preferencesRepository;
       _preferences = preferencesRepository.value;
+      unawaited(_displayController.apply(_preferences));
       preferencesRepository.addListener(_syncPreferences);
       unawaited(preferencesRepository.load());
     }
@@ -278,6 +282,7 @@ class _ReaderScreenState extends State<ReaderScreen>
         _activityPaused = false;
         session.resume();
       }
+      unawaited(_displayController.apply(_preferences));
       return;
     }
     if (!_activityPaused) {
@@ -319,6 +324,7 @@ class _ReaderScreenState extends State<ReaderScreen>
       return;
     }
     setState(() => _preferences = preferences);
+    unawaited(_displayController.apply(preferences));
   }
 
   Future<void> _savePreferences(ReaderPreferences preferences) async {
@@ -338,6 +344,7 @@ class _ReaderScreenState extends State<ReaderScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _finishActivitySession();
+    unawaited(_displayController.restore());
     _preferencesRepository?.removeListener(_syncPreferences);
     super.dispose();
   }
