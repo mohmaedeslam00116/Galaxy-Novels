@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'reader_font_selector.dart';
 import 'reader_preferences.dart';
 
 Future<void> showReaderSettingsSheet({
@@ -48,7 +49,7 @@ class _ReaderSettingsSheetState extends State<ReaderSettingsSheet> {
     return SafeArea(
       child: ConstrainedBox(
         constraints: BoxConstraints(
-          maxHeight: MediaQuery.sizeOf(context).height * 0.84,
+          maxHeight: MediaQuery.sizeOf(context).height * 0.72,
         ),
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
@@ -68,7 +69,7 @@ class _ReaderSettingsSheetState extends State<ReaderSettingsSheet> {
   }
 }
 
-class ReaderSettingsControls extends StatelessWidget {
+class ReaderSettingsControls extends StatefulWidget {
   const ReaderSettingsControls({
     required this.preferences,
     required this.onChanged,
@@ -81,22 +82,132 @@ class ReaderSettingsControls extends StatelessWidget {
   final bool showHeading;
 
   @override
+  State<ReaderSettingsControls> createState() => _ReaderSettingsControlsState();
+}
+
+enum _ReaderSettingsPanel { text, colors, screen }
+
+class _ReaderSettingsControlsState extends State<ReaderSettingsControls> {
+  _ReaderSettingsPanel _panel = _ReaderSettingsPanel.text;
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final preferences = widget.preferences;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (showHeading) ...[
+        if (widget.showHeading) ...[
           Text(
             'إعدادات القراءة',
             style: theme.textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.w900,
             ),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 14),
         ],
+        _ReaderSettingsPanelSelector(
+          selected: _panel,
+          onChanged: (panel) => setState(() => _panel = panel),
+        ),
+        const SizedBox(height: 16),
+        _buildPanel(preferences),
+        const SizedBox(height: 16),
+        Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: OutlinedButton.icon(
+            key: const ValueKey('reader-settings-reset'),
+            onPressed: preferences == ReaderPreferences.defaults
+                ? null
+                : () => widget.onChanged(ReaderPreferences.defaults),
+            icon: const Icon(Icons.restart_alt_rounded),
+            label: const Text('إعادة الافتراضي'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPanel(ReaderPreferences preferences) {
+    return switch (_panel) {
+      _ReaderSettingsPanel.text => _TextSettingsPanel(
+        preferences: preferences,
+        onChanged: widget.onChanged,
+      ),
+      _ReaderSettingsPanel.colors => _ColorSettingsPanel(
+        preferences: preferences,
+        onChanged: widget.onChanged,
+      ),
+      _ReaderSettingsPanel.screen => _ScreenSettingsPanel(
+        preferences: preferences,
+        onChanged: widget.onChanged,
+      ),
+    };
+  }
+}
+
+class _ReaderSettingsPanelSelector extends StatelessWidget {
+  const _ReaderSettingsPanelSelector({
+    required this.selected,
+    required this.onChanged,
+  });
+
+  final _ReaderSettingsPanel selected;
+  final ValueChanged<_ReaderSettingsPanel> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: SegmentedButton<_ReaderSettingsPanel>(
+        segments: const [
+          ButtonSegment(
+            value: _ReaderSettingsPanel.text,
+            label: Text('النص', key: ValueKey('reader-settings-tab-text')),
+            icon: Icon(Icons.format_size_rounded),
+          ),
+          ButtonSegment(
+            value: _ReaderSettingsPanel.colors,
+            label: Text('الألوان', key: ValueKey('reader-settings-tab-colors')),
+            icon: Icon(Icons.palette_outlined),
+          ),
+          ButtonSegment(
+            value: _ReaderSettingsPanel.screen,
+            label: Text('الشاشة', key: ValueKey('reader-settings-tab-screen')),
+            icon: Icon(Icons.phone_android_rounded),
+          ),
+        ],
+        selected: {selected},
+        onSelectionChanged: (selection) => onChanged(selection.single),
+      ),
+    );
+  }
+}
+
+class _TextSettingsPanel extends StatelessWidget {
+  const _TextSettingsPanel({
+    required this.preferences,
+    required this.onChanged,
+  });
+
+  final ReaderPreferences preferences;
+  final ValueChanged<ReaderPreferences> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ReaderFontSelector(
+          selected: preferences.fontFamily,
+          readerScheme: preferences.colorSchemeFor(context),
+          onChanged: (fontFamily) {
+            onChanged(preferences.copyWith(fontFamily: fontFamily));
+          },
+        ),
+        const SizedBox(height: 16),
         _StepperRow(
           label: 'حجم الخط',
           value: '${(preferences.fontScale * 100).round()}%',
@@ -116,6 +227,40 @@ class ReaderSettingsControls extends StatelessWidget {
         ),
         const SizedBox(height: 18),
         Text(
+          'عرض النص',
+          style: Theme.of(
+            context,
+          ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 10),
+        _TextWidthSelector(
+          selected: preferences.textWidth,
+          onChanged: (textWidth) {
+            onChanged(preferences.copyWith(textWidth: textWidth));
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _ColorSettingsPanel extends StatelessWidget {
+  const _ColorSettingsPanel({
+    required this.preferences,
+    required this.onChanged,
+  });
+
+  final ReaderPreferences preferences;
+  final ValueChanged<ReaderPreferences> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
           'ألوان القراءة',
           style: theme.textTheme.titleSmall?.copyWith(
             fontWeight: FontWeight.w800,
@@ -128,21 +273,25 @@ class ReaderSettingsControls extends StatelessWidget {
             onChanged(preferences.copyWith(paletteMode: paletteMode));
           },
         ),
-        const SizedBox(height: 18),
-        Text(
-          'عرض النص',
-          style: theme.textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        const SizedBox(height: 10),
-        _TextWidthSelector(
-          selected: preferences.textWidth,
-          onChanged: (textWidth) {
-            onChanged(preferences.copyWith(textWidth: textWidth));
-          },
-        ),
-        const SizedBox(height: 18),
+      ],
+    );
+  }
+}
+
+class _ScreenSettingsPanel extends StatelessWidget {
+  const _ScreenSettingsPanel({
+    required this.preferences,
+    required this.onChanged,
+  });
+
+  final ReaderPreferences preferences;
+  final ValueChanged<ReaderPreferences> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
         SwitchListTile(
           key: const ValueKey('reader-immersive-toggle'),
           contentPadding: EdgeInsets.zero,
@@ -156,18 +305,6 @@ class ReaderSettingsControls extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         _BrightnessControls(preferences: preferences, onChanged: onChanged),
-        const SizedBox(height: 16),
-        Align(
-          alignment: AlignmentDirectional.centerStart,
-          child: OutlinedButton.icon(
-            key: const ValueKey('reader-settings-reset'),
-            onPressed: preferences == ReaderPreferences.defaults
-                ? null
-                : () => onChanged(ReaderPreferences.defaults),
-            icon: const Icon(Icons.restart_alt_rounded),
-            label: const Text('إعادة الافتراضي'),
-          ),
-        ),
       ],
     );
   }

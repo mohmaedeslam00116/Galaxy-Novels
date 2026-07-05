@@ -16,6 +16,7 @@ void main() {
       'font_scale': 4,
       'line_height': 0.5,
       'palette_mode': 'nightBlue',
+      'font_family': 'amiri',
       'text_width': 'compact',
       'immersive_mode': true,
       'brightness_mode': 'manual',
@@ -25,6 +26,7 @@ void main() {
     expect(preferences.fontScale, 1.35);
     expect(preferences.lineHeight, 1.75);
     expect(preferences.paletteMode, ReaderPaletteMode.nightBlue);
+    expect(preferences.fontFamily, ReaderFontFamily.amiri);
     expect(preferences.textWidth, ReaderTextWidth.compact);
     expect(preferences.immersiveMode, isTrue);
     expect(preferences.brightnessMode, ReaderBrightnessMode.manual);
@@ -40,6 +42,7 @@ void main() {
         .increaseLineHeight()
         .copyWith(
           paletteMode: ReaderPaletteMode.sepia,
+          fontFamily: ReaderFontFamily.cairo,
           textWidth: ReaderTextWidth.wide,
           immersiveMode: true,
           brightnessMode: ReaderBrightnessMode.manual,

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../app/app_dependencies.dart';
 import '../application/reader_preferences_repository.dart';
+import 'reader_font_options.dart';
 import 'reader_preferences.dart';
 import 'reader_settings_sheet.dart';
 
@@ -101,6 +102,7 @@ class _ReaderPreview extends StatelessWidget {
               key: const ValueKey('reader-settings-preview-text'),
               style: theme.textTheme.bodyLarge?.copyWith(
                 color: scheme.onSurface,
+                fontFamily: preferences.fontFamily.fontFamily,
                 fontSize:
                     (theme.textTheme.bodyLarge?.fontSize ?? 16) *
                     preferences.fontScale,

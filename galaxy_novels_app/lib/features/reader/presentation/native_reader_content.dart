@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../data/models/reader_content_data.dart';
 import '../data/chapter_html_parser.dart';
+import 'reader_font_options.dart';
 import 'reader_preferences.dart';
 
 class NativeReaderContent extends StatefulWidget {
@@ -79,6 +80,7 @@ class _NativeReaderContentState extends State<NativeReaderContent> {
       theme.textTheme.titleLarge,
       fallbackSize: 22,
       fontScale: widget.preferences.fontScale,
+      fontFamily: widget.preferences.fontFamily.fontFamily,
       height: 1.55,
       color: readerScheme.onSurface,
       fontWeight: FontWeight.w900,
@@ -87,6 +89,7 @@ class _NativeReaderContentState extends State<NativeReaderContent> {
       theme.textTheme.titleMedium,
       fallbackSize: 16,
       fontScale: widget.preferences.fontScale,
+      fontFamily: widget.preferences.fontFamily.fontFamily,
       height: widget.preferences.lineHeight,
       color: readerScheme.onSurface.withValues(alpha: 0.92),
     );
@@ -120,6 +123,7 @@ class _NativeReaderContentState extends State<NativeReaderContent> {
                         theme.textTheme.headlineSmall,
                         fallbackSize: 24,
                         fontScale: widget.preferences.fontScale,
+                        fontFamily: widget.preferences.fontFamily.fontFamily,
                         height: 1.45,
                         color: readerScheme.onSurface,
                         fontWeight: FontWeight.w900,
@@ -434,6 +438,7 @@ TextStyle _readerTextStyle(
   TextStyle? baseStyle, {
   required double fallbackSize,
   required double fontScale,
+  required String? fontFamily,
   required double height,
   required Color color,
   FontWeight? fontWeight,
@@ -442,6 +447,7 @@ TextStyle _readerTextStyle(
   return base.copyWith(
     color: color,
     fontSize: (base.fontSize ?? fallbackSize) * fontScale,
+    fontFamily: fontFamily,
     fontWeight: fontWeight ?? base.fontWeight,
     height: height,
   );

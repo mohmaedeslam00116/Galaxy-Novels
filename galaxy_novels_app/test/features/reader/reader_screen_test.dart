@@ -185,6 +185,38 @@ void main() {
     expect(afterStyle?.fontSize, greaterThan(beforeStyle?.fontSize ?? 0));
   });
 
+  testWidgets('reader settings applies the selected Arabic font family', (
+    tester,
+  ) async {
+    final preferencesRepository = FakeReaderPreferencesRepository();
+
+    await tester.pumpWidget(
+      _ReaderTestApp(
+        readerRepository: const _TestReaderRepository(),
+        readerPreferencesRepository: preferencesRepository,
+        child: const ReaderScreen(
+          contentApi: '/wp-json/wor-reader-app/v1/chapters/10',
+          chapterTitle: 'الفصل 1',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('reader-content-tap-area')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('reader-settings-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('reader-font-preview')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('reader-font-amiri')));
+    await tester.pumpAndSettle();
+
+    final paragraph = tester.widget<Text>(find.text('نص الفصل الأول'));
+    expect(preferencesRepository.value.fontFamily, ReaderFontFamily.amiri);
+    expect(paragraph.style?.fontFamily, 'Amiri');
+  });
+
   testWidgets('reader settings can switch to a light reading palette', (
     tester,
   ) async {
@@ -206,6 +238,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('reader-content-tap-area')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('reader-settings-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('reader-settings-tab-colors')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('reader-palette-light')));
     await tester.pumpAndSettle();
@@ -244,6 +278,10 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('reader-settings-button')));
       await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('reader-settings-tab-colors')),
+      );
+      await tester.pumpAndSettle();
 
       expect(find.text('ألوان القراءة'), findsOneWidget);
       expect(
@@ -262,9 +300,17 @@ void main() {
         find.byKey(const ValueKey('reader-palette-amoled')),
         findsOneWidget,
       );
-      expect(find.text('عرض النص'), findsOneWidget);
 
       await tester.tap(find.byKey(const ValueKey('reader-palette-nightBlue')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('reader-settings-tab-text')));
+      await tester.pumpAndSettle();
+      expect(find.text('عرض النص'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('reader-width-compact')),
+        120,
+        scrollable: find.byType(Scrollable).last,
+      );
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('reader-width-compact')));
       await tester.pumpAndSettle();
@@ -313,6 +359,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('reader-content-tap-area')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('reader-settings-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('reader-settings-tab-screen')));
     await tester.pumpAndSettle();
 
     expect(find.text('الوضع الغامر'), findsOneWidget);

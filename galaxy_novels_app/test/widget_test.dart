@@ -309,7 +309,22 @@ void main() {
     await tester.tap(find.byIcon(Icons.menu));
     await tester.pumpAndSettle();
 
-    expect(find.byType(NavigationDrawerDestination), findsNWidgets(4));
+    expect(
+      find.byKey(const ValueKey('drawer-destination-account')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('drawer-destination-favorites')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('drawer-destination-settings')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('drawer-destination-about')),
+      findsOneWidget,
+    );
     expect(find.text('المفضلة'), findsOneWidget);
     expect(find.text('الإعدادات'), findsOneWidget);
     expect(find.text('إعدادات القراءة'), findsNothing);

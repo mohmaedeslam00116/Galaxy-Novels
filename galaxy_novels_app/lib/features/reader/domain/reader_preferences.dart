@@ -1,5 +1,18 @@
 enum ReaderPaletteMode { system, light, dark, paper, sepia, nightBlue, amoled }
 
+enum ReaderFontFamily {
+  system,
+  amiri,
+  cairo,
+  tajawal,
+  readexPro,
+  ibmPlexSansArabic,
+  almarai,
+  arefRuqaa,
+  elMessiri,
+  changa,
+}
+
 enum ReaderTextWidth { compact, comfortable, wide }
 
 enum ReaderBrightnessMode { system, manual }
@@ -9,6 +22,7 @@ class ReaderPreferences {
     required this.fontScale,
     required this.lineHeight,
     required this.paletteMode,
+    required this.fontFamily,
     required this.textWidth,
     required this.immersiveMode,
     required this.brightnessMode,
@@ -19,6 +33,7 @@ class ReaderPreferences {
     fontScale: 1,
     lineHeight: 2.05,
     paletteMode: ReaderPaletteMode.system,
+    fontFamily: ReaderFontFamily.system,
     textWidth: ReaderTextWidth.comfortable,
     immersiveMode: false,
     brightnessMode: ReaderBrightnessMode.system,
@@ -37,6 +52,7 @@ class ReaderPreferences {
   final double fontScale;
   final double lineHeight;
   final ReaderPaletteMode paletteMode;
+  final ReaderFontFamily fontFamily;
   final ReaderTextWidth textWidth;
   final bool immersiveMode;
   final ReaderBrightnessMode brightnessMode;
@@ -52,6 +68,11 @@ class ReaderPreferences {
     final textWidth = ReaderTextWidth.values.firstWhere(
       (width) => width.name == textWidthName,
       orElse: () => ReaderTextWidth.comfortable,
+    );
+    final fontFamilyName = json['font_family']?.toString();
+    final fontFamily = ReaderFontFamily.values.firstWhere(
+      (family) => family.name == fontFamilyName,
+      orElse: () => ReaderFontFamily.system,
     );
     final brightnessModeName = json['brightness_mode']?.toString();
     final brightnessMode = ReaderBrightnessMode.values.firstWhere(
@@ -71,6 +92,7 @@ class ReaderPreferences {
         _maxLineHeight,
       ),
       paletteMode: paletteMode,
+      fontFamily: fontFamily,
       textWidth: textWidth,
       immersiveMode: json['immersive_mode'] == true,
       brightnessMode: brightnessMode,
@@ -87,6 +109,7 @@ class ReaderPreferences {
       'font_scale': fontScale,
       'line_height': lineHeight,
       'palette_mode': paletteMode.name,
+      'font_family': fontFamily.name,
       'text_width': textWidth.name,
       'immersive_mode': immersiveMode,
       'brightness_mode': brightnessMode.name,
@@ -98,6 +121,7 @@ class ReaderPreferences {
     double? fontScale,
     double? lineHeight,
     ReaderPaletteMode? paletteMode,
+    ReaderFontFamily? fontFamily,
     ReaderTextWidth? textWidth,
     bool? immersiveMode,
     ReaderBrightnessMode? brightnessMode,
@@ -107,6 +131,7 @@ class ReaderPreferences {
       fontScale: fontScale ?? this.fontScale,
       lineHeight: lineHeight ?? this.lineHeight,
       paletteMode: paletteMode ?? this.paletteMode,
+      fontFamily: fontFamily ?? this.fontFamily,
       textWidth: textWidth ?? this.textWidth,
       immersiveMode: immersiveMode ?? this.immersiveMode,
       brightnessMode: brightnessMode ?? this.brightnessMode,
@@ -158,6 +183,7 @@ class ReaderPreferences {
         other.fontScale == fontScale &&
         other.lineHeight == lineHeight &&
         other.paletteMode == paletteMode &&
+        other.fontFamily == fontFamily &&
         other.textWidth == textWidth &&
         other.immersiveMode == immersiveMode &&
         other.brightnessMode == brightnessMode &&
@@ -169,6 +195,7 @@ class ReaderPreferences {
     fontScale,
     lineHeight,
     paletteMode,
+    fontFamily,
     textWidth,
     immersiveMode,
     brightnessMode,
