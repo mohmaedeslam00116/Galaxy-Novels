@@ -28,6 +28,7 @@ import 'package:galaxy_novels_app/features/novel_engagement/application/novel_en
 import 'package:galaxy_novels_app/features/novel_engagement/domain/novel_user_state.dart';
 import 'package:galaxy_novels_app/features/rewards/data/stored_reader_rewards_repository.dart';
 import 'package:galaxy_novels_app/features/shell/presentation/app_shell.dart';
+import 'package:galaxy_novels_app/shared/widgets/novel_list_row.dart';
 
 import 'helpers/fake_auth_repository.dart';
 import 'helpers/fake_comments_repository.dart';
@@ -718,6 +719,40 @@ void main() {
 
     expect(requestedContentApi, '/wp-json/wor-reader-app/v1/chapters/2');
     expect(find.text('قارئ تجريبي'), findsOneWidget);
+  });
+
+  testWidgets('home continue reading row keeps the saved novel cover', (
+    tester,
+  ) async {
+    final historyRepository = _TestReadingHistoryRepository();
+    await tester.pumpWidget(
+      GalaxyNovelsApp(
+        homeRepository: _TestHomeRepository(_homeData),
+        catalogRepository: const _TestCatalogRepository(),
+        novelRepository: const _TestNovelRepository(),
+        readingHistoryRepository: historyRepository,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await historyRepository.record(
+      local_progress.ReadingProgress(
+        novelId: 99,
+        novelTitle: 'رواية بغلاف',
+        chapterId: 2,
+        chapterTitle: 'الفصل 2',
+        contentApi: '/wp-json/wor-reader-app/v1/chapters/2',
+        coverUrl: '/wp-content/uploads/covers/local-cover.jpg',
+        chapterPosition: 2,
+        chaptersTotal: 100,
+        updatedAt: DateTime.utc(2026, 6, 22),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final row = tester.widget<NovelListRow>(find.byType(NovelListRow).first);
+    expect(row.title, 'رواية بغلاف');
+    expect(row.imageUrl, '/wp-content/uploads/covers/local-cover.jpg');
   });
 
   testWidgets('latest update opens its newest chapter in native reader', (

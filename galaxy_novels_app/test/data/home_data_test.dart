@@ -102,6 +102,7 @@ void main() {
         'continue_reading': {
           'novel_title': 'ظلال المجرة',
           'chapter_label': 'الفصل 24',
+          'cover_url': '/uploads/shadows.jpg',
           'progress': 68,
         },
         'latest_chapters': [
@@ -128,6 +129,7 @@ void main() {
     });
 
     expect(home.continueReading?.novelTitle, 'ظلال المجرة');
+    expect(home.continueReading?.coverUrl, '/uploads/shadows.jpg');
     expect(home.latestChapters.single.novelTitle, 'حارس النجوم');
     expect(home.recentNovels.single.title, 'بوابة الشمال');
     expect(home.isEmpty, isFalse);

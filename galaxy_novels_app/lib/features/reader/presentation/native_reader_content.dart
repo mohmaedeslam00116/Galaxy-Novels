@@ -332,20 +332,20 @@ class _ReaderFloatingControls extends StatelessWidget {
                         children: [
                           Expanded(
                             child: _ReaderNavButton(
-                              tooltip: 'الفصل التالي',
-                              label: 'التالي',
-                              icon: Icons.chevron_left_rounded,
-                              onPressed: hasNext ? onNext : null,
-                              isPrimary: true,
+                              tooltip: 'الفصل السابق',
+                              label: 'السابق',
+                              icon: Icons.chevron_right_rounded,
+                              onPressed: hasPrevious ? onPrevious : null,
                             ),
                           ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: _ReaderNavButton(
-                              tooltip: 'الفصل السابق',
-                              label: 'السابق',
-                              icon: Icons.chevron_right_rounded,
-                              onPressed: hasPrevious ? onPrevious : null,
+                              tooltip: 'الفصل التالي',
+                              label: 'التالي',
+                              icon: Icons.chevron_left_rounded,
+                              onPressed: hasNext ? onNext : null,
+                              isPrimary: true,
                             ),
                           ),
                         ],
@@ -367,24 +367,24 @@ class _ReaderFloatingControls extends StatelessWidget {
                   children: [
                     Expanded(
                       child: _ReaderNavButton(
+                        tooltip: 'الفصل السابق',
+                        label: 'السابق',
+                        icon: Icons.chevron_right_rounded,
+                        onPressed: hasPrevious ? onPrevious : null,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    settingsButton,
+                    const SizedBox(width: 8),
+                    commentsButton,
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _ReaderNavButton(
                         tooltip: 'الفصل التالي',
                         label: 'التالي',
                         icon: Icons.chevron_left_rounded,
                         onPressed: hasNext ? onNext : null,
                         isPrimary: true,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    commentsButton,
-                    const SizedBox(width: 8),
-                    settingsButton,
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _ReaderNavButton(
-                        tooltip: 'الفصل السابق',
-                        label: 'السابق',
-                        icon: Icons.chevron_right_rounded,
-                        onPressed: hasPrevious ? onPrevious : null,
                       ),
                     ),
                   ],

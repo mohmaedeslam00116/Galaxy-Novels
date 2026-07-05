@@ -41,6 +41,7 @@ class ReadingProgress {
     required this.novelTitle,
     required this.chapterLabel,
     required this.progress,
+    this.coverUrl = '',
   });
 
   factory ReadingProgress.fromJson(Map<String, dynamic> json) {
@@ -48,12 +49,14 @@ class ReadingProgress {
       novelTitle: _asString(json['novel_title']),
       chapterLabel: _asString(json['chapter_label']),
       progress: _asInt(json['progress']).clamp(0, 100),
+      coverUrl: _bestCoverFromJson(json),
     );
   }
 
   final String novelTitle;
   final String chapterLabel;
   final int progress;
+  final String coverUrl;
 }
 
 List<Map<String, dynamic>> _asList(Object? value) {
@@ -78,3 +81,35 @@ int _asInt(Object? value) {
 }
 
 String _asString(Object? value) => value?.toString() ?? '';
+
+String _bestCoverFromJson(Map<String, dynamic> json) {
+  final cover = json['cover'];
+  if (cover is Map) {
+    final map = cover.map((key, value) => MapEntry(key.toString(), value));
+    return _firstNonEmptyString([
+      map['medium'],
+      map['large'],
+      map['thumbnail'],
+      map['url'],
+    ]);
+  }
+
+  return _firstNonEmptyString([
+    json['cover_url'],
+    json['coverUrl'],
+    json['cover_medium'],
+    json['coverMedium'],
+    json['cover_thumbnail'],
+    json['coverThumbnail'],
+  ]);
+}
+
+String _firstNonEmptyString(List<Object?> values) {
+  for (final value in values) {
+    final text = _asString(value);
+    if (text.isNotEmpty) {
+      return text;
+    }
+  }
+  return '';
+}

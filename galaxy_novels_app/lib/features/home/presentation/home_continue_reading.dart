@@ -19,7 +19,7 @@ class HomeContinueReadingEntry {
       chapterTitle: progress.chapterLabel,
       completionPercent: progress.progress,
       contentApi: '',
-      coverUrl: '',
+      coverUrl: progress.coverUrl,
     );
   }
 
@@ -65,7 +65,8 @@ class HomeContinueReadingTile extends StatelessWidget {
       title: progress.novelTitle,
       subtitle: progress.chapterTitle,
       meta: progress.meta,
-      leadingLabel: progress.leadingLabel,
+      imageUrl: progress.coverUrl,
+      leadingLabel: progress.coverUrl.isEmpty ? progress.leadingLabel : null,
       onTap: onTap,
     );
   }

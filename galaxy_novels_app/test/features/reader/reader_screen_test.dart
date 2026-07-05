@@ -154,6 +154,49 @@ void main() {
     expect(find.byTooltip('الفصل السابق'), findsOneWidget);
   });
 
+  testWidgets(
+    'floating controls place next on the left and previous on right',
+    (tester) async {
+      await tester.pumpWidget(
+        _ReaderTestApp(
+          readerRepository: const _TestReaderRepository(),
+          child: const ReaderScreen(
+            contentApi: '/wp-json/wor-reader-app/v1/chapters/10',
+            chapterTitle: 'الفصل 1',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('reader-content-tap-area')));
+      await tester.pumpAndSettle();
+
+      final nextCenter = tester.getCenter(find.text('التالي'));
+      final previousCenter = tester.getCenter(find.text('السابق'));
+      expect(nextCenter.dx, lessThan(previousCenter.dx));
+      expect(
+        find.descendant(
+          of: find.ancestor(
+            of: find.text('التالي'),
+            matching: find.byType(FilledButton),
+          ),
+          matching: find.byIcon(Icons.chevron_left_rounded),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.ancestor(
+            of: find.text('السابق'),
+            matching: find.byType(FilledButton),
+          ),
+          matching: find.byIcon(Icons.chevron_right_rounded),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
+
   testWidgets('opens reader settings and updates paragraph text size', (
     tester,
   ) async {
