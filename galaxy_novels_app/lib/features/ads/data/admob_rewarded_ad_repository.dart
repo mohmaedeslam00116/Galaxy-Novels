@@ -7,9 +7,9 @@ import '../application/rewarded_ad_repository.dart';
 import 'admob_ad_units.dart';
 
 class AdMobRewardedAdRepository implements RewardedAdRepository {
-  AdMobRewardedAdRepository({
-    this.rewardedAdUnitId = AdMobAdUnits.androidRewardedTest,
-  });
+  AdMobRewardedAdRepository({String? rewardedAdUnitId})
+    : rewardedAdUnitId =
+          rewardedAdUnitId ?? AdMobAdUnits.current.androidRewardedId;
 
   final String rewardedAdUnitId;
   Future<void>? _initialization;

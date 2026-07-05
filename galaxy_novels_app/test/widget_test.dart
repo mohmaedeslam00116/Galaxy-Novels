@@ -245,6 +245,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('قارئ الاختبار'), findsOneWidget);
+    await tester.ensureVisible(find.text('تسجيل الخروج'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('تسجيل الخروج'));
     await tester.pumpAndSettle();
 

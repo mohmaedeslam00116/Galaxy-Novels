@@ -7,9 +7,9 @@ import 'admob_ad_units.dart';
 import '../presentation/admob_adaptive_banner.dart';
 
 class AdMobReaderAdRepository implements ReaderAdRepository {
-  AdMobReaderAdRepository({
-    this.readerBannerAdUnitId = AdMobAdUnits.androidReaderBannerTest,
-  });
+  AdMobReaderAdRepository({String? readerBannerAdUnitId})
+    : readerBannerAdUnitId =
+          readerBannerAdUnitId ?? AdMobAdUnits.current.androidReaderBannerId;
 
   final String readerBannerAdUnitId;
   Future<void>? _initialization;
