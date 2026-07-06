@@ -14,6 +14,7 @@ class FakeAuthRepository extends ValueNotifier<AuthSessionState>
   final bool expireOnRefresh;
 
   LoginCredentials? lastLogin;
+  RegisterCredentials? lastRegister;
   int refreshProfileCalls = 0;
 
   @override
@@ -26,6 +27,15 @@ class FakeAuthRepository extends ValueNotifier<AuthSessionState>
   @override
   Future<void> login(LoginCredentials credentials) async {
     lastLogin = credentials;
+    final user = authenticatedUser;
+    if (user != null) {
+      value = AuthSessionState.authenticated(user);
+    }
+  }
+
+  @override
+  Future<void> register(RegisterCredentials credentials) async {
+    lastRegister = credentials;
     final user = authenticatedUser;
     if (user != null) {
       value = AuthSessionState.authenticated(user);

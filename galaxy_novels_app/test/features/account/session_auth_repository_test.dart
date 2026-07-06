@@ -107,6 +107,73 @@ void main() {
     },
   );
 
+  test('register creates an account and persists the bearer token', () async {
+    final sessionStore = FakeAuthSessionStore();
+    final harness = _AuthHarness(
+      responses: [_authenticatedResponse(nonce: 'register-token')],
+      sessionStore: sessionStore,
+    );
+    addTearDown(harness.repository.dispose);
+
+    await harness.repository.register(
+      const RegisterCredentials(
+        username: 'reader123',
+        email: 'reader@example.com',
+        password: 'secret123',
+        displayName: 'Reader',
+        rememberSession: true,
+        deviceId: 'android-device-id',
+        deviceLabel: 'Android',
+      ),
+    );
+
+    final request = harness.requests.single;
+    final body = jsonDecode(request.body!) as Map<String, dynamic>;
+    expect(harness.repository.value.status, AuthSessionStatus.authenticated);
+    expect(request.method, 'POST');
+    expect(request.uri.path, endsWith('/auth/register'));
+    expect(request.headers['User-Agent'], 'WorReaderApp/1.0 Android');
+    expect(request.headers, isNot(contains('X-WP-Nonce')));
+    expect(body, {
+      'username': 'reader123',
+      'email': 'reader@example.com',
+      'password': 'secret123',
+      'display_name': 'Reader',
+      'device_id': 'android-device-id',
+      'device_label': 'Android',
+    });
+    expect(sessionStore.session?.accessToken, 'wra_register_token');
+  });
+
+  test('missing register route returns a clear setup message', () async {
+    final harness = _AuthHarness(
+      responses: [
+        const PrivateRawResponse(
+          statusCode: 404,
+          body:
+              '{"code":"rest_no_route","message":"No route was found matching the URL and request method."}',
+        ),
+      ],
+    );
+    addTearDown(harness.repository.dispose);
+
+    await harness.repository.register(
+      const RegisterCredentials(
+        username: 'reader123',
+        email: 'reader@example.com',
+        password: 'secret123',
+        displayName: 'Reader',
+        rememberSession: true,
+      ),
+    );
+
+    expect(harness.repository.value.status, AuthSessionStatus.guest);
+    expect(
+      harness.repository.value.errorMessage,
+      'إنشاء الحساب غير مفعّل في نسخة الموقع الحالية.',
+    );
+  });
+
   test('deduplicates concurrent profile refreshes', () async {
     final profileResponse = Completer<PrivateRawResponse>();
     final harness = _AuthHarness(

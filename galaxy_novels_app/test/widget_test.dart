@@ -180,6 +180,64 @@ void main() {
     expect(authRepository.lastLogin?.rememberSession, isTrue);
   });
 
+  testWidgets('account screen submits registration credentials', (
+    tester,
+  ) async {
+    final authRepository = FakeAuthRepository(
+      initialState: const AuthSessionState.idle(),
+    );
+    await tester.pumpWidget(
+      GalaxyNovelsApp(
+        homeRepository: _TestHomeRepository(_homeData),
+        catalogRepository: const _TestCatalogRepository(),
+        novelRepository: const _TestNovelRepository(),
+        authRepository: authRepository,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.menu));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('حسابي'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('auth-show-register')));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('register-username')),
+      'reader123',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('register-email')),
+      'reader@example.com',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('register-display-name')),
+      'Reader',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('register-password')),
+      'secret123',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('register-confirm-password')),
+      'secret123',
+    );
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('register-submit')),
+      120,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('register-submit')));
+    await tester.pump();
+
+    expect(authRepository.lastRegister?.username, 'reader123');
+    expect(authRepository.lastRegister?.email, 'reader@example.com');
+    expect(authRepository.lastRegister?.displayName, 'Reader');
+    expect(authRepository.lastRegister?.password, 'secret123');
+  });
+
   testWidgets('keeps the account signed in after closing and reopening', (
     tester,
   ) async {

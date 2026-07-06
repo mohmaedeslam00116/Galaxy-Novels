@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/auth_repository.dart';
 import '../../domain/auth_session.dart';
-import 'login_account_view.dart';
+import 'auth_entry_view.dart';
 import 'signed_in_account_view.dart';
 
 class AccountSessionView extends StatelessWidget {
@@ -30,10 +30,11 @@ class AccountSessionView extends StatelessWidget {
           AuthSessionStatus.idle ||
           AuthSessionStatus.restoring => const _LoadingAccount(),
           AuthSessionStatus.guest ||
-          AuthSessionStatus.authenticating => LoginAccountView(
+          AuthSessionStatus.authenticating => AuthEntryView(
             errorMessage: state.errorMessage,
             isSubmitting: state.status == AuthSessionStatus.authenticating,
             onLogin: repository.login,
+            onRegister: repository.register,
           ),
           AuthSessionStatus.failure => _AccountFailure(
             message: state.errorMessage ?? 'تعذر التحقق من الجلسة.',

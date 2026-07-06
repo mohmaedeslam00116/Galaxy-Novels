@@ -58,6 +58,28 @@ class LoginCredentials {
   final bool rememberSession;
 }
 
+class RegisterCredentials {
+  const RegisterCredentials({
+    required this.username,
+    required this.email,
+    required this.password,
+    required this.displayName,
+    required this.rememberSession,
+    this.deviceId = 'galaxy-novels-android',
+    this.deviceLabel = 'Android',
+    this.cfTurnstileResponse,
+  });
+
+  final String username;
+  final String email;
+  final String password;
+  final String displayName;
+  final bool rememberSession;
+  final String deviceId;
+  final String deviceLabel;
+  final String? cfTurnstileResponse;
+}
+
 class AuthUser {
   const AuthUser({
     required this.id,

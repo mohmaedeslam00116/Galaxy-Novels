@@ -171,6 +171,63 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
     }
   }
 
+  @override
+  Future<void> register(RegisterCredentials credentials) async {
+    if (_value.status == AuthSessionStatus.authenticating) {
+      return;
+    }
+    _authLog('register:start remember=${credentials.rememberSession}');
+    _resetProfileRefreshRequests();
+    _sessionGeneration += 1;
+    if (_invalidRegisterCredentials(credentials)) {
+      _publishState(
+        const AuthSessionState.guest(
+          errorMessage: 'أكمل بيانات إنشاء الحساب بشكل صحيح.',
+        ),
+      );
+      return;
+    }
+
+    _publishState(const AuthSessionState.authenticating());
+    _client.clearSession();
+    _persistSession = false;
+
+    try {
+      final session = await _requestRegister(credentials);
+      final notice = await _persistSnapshotIfNeeded();
+      _publishState(
+        AuthSessionState.authenticated(session.user, noticeMessage: notice),
+      );
+      _authLog(
+        'register:authenticated user=${session.user.id} '
+        'persist=$_persistSession notice=${notice != null}',
+      );
+    } on PrivateApiException catch (error) {
+      _authLog(
+        'register:api-error status=${error.statusCode} code=${error.code}',
+      );
+      _client.clearSession();
+      _publishState(
+        AuthSessionState.guest(errorMessage: registerMessageFor(error)),
+      );
+    } on AuthSessionStoreException {
+      _authLog('register:store-error');
+      _publishState(
+        const AuthSessionState.guest(
+          errorMessage: 'تعذر استخدام التخزين الآمن على هذا الجهاز.',
+        ),
+      );
+    } on FormatException {
+      _authLog('register:format-error');
+      _client.clearSession();
+      _publishState(
+        const AuthSessionState.guest(
+          errorMessage: 'أعاد الموقع بيانات حساب غير مكتملة.',
+        ),
+      );
+    }
+  }
+
   Future<AuthSessionPayload> _requestLogin(LoginCredentials credentials) async {
     await _sessionStore.clear();
     _authLog('login:cleared-stored-session');
@@ -186,6 +243,41 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
     _applySessionAccessToken(session, requireToken: true);
     _persistSession = credentials.rememberSession;
     return session;
+  }
+
+  Future<AuthSessionPayload> _requestRegister(
+    RegisterCredentials credentials,
+  ) async {
+    await _sessionStore.clear();
+    _authLog('register:cleared-stored-session');
+    final turnstileResponse = credentials.cfTurnstileResponse?.trim() ?? '';
+    final response = await _client.postPublic(
+      'auth/register',
+      body: {
+        'username': credentials.username.trim(),
+        'email': credentials.email.trim(),
+        'password': credentials.password,
+        'display_name': credentials.displayName.trim(),
+        'device_id': credentials.deviceId.trim(),
+        'device_label': credentials.deviceLabel.trim(),
+        if (turnstileResponse.isNotEmpty)
+          'cf_turnstile_response': turnstileResponse,
+      },
+    );
+    final session = AuthSessionPayload.fromResponse(response);
+    _applySessionAccessToken(session, requireToken: true);
+    _persistSession = credentials.rememberSession;
+    return session;
+  }
+
+  bool _invalidRegisterCredentials(RegisterCredentials credentials) {
+    return credentials.username.trim().isEmpty ||
+        credentials.email.trim().isEmpty ||
+        !credentials.email.contains('@') ||
+        credentials.password.isEmpty ||
+        credentials.displayName.trim().isEmpty ||
+        credentials.deviceId.trim().isEmpty ||
+        credentials.deviceLabel.trim().isEmpty;
   }
 
   void _applySessionAccessToken(

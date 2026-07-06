@@ -7,12 +7,14 @@ class LoginAccountView extends StatefulWidget {
     required this.isSubmitting,
     required this.onLogin,
     this.errorMessage,
+    this.onCreateAccount,
     super.key,
   });
 
   final bool isSubmitting;
   final String? errorMessage;
   final Future<void> Function(LoginCredentials credentials) onLogin;
+  final VoidCallback? onCreateAccount;
 
   @override
   State<LoginAccountView> createState() => _LoginAccountViewState();
@@ -129,6 +131,15 @@ class _LoginAccountViewState extends State<LoginAccountView> {
                 widget.isSubmitting ? 'جارٍ تسجيل الدخول...' : 'تسجيل الدخول',
               ),
             ),
+            if (widget.onCreateAccount != null) ...[
+              const SizedBox(height: 10),
+              TextButton.icon(
+                key: const ValueKey('auth-show-register'),
+                onPressed: widget.isSubmitting ? null : widget.onCreateAccount,
+                icon: const Icon(Icons.person_add_alt_1_rounded),
+                label: const Text('إنشاء حساب جديد'),
+              ),
+            ],
           ],
         ),
       ),
