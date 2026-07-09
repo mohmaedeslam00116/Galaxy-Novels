@@ -1,4 +1,4 @@
-package com.galaxynovels.galaxy_novels_app
+package com.galaxynovels.app
 
 import android.Manifest
 import android.content.Intent
