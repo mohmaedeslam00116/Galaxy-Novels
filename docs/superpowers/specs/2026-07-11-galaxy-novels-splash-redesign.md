@@ -24,7 +24,7 @@ The splash uses a fixed OLED-friendly cosmic composition inspired by the supplie
 - The mark has a restrained blue/gold halo but no square card, rounded app-icon plate, or opaque frame behind it.
 - The title `مجرة الروايات` appears below the mark in `El Messiri`, with the approved line `كل حكاية تبدأ من نجمة` beneath it in the regular app typography.
 - A custom stellar loader appears below the line: three luminous points orbit a small central star. It replaces the current linear progress line and avoids a generic CircularProgressIndicator.
-- Optional status copy under the loader is `نُهيّئ لك عالماً من الحكايات...` in a low-emphasis accessible color.
+- The status copy under the loader is `نُهيّئ لك عالماً من الحكايات...` in a low-emphasis accessible color.
 
 ## Palette and Typography
 
