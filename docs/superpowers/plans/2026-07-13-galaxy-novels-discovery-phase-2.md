@@ -118,13 +118,14 @@ Expected: PASS and no analysis issues. Request spec and code/test review before 
 
 ---
 
-### Task 2: Final five lazy shell destinations
+### Task 5: Final five lazy shell destinations
 
 **Interfaces:**
 
 - Changes `ShellDestination` to `home`, `library`, `favorites`, `history`, `account`.
 - Produces: `FavoritesScreen({bool embedded = false})` and `AccountScreen({bool embedded = false})`; `embedded: true` returns content only and lets the shell own the app bar.
 - Preserves: all five screens remain lazily created and preserve state across 599→600 and destination changes.
+- Consumes: اختصارات التنزيلات والترتيبات المرئية التي اكتملت في Tasks 2–4؛ لا تُنفذ هذه المهمة قبلها حتى لا تختفي أي وظيفة مؤقتًا.
 
 - [ ] **Step 1: Replace shell expectations with failing final-map tests**
 
@@ -170,7 +171,7 @@ Expected: PASS; builders for unvisited destinations remain at zero. Request spec
 
 ---
 
-### Task 3: Editorial home discovery
+### Task 2: Editorial home discovery
 
 **Interfaces:**
 
@@ -209,7 +210,7 @@ Expected: PASS. Request spec and code/test review.
 
 ---
 
-### Task 4: Compact library controls and visible feature shortcuts
+### Task 3: Compact library controls and visible feature shortcuts
 
 **Interfaces:**
 
@@ -247,7 +248,7 @@ Expected: PASS. Request spec and code/test review.
 
 ---
 
-### Task 5: Rankings shared presentation and unified states
+### Task 4: Rankings shared presentation and unified states
 
 **Interfaces:**
 
