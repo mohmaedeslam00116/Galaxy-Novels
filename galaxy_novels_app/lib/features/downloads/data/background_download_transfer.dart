@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:background_downloader/background_downloader.dart';
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as path;
 
 import '../application/download_transfer.dart';
@@ -144,7 +146,11 @@ class BackgroundDownloadTransfer implements DownloadTransfer {
           mimeType: update.mimeType,
         ),
       );
-    } on Object {
+    } on PlatformException {
+      _controller.add(
+        DownloadTransferFailed(transferId, DownloadFailure.unknown),
+      );
+    } on FileSystemException {
       _controller.add(
         DownloadTransferFailed(transferId, DownloadFailure.unknown),
       );

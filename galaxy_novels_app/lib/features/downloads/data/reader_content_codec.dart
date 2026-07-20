@@ -32,10 +32,10 @@ class ReaderContentCodec {
     if (decoded is! Map<String, dynamic> || decoded['version'] != 1) {
       throw const FormatException('Unsupported downloaded chapter payload.');
     }
-    final data = decoded['data'];
-    if (data is! Map<String, dynamic>) {
+    final chapterJson = decoded['data'];
+    if (chapterJson is! Map<String, dynamic>) {
       throw const FormatException('Missing downloaded chapter data.');
     }
-    return ReaderChapterContent.fromJson(data);
+    return ReaderChapterContent.fromJson(chapterJson);
   }
 }

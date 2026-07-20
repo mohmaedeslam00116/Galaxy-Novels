@@ -105,7 +105,7 @@ void main() {
     await Future<void>.delayed(Duration.zero);
 
     expect(updates[0], isA<DownloadTransferProgress>());
-    expect((updates[0] as DownloadTransferProgress).value, 0.4);
+    expect((updates[0] as DownloadTransferProgress).progressFraction, 0.4);
     expect(
       (updates[1] as DownloadTransferFailed).failure,
       DownloadFailure.unauthorized,

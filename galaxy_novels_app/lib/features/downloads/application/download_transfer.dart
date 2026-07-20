@@ -27,9 +27,9 @@ sealed class DownloadTransferUpdate {
 }
 
 final class DownloadTransferProgress extends DownloadTransferUpdate {
-  const DownloadTransferProgress(super.transferId, this.value);
+  const DownloadTransferProgress(super.transferId, this.progressFraction);
 
-  final double value;
+  final double progressFraction;
 }
 
 final class DownloadTransferFinished extends DownloadTransferUpdate {

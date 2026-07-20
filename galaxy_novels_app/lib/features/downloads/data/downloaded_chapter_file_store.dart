@@ -54,7 +54,7 @@ class DownloadedChapterFileStore {
       return _codec.decode(encoded);
     } on DownloadFileException {
       rethrow;
-    } on Object catch (error) {
+    } on FormatException catch (error) {
       throw DownloadFileCorruptException(storedPath, error);
     }
   }
@@ -78,7 +78,9 @@ class DownloadedChapterFileStore {
       return _codec.decode(utf8.decode(clearBytes));
     } on DownloadFileException {
       rethrow;
-    } on Object catch (error) {
+    } on FormatException catch (error) {
+      throw DownloadFileCorruptException(storedPath, error);
+    } on SecretBoxAuthenticationError catch (error) {
       throw DownloadFileCorruptException(storedPath, error);
     }
   }

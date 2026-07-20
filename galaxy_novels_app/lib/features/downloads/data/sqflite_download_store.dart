@@ -612,9 +612,9 @@ class SqfliteDownloadStore implements DownloadStore {
   }
 
   @override
-  Future<void> setWifiOnly(bool value) {
+  Future<void> setWifiOnly(bool enabled) {
     return _database.update('download_settings', {
-      'wifi_only': value ? 1 : 0,
+      'wifi_only': enabled ? 1 : 0,
     }, where: 'id = 1');
   }
 
@@ -831,7 +831,7 @@ class SqfliteDownloadStore implements DownloadStore {
   }
 
   static T _enumByName<T extends Enum>(List<T> values, String name) {
-    return values.firstWhere((value) => value.name == name);
+    return values.firstWhere((candidate) => candidate.name == name);
   }
 
   static T? _nullableEnumByName<T extends Enum>(List<T> values, String? name) {
@@ -839,5 +839,5 @@ class SqfliteDownloadStore implements DownloadStore {
     return _enumByName(values, name);
   }
 
-  static int _int(Object? value) => value is int ? value : 0;
+  static int _int(Object? storedInteger) => (storedInteger as int?) ?? 0;
 }

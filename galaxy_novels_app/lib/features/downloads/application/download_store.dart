@@ -32,7 +32,7 @@ abstract interface class DownloadStore {
   Future<DownloadStoreSnapshot> snapshot();
   Future<void> saveMembership(DownloadMembershipSnapshot membership);
   Future<void> updateCoverPath(int novelId, String coverPath);
-  Future<void> setWifiOnly(bool value);
+  Future<void> setWifiOnly(bool enabled);
   Future<void> deleteChapters(Set<String> chapterKeys);
   Future<void> close();
 }
