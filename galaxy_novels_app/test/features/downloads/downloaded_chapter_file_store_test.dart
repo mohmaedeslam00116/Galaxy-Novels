@@ -97,6 +97,18 @@ void main() {
 
     expect(File(path).existsSync(), isFalse);
   });
+
+  test('temporary-file cleanup is idempotent', () async {
+    final temporary = File(
+      '${directory.path}${Platform.pathSeparator}completed-download.tmp',
+    );
+    await temporary.writeAsString('done');
+
+    await deleteDownloadTemporaryFile(temporary);
+    await deleteDownloadTemporaryFile(temporary);
+
+    expect(temporary.existsSync(), isFalse);
+  });
 }
 
 SecretKey _key(int seed) {

@@ -2,17 +2,17 @@ import 'package:flutter/material.dart';
 
 import '../../../app/app_dependencies.dart';
 import '../../../app/app_theme.dart';
-import '../../../core/text/arabic_search_normalizer.dart';
-import '../../../data/models/novel_details_data.dart';
-import '../../../data/repositories/downloads_repository.dart';
+import '../../../core/analytics/app_screen_names.dart';
 import '../../../data/repositories/novel_repository.dart';
-import '../../downloads/application/download_manager.dart';
-import '../../downloads/presentation/chapter_download_button.dart';
+import '../../downloads/domain/download_models.dart';
 import '../../reader/presentation/reader_screen.dart';
-import '../../rewards/application/reader_rewards_repository.dart';
 import '../../vip/application/vip_chapters_controller.dart';
 import '../../vip/domain/vip_chapter.dart';
+import '../application/chapter_download_request.dart';
 import '../domain/readable_chapter.dart';
+import 'chapter_download_state.dart';
+import 'chapter_download_feedback.dart';
+import 'chapter_range_download_sheet.dart';
 import 'visible_chapter_count.dart';
 import 'widgets/readable_chapter_tile.dart';
 
@@ -23,12 +23,33 @@ class AllChaptersScreen extends StatefulWidget {
     required this.canReadPrivate,
     required this.isVipDirectContentRouteAvailable,
     super.key,
-  });
+  }) : _startsSelecting = false,
+       _returnsSelection = false;
+
+  const AllChaptersScreen.selecting({
+    required this.result,
+    required this.vipController,
+    required this.canReadPrivate,
+    required this.isVipDirectContentRouteAvailable,
+    super.key,
+  }) : _startsSelecting = true,
+       _returnsSelection = false;
+
+  const AllChaptersScreen.picking({
+    required this.result,
+    required this.vipController,
+    required this.canReadPrivate,
+    required this.isVipDirectContentRouteAvailable,
+    super.key,
+  }) : _startsSelecting = true,
+       _returnsSelection = true;
 
   final NovelDetailsLoadResult result;
   final VipChaptersController vipController;
   final bool canReadPrivate;
   final bool isVipDirectContentRouteAvailable;
+  final bool _startsSelecting;
+  final bool _returnsSelection;
 
   @override
   State<AllChaptersScreen> createState() => _AllChaptersScreenState();
@@ -39,10 +60,13 @@ class _AllChaptersScreenState extends State<AllChaptersScreen> {
   final TextEditingController _searchController = TextEditingController();
   int _pageIndex = 0;
   String _searchQuery = '';
+  late bool _selectionMode;
+  final Set<String> _selectedChapterKeys = {};
 
   @override
   void initState() {
     super.initState();
+    _selectionMode = widget._startsSelecting;
     _loadVipIfAllowed();
   }
 
@@ -64,37 +88,76 @@ class _AllChaptersScreenState extends State<AllChaptersScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final dependencies = AppDependencies.of(context);
-    final downloadsRepository = dependencies.downloadsRepository;
-    final downloadManager = dependencies.downloadManager;
-
     return Scaffold(
-      appBar: AppBar(title: const Text('كل الفصول')),
+      appBar: AppBar(
+        title: Text(_selectionMode ? 'اختر الفصول' : 'كل الفصول'),
+        actions: [
+          IconButton(
+            key: const ValueKey('chapters-select-mode'),
+            tooltip: _selectionMode ? 'إنهاء التحديد' : 'تحديد عدة فصول',
+            onPressed: widget._returnsSelection
+                ? () => Navigator.of(context).pop()
+                : _toggleSelectionMode,
+            icon: Icon(
+              _selectionMode ? Icons.close_rounded : Icons.checklist_rounded,
+            ),
+          ),
+        ],
+      ),
+      bottomNavigationBar: _selectionMode
+          ? SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: FilledButton.icon(
+                  key: ValueKey(
+                    widget._returnsSelection
+                        ? 'chapters-use-selection'
+                        : 'chapters-download-selected',
+                  ),
+                  onPressed: _selectedChapterKeys.isEmpty
+                      ? null
+                      : widget._returnsSelection
+                      ? _returnSelected
+                      : _downloadSelected,
+                  icon: Icon(
+                    widget._returnsSelection
+                        ? Icons.check_rounded
+                        : Icons.download_rounded,
+                  ),
+                  label: Text(
+                    widget._returnsSelection
+                        ? 'استخدام المحدد (${_selectedChapterKeys.length})'
+                        : 'تنزيل المحدد (${_selectedChapterKeys.length})',
+                  ),
+                ),
+              ),
+            )
+          : null,
       body: SafeArea(
-        child: ValueListenableBuilder<VipChaptersState>(
-          valueListenable: widget.vipController,
-          builder: (context, vipState, _) {
-            final chapters = mergeReadableChapters(
-              publicChapters: widget.result.chapters,
-              vipChapters: _vipChaptersFor(vipState),
-            );
-            final filteredChapters = _filteredChapters(chapters);
-            final hasSearchQuery = _searchQuery.trim().isNotEmpty;
-            final visibleTotalCount = visibleNovelChapterCount(
-              publicChapterCount: widget.result.details.chaptersCount,
-              loadedPublicChapterCount: widget.result.chapters.length,
-              canReadPrivate: widget.canReadPrivate,
-              vipState: vipState,
-            );
-            final pageCount = chapterPageCount(filteredChapters);
-            final pageIndex = pageCount == 0
-                ? 0
-                : _pageIndex.clamp(0, pageCount - 1);
-            final pageItems = chapterPageItems(filteredChapters, pageIndex);
+        child: ValueListenableBuilder<DownloadsDashboard>(
+          valueListenable: AppDependencies.of(context).downloadRepository,
+          builder: (context, dashboard, _) {
+            return ValueListenableBuilder<VipChaptersState>(
+              valueListenable: widget.vipController,
+              builder: (context, vipState, _) {
+                final chapters = mergeReadableChapters(
+                  publicChapters: widget.result.chapters,
+                  vipChapters: _vipChaptersFor(vipState),
+                );
+                final filteredChapters = _filteredChapters(chapters);
+                final hasSearchQuery = _searchQuery.trim().isNotEmpty;
+                final visibleTotalCount = visibleNovelChapterCount(
+                  publicChapterCount: widget.result.details.chaptersCount,
+                  loadedPublicChapterCount: widget.result.chapters.length,
+                  canReadPrivate: widget.canReadPrivate,
+                  vipState: vipState,
+                );
+                final pageCount = chapterPageCount(filteredChapters);
+                final pageIndex = pageCount == 0
+                    ? 0
+                    : _pageIndex.clamp(0, pageCount - 1);
+                final pageItems = chapterPageItems(filteredChapters, pageIndex);
 
-            return ValueListenableBuilder<DownloadsState>(
-              valueListenable: downloadsRepository.state,
-              builder: (context, downloadsState, _) {
                 if (chapters.isEmpty) {
                   return const _EmptyChaptersView();
                 }
@@ -110,6 +173,10 @@ class _AllChaptersScreenState extends State<AllChaptersScreen> {
                       isFiltered: hasSearchQuery,
                       onSelected: _selectPage,
                     ),
+                    if (_selectionMode && !widget._returnsSelection)
+                      _DownloadRangeButton(
+                        onPressed: () => _downloadRange(chapters),
+                      ),
                     _ChapterSearchField(
                       controller: _searchController,
                       query: _searchQuery,
@@ -134,18 +201,35 @@ class _AllChaptersScreenState extends State<AllChaptersScreen> {
                                 }
 
                                 final chapter = pageItems[index];
+                                final downloadState =
+                                    resolveChapterDownloadState(
+                                      dashboard,
+                                      chapterDownloadKey(chapter),
+                                    );
                                 return ReadableChapterTile(
                                   chapter: chapter,
-                                  trailingAction: chapter.isVip
+                                  onTap: _chapterOnTap(
+                                    filteredChapters,
+                                    chapter,
+                                  ),
+                                  downloadState: downloadState,
+                                  onDownload:
+                                      downloadState.status ==
+                                          ChapterDownloadStatus.available
+                                      ? () => _downloadChapters([chapter])
+                                      : null,
+                                  onRetryDownload:
+                                      downloadState.retryJobId == null
                                       ? null
-                                      : _downloadAction(
-                                          context,
-                                          downloadsState,
-                                          downloadManager,
-                                          chapter,
+                                      : () => _retryDownload(
+                                          downloadState.retryJobId!,
                                         ),
-                                  onTap: () =>
-                                      _openChapter(filteredChapters, chapter),
+                                  selectionMode: _selectionMode,
+                                  selected: _selectedChapterKeys.contains(
+                                    chapterDownloadKey(chapter),
+                                  ),
+                                  onToggleSelection: () =>
+                                      _toggleChapterSelection(chapter),
                                 );
                               },
                             ),
@@ -159,6 +243,76 @@ class _AllChaptersScreenState extends State<AllChaptersScreen> {
       ),
     );
   }
+
+  void _toggleSelectionMode() {
+    setState(() {
+      _selectionMode = !_selectionMode;
+      if (!_selectionMode) _selectedChapterKeys.clear();
+    });
+  }
+
+  void _toggleChapterSelection(ReadableChapter chapter) {
+    final key = chapterDownloadKey(chapter);
+    setState(() {
+      if (!_selectedChapterKeys.add(key)) _selectedChapterKeys.remove(key);
+    });
+  }
+
+  Future<void> _downloadSelected() async {
+    final chapters =
+        mergeReadableChapters(
+          publicChapters: widget.result.chapters,
+          vipChapters: _vipChaptersFor(widget.vipController.value),
+        ).where(
+          (chapter) =>
+              _selectedChapterKeys.contains(chapterDownloadKey(chapter)),
+        );
+    await _downloadChapters(chapters.toList(growable: false));
+    if (mounted) _toggleSelectionMode();
+  }
+
+  void _returnSelected() {
+    final chapters =
+        mergeReadableChapters(
+              publicChapters: widget.result.chapters,
+              vipChapters: _vipChaptersFor(widget.vipController.value),
+            )
+            .where(
+              (chapter) =>
+                  _selectedChapterKeys.contains(chapterDownloadKey(chapter)),
+            )
+            .toList(growable: false);
+    Navigator.of(context).pop<List<ReadableChapter>>(chapters);
+  }
+
+  Future<void> _downloadChapters(List<ReadableChapter> chapters) async {
+    await enqueueChaptersWithFeedback(
+      context: context,
+      novel: DownloadNovelRequest(
+        novelId: widget.result.details.id,
+        title: widget.result.details.title,
+        coverUrl: widget.result.details.bestCover,
+      ),
+      chapters: chapters.map(chapterDownloadRequest).toList(growable: false),
+      successMessage: (response) => response.acceptedChapterKeys.isEmpty
+          ? 'الفصول المحددة محفوظة أو موجودة في الطابور بالفعل'
+          : 'تمت إضافة ${response.acceptedChapterKeys.length} فصل إلى التنزيلات',
+    );
+  }
+
+  Future<void> _downloadRange(List<ReadableChapter> chapters) async {
+    final selected = await showChapterRangeDownloadSheet(
+      context: context,
+      chapters: chapters,
+    );
+    if (!mounted || selected == null || selected.isEmpty) {
+      return;
+    }
+    await _downloadChapters(selected);
+  }
+
+  Future<void> _retryDownload(String jobId) =>
+      retryChapterDownloadWithFeedback(context: context, jobId: jobId);
 
   void _selectPage(int index) {
     if (index == _pageIndex) {
@@ -204,12 +358,10 @@ class _AllChaptersScreenState extends State<AllChaptersScreen> {
   }
 
   List<ReadableChapter> _filteredChapters(List<ReadableChapter> chapters) {
-    final query = _normalizeChapterSearchText(_searchQuery);
-    if (query.isEmpty) {
-      return chapters;
-    }
-    return List.unmodifiable(
-      chapters.where((chapter) => _chapterMatchesQuery(chapter, query)),
+    return readableChaptersForDisplay(
+      chapters,
+      query: _searchQuery,
+      descending: false,
     );
   }
 
@@ -229,71 +381,10 @@ class _AllChaptersScreenState extends State<AllChaptersScreen> {
     return 1;
   }
 
-  Widget _downloadAction(
-    BuildContext context,
-    DownloadsState downloadsState,
-    DownloadManager downloadManager,
+  VoidCallback? _chapterOnTap(
+    List<ReadableChapter> chapters,
     ReadableChapter chapter,
   ) {
-    final publicChapter = chapter.publicChapter;
-    if (publicChapter == null) {
-      return const SizedBox.shrink();
-    }
-    return ChapterDownloadButton(
-      isDownloaded: downloadsState.contains(publicChapter.effectiveContentApi),
-      isEnabled: publicChapter.effectiveContentApi.isNotEmpty,
-      onPressed: () =>
-          _downloadChapter(context, downloadManager, publicChapter),
-    );
-  }
-
-  Future<void> _downloadChapter(
-    BuildContext context,
-    DownloadManager manager,
-    NovelChapter chapter,
-  ) async {
-    try {
-      await manager.downloadChapter(
-        ChapterDownloadRequest(
-          novelId: widget.result.details.id,
-          novelTitle: widget.result.details.title,
-          novelCover: widget.result.details.bestCover,
-          chapter: chapter,
-        ),
-      );
-      if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('تم تحميل الفصل')));
-      }
-    } on DownloadJobInProgressException {
-      if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('يوجد تنزيل جار بالفعل')));
-      }
-    } on DownloadLimitExceededException {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('وصلت إلى حد 100 فصل محمل')),
-        );
-      }
-    } on InsufficientDownloadPointsException {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('رصيد النقاط لا يكفي لتحميل هذا الفصل')),
-        );
-      }
-    } catch (_) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('تعذر تحميل الفصل، حاول مجددا')),
-        );
-      }
-    }
-  }
-
-  void _openChapter(List<ReadableChapter> chapters, ReadableChapter chapter) {
     final index = chapters.indexOf(chapter);
     final contentApi = readableChapterOpenContentApi(
       chapters,
@@ -301,17 +392,15 @@ class _AllChaptersScreenState extends State<AllChaptersScreen> {
       directVipChapterRouteAvailable: widget.isVipDirectContentRouteAvailable,
     );
     if (contentApi.isEmpty) {
-      if (chapter.isVip) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('قراءة هذا الفصل تحتاج تحديث مسار VIP في السيرفر.'),
-          ),
-        );
-      }
-      return;
+      return null;
     }
+    return () => _openChapter(contentApi, chapter);
+  }
+
+  void _openChapter(String contentApi, ReadableChapter chapter) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
+        settings: const RouteSettings(name: AppScreenNames.reader),
         builder: (context) => ReaderScreen(
           contentApi: contentApi,
           chapterTitle: chapter.label,
@@ -327,6 +416,25 @@ class _AllChaptersScreenState extends State<AllChaptersScreen> {
         widget.result.details.vipScheduleManifest.isNotEmpty) {
       widget.vipController.loadInitial();
     }
+  }
+}
+
+class _DownloadRangeButton extends StatelessWidget {
+  const _DownloadRangeButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+      child: OutlinedButton.icon(
+        key: const ValueKey('chapters-download-range'),
+        onPressed: onPressed,
+        icon: const Icon(Icons.linear_scale_rounded),
+        label: const Text('تنزيل نطاق من–إلى'),
+      ),
+    );
   }
 }
 
@@ -667,21 +775,4 @@ class _EmptyChaptersView extends StatelessWidget {
       ),
     );
   }
-}
-
-bool _chapterMatchesQuery(ReadableChapter chapter, String query) {
-  final searchable = _normalizeChapterSearchText(
-    [
-      chapter.number,
-      chapter.label,
-      chapter.title,
-      chapter.dateLabel,
-      chapter.isVip ? 'vip' : '',
-    ].join(' '),
-  );
-  return searchable.contains(query);
-}
-
-String _normalizeChapterSearchText(String value) {
-  return normalizeArabicSearch(value);
 }

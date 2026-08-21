@@ -20,6 +20,34 @@ void main() {
 
   tearDown(() => store.close());
 
+  test(
+    'closing an independent background connection keeps foreground open',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'galaxy_download_connections_',
+      );
+      final path = '${directory.path}${Platform.pathSeparator}downloads.db';
+      final foreground = await SqfliteDownloadStore.open(
+        factory: databaseFactoryFfi,
+        path: path,
+      );
+      final background = await SqfliteDownloadStore.open(
+        factory: databaseFactoryFfi,
+        path: path,
+        singleInstance: false,
+      );
+
+      try {
+        await background.close();
+
+        expect((await foreground.snapshot()).groups, isEmpty);
+      } finally {
+        await foreground.close();
+        await directory.delete(recursive: true);
+      }
+    },
+  );
+
   test('releasing a reservation does not charge a chapter', () async {
     final enqueued = await store.enqueue(
       novel: _novel,
@@ -56,6 +84,53 @@ void main() {
     expect(second, isNotNull);
     expect(third, isNull);
   });
+
+  test('pausing a group blocks queued work until it is resumed', () async {
+    final enqueued = await store.enqueue(
+      novel: _novel,
+      chapters: const [_chapter71, _chapter72],
+    );
+    final plan = DownloadPlan.forTier(DownloadMembershipTier.regular);
+    final first = await store.reserveNext(plan: plan, now: _dayOne);
+    expect(first, isNotNull);
+
+    await store.pauseGroup(enqueued.groupId!);
+
+    var snapshot = await store.snapshot();
+    expect(snapshot.groups.single.status, DownloadGroupStatus.paused);
+    expect(await store.reserveNext(plan: plan, now: _dayOne), isNull);
+
+    await store.resumeGroup(enqueued.groupId!);
+
+    snapshot = await store.snapshot();
+    expect(snapshot.groups.single.status, DownloadGroupStatus.running);
+    expect(await store.reserveNext(plan: plan, now: _dayOne), isNotNull);
+  });
+
+  test(
+    'canceling a group removes pending jobs and allows redownload',
+    () async {
+      final enqueued = await store.enqueue(
+        novel: _novel,
+        chapters: const [_chapter71, _chapter72],
+      );
+      final plan = DownloadPlan.forTier(DownloadMembershipTier.regular);
+      expect(await store.reserveNext(plan: plan, now: _dayOne), isNotNull);
+
+      await store.cancelGroup(enqueued.groupId!);
+
+      final snapshot = await store.snapshot();
+      expect(snapshot.groups, isEmpty);
+      expect(snapshot.novels, isEmpty);
+      expect(snapshot.reservedCount, 0);
+
+      final redownload = await store.enqueue(
+        novel: _novel,
+        chapters: const [_chapter71, _chapter72],
+      );
+      expect(redownload.acceptedChapterKeys, ['public:71', 'public:72']);
+    },
+  );
 
   test('the next reservation is refused when the plan is exhausted', () async {
     const plan = DownloadPlan(

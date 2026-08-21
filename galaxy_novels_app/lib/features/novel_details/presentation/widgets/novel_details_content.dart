@@ -2,64 +2,70 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../../../app/app_dependencies.dart';
-import '../../../../app/app_theme.dart';
 import '../../../../data/models/novel_details_data.dart';
+import '../../../../data/models/reading_progress.dart';
 import '../../../../data/repositories/novel_repository.dart';
-import '../../../../shared/widgets/section_title.dart';
+import '../../../../design_system/foundation/galaxy_adaptive.dart';
+import '../../../../design_system/patterns/galaxy_novel_details_header.dart';
+import '../../../../shared/widgets/novel_cover.dart';
+import '../../../account/application/auth_repository.dart';
+import '../../../account/domain/auth_session.dart';
+import '../../../ads/application/inline_native_ad_repository.dart';
+import '../../../ads/presentation/inline_native_ad_slot.dart';
 import '../../../comments/application/comments_controller.dart';
 import '../../../comments/application/comments_repository.dart';
 import '../../../comments/domain/comment_target.dart';
 import '../../../comments/presentation/comments_sliver_section.dart';
-import '../../../account/application/auth_repository.dart';
 import '../../../novel_engagement/application/novel_engagement_controller.dart';
-import '../../../novel_engagement/presentation/novel_personal_state_section.dart';
 import '../../../vip/application/vip_chapters_controller.dart';
+import '../novel_details_visual_tokens.dart';
+import '../novel_details_transition.dart';
 import '../visible_chapter_count.dart';
-import 'favorite_toggle_button.dart';
 import 'novel_chapters_section.dart';
 import 'novel_details_header.dart';
+import 'novel_details_section_tabs.dart';
+import 'novel_details_summary_card.dart';
 
 class NovelDetailsContent extends StatefulWidget {
   const NovelDetailsContent({
     required this.loadResult,
     required this.engagementState,
+    this.readingProgress,
     required this.commentsRepository,
     required this.authRepository,
     required this.vipController,
     required this.isVipNativeReaderAvailable,
     required this.onRead,
     required this.onOpenVipChapter,
-    required this.onDownloadChapters,
-    required this.onToggleFavorite,
     required this.onRate,
     required this.onSignIn,
     required this.onRetryEngagement,
+    this.favoriteAction,
+    this.heroTag,
     super.key,
   });
 
   final NovelDetailsLoadResult loadResult;
   final NovelEngagementState engagementState;
+  final ReadingProgress? readingProgress;
   final CommentsRepository commentsRepository;
   final AuthRepository authRepository;
   final VipChaptersController vipController;
   final bool isVipNativeReaderAvailable;
   final void Function(NovelChapter chapter, String novelTitle) onRead;
   final void Function(String contentApi, String title) onOpenVipChapter;
-  final VoidCallback onDownloadChapters;
-  final Future<void> Function() onToggleFavorite;
   final VoidCallback onRate;
   final VoidCallback onSignIn;
   final VoidCallback onRetryEngagement;
+  final Widget? favoriteAction;
+  final Object? heroTag;
 
   @override
   State<NovelDetailsContent> createState() => _NovelDetailsContentState();
 }
 
-enum _NovelDetailsSection { chapters, comments }
-
 class _NovelDetailsContentState extends State<NovelDetailsContent> {
-  _NovelDetailsSection _section = _NovelDetailsSection.chapters;
+  NovelDetailsSection _section = NovelDetailsSection.chapters;
   CommentsController? _commentsController;
 
   @override
@@ -75,7 +81,7 @@ class _NovelDetailsContentState extends State<NovelDetailsContent> {
         oldWidget.commentsRepository != widget.commentsRepository) {
       _commentsController?.dispose();
       _commentsController = null;
-      _section = _NovelDetailsSection.chapters;
+      _section = NovelDetailsSection.chapters;
     }
     if (oldWidget.vipController != widget.vipController ||
         oldWidget.loadResult.details.id != widget.loadResult.details.id ||
@@ -89,104 +95,146 @@ class _NovelDetailsContentState extends State<NovelDetailsContent> {
   Widget build(BuildContext context) {
     final loadResult = widget.loadResult;
     final details = loadResult.details;
-    final selectedSection = _section;
     final firstReadableChapter = _firstReadableChapter(loadResult.chapters);
     final continuationChapter = _continuationChapter(
       loadResult.chapters,
-      widget.engagementState.userState?.lastRead.chapterId ?? 0,
+      widget.readingProgress?.chapterId ??
+          widget.engagementState.userState?.lastRead.chapterId ??
+          0,
     );
     final readChapter = continuationChapter ?? firstReadableChapter;
+    final tokens = NovelDetailsVisualTokens.of(context);
+    final maximumContentWidth =
+        GalaxyAdaptive.of(context) == GalaxyLayoutTier.expanded
+        ? 1120.0
+        : 768.0;
 
-    return Stack(
-      children: [
-        CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(
-              child: ValueListenableBuilder<VipChaptersState>(
-                valueListenable: widget.vipController,
-                builder: (context, vipState, _) {
-                  return NovelDetailsHeader(
-                    details: details,
-                    chaptersCount: visibleNovelChapterCount(
-                      publicChapterCount: details.chaptersCount,
-                      loadedPublicChapterCount: loadResult.chapters.length,
-                      canReadPrivate:
-                          widget
-                              .engagementState
-                              .userState
-                              ?.vip
-                              .canReadPrivate ??
-                          false,
-                      vipState: vipState,
-                    ),
-                  );
-                },
+    return ColoredBox(
+      color: tokens.background,
+      child: Center(
+        child: ConstrainedBox(
+          key: const ValueKey('novel-details-content-column'),
+          constraints: BoxConstraints(maxWidth: maximumContentWidth),
+          child: CustomScrollView(
+            slivers: [
+              SliverAppBar(
+                pinned: true,
+                backgroundColor: tokens.background,
+                surfaceTintColor: Colors.transparent,
+                titleSpacing: 16,
+                title: GalaxyCollapsingDetailsBar(
+                  key: const ValueKey('novel-details-collapsing-bar'),
+                  title: details.title,
+                  readLabel: readChapter == null ? null : 'متابعة',
+                  onRead: readChapter == null
+                      ? null
+                      : () => widget.onRead(readChapter, details.title),
+                ),
               ),
-            ),
-            SliverToBoxAdapter(
-              child: NovelPersonalStateSection(
-                state: widget.engagementState,
-                onRate: widget.onRate,
-                onSignIn: widget.onSignIn,
-                onRetry: widget.onRetryEngagement,
-              ),
-            ),
-            if (details.summary.isNotEmpty)
               SliverToBoxAdapter(
-                child: _SummarySection(summary: details.summary),
+                child: ValueListenableBuilder<VipChaptersState>(
+                  valueListenable: widget.vipController,
+                  builder: (context, vipState, _) {
+                    return NovelDetailsHeader(
+                      details: details,
+                      chaptersCount: visibleNovelChapterCount(
+                        publicChapterCount: details.chaptersCount,
+                        loadedPublicChapterCount: loadResult.chapters.length,
+                        canReadPrivate:
+                            widget
+                                .engagementState
+                                .userState
+                                ?.vip
+                                .canReadPrivate ??
+                            false,
+                        vipState: vipState,
+                      ),
+                      engagementState: widget.engagementState,
+                      onRate: widget.onRate,
+                      onSignIn: widget.onSignIn,
+                      onRetryEngagement: widget.onRetryEngagement,
+                      heroTag: widget.heroTag,
+                    );
+                  },
+                ),
               ),
-            SliverToBoxAdapter(
-              child: _DetailsSectionTabs(
-                selected: selectedSection,
-                onSelected: _selectSection,
+              SliverToBoxAdapter(
+                child: _ReadAction(
+                  label: continuationChapter == null
+                      ? 'ابدأ القراءة'
+                      : 'متابعة ${continuationChapter.label}',
+                  onPressed: readChapter == null
+                      ? null
+                      : () => widget.onRead(readChapter, details.title),
+                  favoriteAction: widget.favoriteAction,
+                ),
               ),
-            ),
-            switch (selectedSection) {
-              _NovelDetailsSection.chapters => NovelChaptersSection(
-                result: loadResult,
-                vipController: widget.vipController,
-                canReadPrivate:
-                    widget.engagementState.userState?.vip.canReadPrivate ??
-                    false,
-                isVipDirectContentRouteAvailable:
-                    widget.isVipNativeReaderAvailable,
-                onRead: widget.onRead,
-                onOpenVipChapter: widget.onOpenVipChapter,
-                onDownloadChapters: widget.onDownloadChapters,
+              if (details.summary.isNotEmpty)
+                SliverToBoxAdapter(
+                  child: NovelDetailsSummaryCard(summary: details.summary),
+                ),
+              const SliverToBoxAdapter(
+                child: InlineNativeAdSlot(
+                  placement: InlineNativeAdPlacement.novelDetails,
+                ),
               ),
-              _NovelDetailsSection.comments => CommentsSliverSection(
-                controller: _commentsController!,
-                authRepository: widget.authRepository,
-                onSignIn: widget.onSignIn,
+              SliverToBoxAdapter(
+                child: NovelDetailsSectionTabs(
+                  selected: _section,
+                  onSelected: _selectSection,
+                  chaptersCount: visibleNovelChapterCount(
+                    publicChapterCount: details.chaptersCount,
+                    loadedPublicChapterCount: loadResult.chapters.length,
+                    canReadPrivate:
+                        widget.engagementState.userState?.vip.canReadPrivate ??
+                        false,
+                    vipState: widget.vipController.value,
+                  ),
+                ),
               ),
-            },
-            const SliverToBoxAdapter(child: SizedBox(height: 118)),
-          ],
-        ),
-        PositionedDirectional(
-          start: 0,
-          end: 0,
-          bottom: 0,
-          child: _DetailsBottomBar(
-            novelId: details.id,
-            onToggleFavorite: widget.onToggleFavorite,
-            readLabel: continuationChapter == null
-                ? 'ابدأ القراءة'
-                : 'متابعة ${continuationChapter.label}',
-            onRead: readChapter == null
-                ? null
-                : () => widget.onRead(readChapter, details.title),
+              switch (_section) {
+                NovelDetailsSection.chapters =>
+                  ValueListenableBuilder<AuthSessionState>(
+                    valueListenable: widget.authRepository,
+                    builder: (context, session, _) {
+                      return NovelChaptersSection(
+                        result: loadResult,
+                        vipController: widget.vipController,
+                        canReadPrivate:
+                            widget
+                                .engagementState
+                                .userState
+                                ?.vip
+                                .canReadPrivate ??
+                            false,
+                        isAuthenticated:
+                            session.status == AuthSessionStatus.authenticated,
+                        isVipDirectContentRouteAvailable:
+                            widget.isVipNativeReaderAvailable,
+                        readingProgress: widget.readingProgress,
+                        onRead: widget.onRead,
+                        onOpenVipChapter: widget.onOpenVipChapter,
+                        onSignIn: widget.onSignIn,
+                      );
+                    },
+                  ),
+                NovelDetailsSection.comments => CommentsSliverSection(
+                  controller: _commentsController!,
+                  authRepository: widget.authRepository,
+                  onSignIn: widget.onSignIn,
+                ),
+              },
+              const SliverToBoxAdapter(child: SizedBox(height: 32)),
+            ],
           ),
         ),
-      ],
+      ),
     );
   }
 
-  void _selectSection(_NovelDetailsSection section) {
-    if (_section == section) {
-      return;
-    }
-    if (section == _NovelDetailsSection.comments) {
+  void _selectSection(NovelDetailsSection section) {
+    if (_section == section) return;
+    if (section == NovelDetailsSection.comments) {
       final controller = _commentsController ??= CommentsController(
         repository: widget.commentsRepository,
         target: CommentTarget.novel(widget.loadResult.details.id),
@@ -215,283 +263,58 @@ class _NovelDetailsContentState extends State<NovelDetailsContent> {
   }
 }
 
-class _DetailsSectionTabs extends StatelessWidget {
-  const _DetailsSectionTabs({required this.selected, required this.onSelected});
-
-  final _NovelDetailsSection selected;
-  final ValueChanged<_NovelDetailsSection> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens =
-        Theme.of(context).extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: tokens.surfaceSoft,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: tokens.border),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(4),
-          child: Row(
-            children: [
-              Expanded(
-                child: _DetailsTabButton(
-                  key: const ValueKey('novel-section-chapters'),
-                  label: 'الفصول',
-                  icon: Icons.menu_book_outlined,
-                  selected: selected == _NovelDetailsSection.chapters,
-                  onTap: () => onSelected(_NovelDetailsSection.chapters),
-                ),
-              ),
-              const SizedBox(width: 4),
-              Expanded(
-                child: _DetailsTabButton(
-                  key: const ValueKey('novel-section-comments'),
-                  label: 'التعليقات',
-                  icon: Icons.forum_outlined,
-                  selected: selected == _NovelDetailsSection.comments,
-                  onTap: () => onSelected(_NovelDetailsSection.comments),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _DetailsTabButton extends StatelessWidget {
-  const _DetailsTabButton({
+class _ReadAction extends StatelessWidget {
+  const _ReadAction({
     required this.label,
-    required this.icon,
-    required this.selected,
-    required this.onTap,
-    super.key,
+    required this.onPressed,
+    this.favoriteAction,
   });
 
   final String label;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
+  final VoidCallback? onPressed;
+  final Widget? favoriteAction;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final tokens = theme.extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
-    final foreground = selected ? tokens.primary : tokens.textSecondary;
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(6),
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOutCubic,
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
-          decoration: BoxDecoration(
-            color: selected
-                ? tokens.primary.withValues(alpha: 0.13)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 19, color: foreground),
-              const SizedBox(width: 7),
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    color: foreground,
-                    fontWeight: FontWeight.w900,
-                  ),
+    final tokens = NovelDetailsVisualTokens.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 22),
+      child: Row(
+        children: [
+          Expanded(
+            child: FilledButton.icon(
+              key: const ValueKey('novel-details-read-action'),
+              onPressed: onPressed,
+              icon: const Icon(Icons.menu_book_outlined),
+              label: Text(
+                onPressed == null ? 'لا يوجد فصل متاح' : label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(58),
+                backgroundColor: tokens.primary,
+                foregroundColor: tokens.onPrimary,
+                disabledBackgroundColor: tokens.surfaceHigh,
+                disabledForegroundColor: tokens.textSecondary,
+                textStyle: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
                 ),
               ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SummarySection extends StatefulWidget {
-  const _SummarySection({required this.summary});
-
-  final String summary;
-
-  @override
-  State<_SummarySection> createState() => _SummarySectionState();
-}
-
-class _SummarySectionState extends State<_SummarySection> {
-  bool _expanded = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final isLong = widget.summary.length > 220;
-    final theme = Theme.of(context);
-    final tokens = theme.extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SectionTitle(title: 'عن الرواية'),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: tokens.surfaceRaised.withValues(alpha: 0.64),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: tokens.accent.withValues(alpha: 0.20)),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.auto_stories_outlined,
-                        color: tokens.accent,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'ملخص القصة',
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          color: tokens.textPrimary,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    widget.summary,
-                    maxLines: isLong && !_expanded ? 6 : null,
-                    overflow: isLong && !_expanded
-                        ? TextOverflow.ellipsis
-                        : null,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      height: 1.75,
-                      color: tokens.textPrimary.withValues(alpha: 0.88),
-                    ),
-                  ),
-                  if (isLong)
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton.icon(
-                        onPressed: () => setState(() => _expanded = !_expanded),
-                        icon: Icon(
-                          _expanded
-                              ? Icons.keyboard_arrow_up_rounded
-                              : Icons.keyboard_arrow_down_rounded,
-                        ),
-                        label: Text(_expanded ? 'عرض أقل' : 'عرض المزيد'),
-                      ),
-                    ),
-                ],
-              ),
             ),
           ),
-        ),
-      ],
-    );
-  }
-}
-
-class _DetailsBottomBar extends StatelessWidget {
-  const _DetailsBottomBar({
-    required this.novelId,
-    required this.onToggleFavorite,
-    required this.readLabel,
-    required this.onRead,
-  });
-
-  final int novelId;
-  final Future<void> Function() onToggleFavorite;
-  final String readLabel;
-  final VoidCallback? onRead;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final tokens = theme.extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
-    final dependencies = AppDependencies.of(context);
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: tokens.surface,
-        border: Border(top: BorderSide(color: tokens.border)),
-        boxShadow: [
-          BoxShadow(
-            color: tokens.primary.withValues(alpha: 0.08),
-            blurRadius: 10,
-            offset: const Offset(0, -3),
-          ),
+          if (favoriteAction != null) ...[
+            const SizedBox(width: 10),
+            ConstrainedBox(
+              constraints: const BoxConstraints(minWidth: 58, minHeight: 58),
+              child: Center(child: favoriteAction),
+            ),
+          ],
         ],
-      ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-          child: Row(
-            children: [
-              FavoriteToggleButton(
-                novelId: novelId,
-                authRepository: dependencies.authRepository,
-                favoritesRepository: dependencies.favoritesRepository,
-                onPressed: onToggleFavorite,
-              ),
-              if (onRead != null) ...[
-                const SizedBox(width: 12),
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: onRead,
-                    icon: const Icon(Icons.menu_book_outlined),
-                    label: Text(
-                      readLabel,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size.fromHeight(56),
-                      textStyle: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-                ),
-              ] else ...[
-                const SizedBox(width: 12),
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: null,
-                    icon: const Icon(Icons.menu_book_outlined),
-                    label: const Text('لا يوجد فصل متاح'),
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size.fromHeight(56),
-                      textStyle: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -499,17 +322,13 @@ class _DetailsBottomBar extends StatelessWidget {
 
 NovelChapter? _firstReadableChapter(List<NovelChapter> chapters) {
   for (final chapter in chapters) {
-    if (chapter.effectiveContentApi.isNotEmpty) {
-      return chapter;
-    }
+    if (chapter.effectiveContentApi.isNotEmpty) return chapter;
   }
   return null;
 }
 
 NovelChapter? _continuationChapter(List<NovelChapter> chapters, int chapterId) {
-  if (chapterId <= 0) {
-    return null;
-  }
+  if (chapterId <= 0) return null;
   for (final chapter in chapters) {
     if (chapter.id == chapterId && chapter.effectiveContentApi.isNotEmpty) {
       return chapter;
@@ -519,46 +338,63 @@ NovelChapter? _continuationChapter(List<NovelChapter> chapters, int chapterId) {
 }
 
 class NovelDetailsSkeleton extends StatelessWidget {
-  const NovelDetailsSkeleton({super.key});
+  const NovelDetailsSkeleton({this.transition, super.key});
+
+  final NovelDetailsTransitionData? transition;
 
   @override
   Widget build(BuildContext context) {
-    final color = Theme.of(context).colorScheme.primary.withValues(alpha: 0.10);
+    final tokens = NovelDetailsVisualTokens.of(context);
+    Widget bar(double width, double height) => Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: tokens.surfaceHigh,
+        borderRadius: BorderRadius.circular(12),
+      ),
+    );
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
-      children: [
-        Center(
-          child: Container(
-            width: 150,
-            height: 224,
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(8),
-            ),
+    return ColoredBox(
+      color: tokens.background,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 28),
+        children: [
+          Center(
+            child: transition == null
+                ? bar(168, 252)
+                : Hero(
+                    tag: transition!.heroTag,
+                    transitionOnUserGestures: true,
+                    child: NovelCover(
+                      title: transition!.title,
+                      imageUrl: transition!.coverUrl,
+                      width: 168,
+                      height: 252,
+                      borderRadius: 16,
+                    ),
+                  ),
           ),
-        ),
-        const SizedBox(height: 18),
-        Center(child: Container(width: 210, height: 22, color: color)),
-        const SizedBox(height: 10),
-        Center(child: Container(width: 160, height: 14, color: color)),
-        const SizedBox(height: 24),
-        Row(
-          children: [
-            Expanded(child: Container(height: 72, color: color)),
-            const SizedBox(width: 8),
-            Expanded(child: Container(height: 72, color: color)),
-            const SizedBox(width: 8),
-            Expanded(child: Container(height: 72, color: color)),
-          ],
-        ),
-        const SizedBox(height: 24),
-        Container(height: 14, color: color),
-        const SizedBox(height: 8),
-        Container(height: 14, color: color),
-        const SizedBox(height: 8),
-        Container(height: 14, width: 180, color: color),
-      ],
+          const SizedBox(height: 18),
+          Center(child: bar(210, 24)),
+          const SizedBox(height: 9),
+          Center(child: bar(150, 14)),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              for (var index = 0; index < 3; index++) ...[
+                if (index > 0) const SizedBox(width: 8),
+                Expanded(child: bar(0, 78)),
+              ],
+            ],
+          ),
+          const SizedBox(height: 22),
+          bar(double.infinity, 58),
+          const SizedBox(height: 22),
+          bar(double.infinity, 156),
+          const SizedBox(height: 18),
+          bar(double.infinity, 58),
+        ],
+      ),
     );
   }
 }

@@ -9,7 +9,11 @@ void main() {
       'id': 123,
       'title': 'بوابة الشمال',
       'url': '/novel/north-gate/',
-      'cover': {'thumbnail': '/uploads/north.jpg'},
+      'cover': {
+        'thumbnail': '/uploads/north-thumb.jpg',
+        'medium': '/uploads/north-medium.jpg',
+        'large': '/uploads/north-large.jpg',
+      },
       'status': {'key': 'ongoing', 'label': 'مستمرة'},
       'genres': [
         {'name': 'خيال'},
@@ -21,7 +25,10 @@ void main() {
 
     expect(novel.id, 123);
     expect(novel.title, 'بوابة الشمال');
-    expect(novel.coverThumbnail, '/uploads/north.jpg');
+    expect(novel.coverThumbnail, '/uploads/north-thumb.jpg');
+    expect(novel.coverMedium, '/uploads/north-medium.jpg');
+    expect(novel.coverLarge, '/uploads/north-large.jpg');
+    expect(novel.bestCover, '/uploads/north-large.jpg');
     expect(novel.statusLabel, 'مستمرة');
     expect(novel.genres, ['خيال', 'أكشن']);
     expect(novel.chaptersCount, 126);
@@ -38,7 +45,13 @@ void main() {
       'date': 'منذ 12 دقيقة',
       'url': '/novel/star-guard/chapter-82/',
       'novel_url': '/novel/star-guard/',
-      'cover_url': '/uploads/star-guard.jpg',
+      'cover_url': '/uploads/star-guard-legacy.jpg',
+      'cover': {
+        'thumbnail': '/uploads/star-guard-thumb.jpg',
+        'medium': '/uploads/star-guard-medium.jpg',
+        'large': '/uploads/star-guard-large.jpg',
+      },
+      'manifest': '/cache/app/manifest/star-guard.json',
     });
 
     expect(chapter.id, 82);
@@ -49,11 +62,27 @@ void main() {
     expect(chapter.dateLabel, 'منذ 12 دقيقة');
     expect(chapter.url, '/novel/star-guard/chapter-82/');
     expect(chapter.novelUrl, '/novel/star-guard/');
-    expect(chapter.coverUrl, '/uploads/star-guard.jpg');
+    expect(chapter.coverUrl, '/uploads/star-guard-legacy.jpg');
+    expect(chapter.bestCover, '/uploads/star-guard-large.jpg');
+    expect(chapter.manifest, '/cache/app/manifest/star-guard.json');
     expect(
       chapter.effectiveContentApi,
       '/wp-json/wor-reader-app/v1/chapters/82',
     );
+  });
+
+  test('ChapterSummary accepts novel_manifest as a latest update fallback', () {
+    final chapter = ChapterSummary.fromJson({
+      'id': 83,
+      'novel_id': 12,
+      'novel_title': 'حارس النجوم',
+      'label': 'الفصل 83',
+      'date': 'الآن',
+      'url': '/novel/star-guard/chapter-83/',
+      'novel_manifest': '/cache/app/manifest/star-guard-legacy.json',
+    });
+
+    expect(chapter.manifest, '/cache/app/manifest/star-guard-legacy.json');
   });
 
   test(
@@ -103,6 +132,10 @@ void main() {
           'novel_title': 'ظلال المجرة',
           'chapter_label': 'الفصل 24',
           'cover_url': '/uploads/shadows.jpg',
+          'cover': {
+            'medium': '/uploads/shadows-medium.jpg',
+            'large': '/uploads/shadows-large.jpg',
+          },
           'progress': 68,
         },
         'latest_chapters': [
@@ -129,7 +162,7 @@ void main() {
     });
 
     expect(home.continueReading?.novelTitle, 'ظلال المجرة');
-    expect(home.continueReading?.coverUrl, '/uploads/shadows.jpg');
+    expect(home.continueReading?.coverUrl, '/uploads/shadows-large.jpg');
     expect(home.latestChapters.single.novelTitle, 'حارس النجوم');
     expect(home.recentNovels.single.title, 'بوابة الشمال');
     expect(home.isEmpty, isFalse);

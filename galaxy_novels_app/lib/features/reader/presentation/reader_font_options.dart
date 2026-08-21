@@ -1,4 +1,39 @@
+import 'package:flutter/material.dart';
+
 import '../domain/reader_preferences.dart';
+
+TextStyle readerFontTextStyle(
+  TextStyle? baseStyle, {
+  required ReaderFontFamily fontFamily,
+}) {
+  final base = baseStyle ?? const TextStyle();
+  if (fontFamily != ReaderFontFamily.system) {
+    return base.copyWith(fontFamily: fontFamily.fontFamily);
+  }
+
+  return TextStyle(
+    inherit: false,
+    color: base.color,
+    backgroundColor: base.backgroundColor,
+    fontSize: base.fontSize,
+    fontWeight: base.fontWeight,
+    fontStyle: base.fontStyle,
+    letterSpacing: base.letterSpacing,
+    wordSpacing: base.wordSpacing,
+    textBaseline: base.textBaseline,
+    height: base.height,
+    leadingDistribution: base.leadingDistribution,
+    locale: base.locale,
+    shadows: base.shadows,
+    fontFeatures: base.fontFeatures,
+    fontVariations: base.fontVariations,
+    decoration: base.decoration,
+    decorationColor: base.decorationColor,
+    decorationStyle: base.decorationStyle,
+    decorationThickness: base.decorationThickness,
+    overflow: base.overflow,
+  );
+}
 
 extension ReaderFontFamilyUi on ReaderFontFamily {
   String get label {

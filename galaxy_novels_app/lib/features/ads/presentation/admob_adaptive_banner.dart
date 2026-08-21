@@ -1,20 +1,50 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
-class AdMobAdaptiveBanner extends StatefulWidget {
-  const AdMobAdaptiveBanner({required this.adUnitId, super.key});
+import 'adaptive_banner_frame.dart';
 
-  static const double reservedHeight = 56;
+class AdMobAdaptiveBanner extends StatelessWidget {
+  const AdMobAdaptiveBanner({
+    required this.adUnitId,
+    required this.readiness,
+    super.key,
+  });
+
+  final String adUnitId;
+  final Future<bool> readiness;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<bool>(
+      future: readiness,
+      builder: (context, snapshot) {
+        if (snapshot.data != true) {
+          return const AdaptiveBannerFrame(
+            isLoaded: false,
+            size: null,
+            child: SizedBox.shrink(),
+          );
+        }
+        return _ReadyAdMobAdaptiveBanner(adUnitId: adUnitId);
+      },
+    );
+  }
+}
+
+class _ReadyAdMobAdaptiveBanner extends StatefulWidget {
+  const _ReadyAdMobAdaptiveBanner({required this.adUnitId});
 
   final String adUnitId;
 
   @override
-  State<AdMobAdaptiveBanner> createState() => _AdMobAdaptiveBannerState();
+  State<_ReadyAdMobAdaptiveBanner> createState() =>
+      _ReadyAdMobAdaptiveBannerState();
 }
 
-class _AdMobAdaptiveBannerState extends State<AdMobAdaptiveBanner> {
+class _ReadyAdMobAdaptiveBannerState extends State<_ReadyAdMobAdaptiveBanner> {
   BannerAd? _bannerAd;
   int? _requestedWidth;
   bool _isLoading = false;
@@ -30,16 +60,18 @@ class _AdMobAdaptiveBannerState extends State<AdMobAdaptiveBanner> {
         }
 
         final bannerAd = _bannerAd;
-        if (!_isLoaded || bannerAd == null) {
-          return const SizedBox.expand();
-        }
-
-        return Center(
-          child: SizedBox(
-            width: bannerAd.size.width.toDouble(),
-            height: bannerAd.size.height.toDouble(),
-            child: AdWidget(ad: bannerAd),
-          ),
+        final bannerSize = bannerAd == null
+            ? null
+            : Size(
+                bannerAd.size.width.toDouble(),
+                bannerAd.size.height.toDouble(),
+              );
+        return AdaptiveBannerFrame(
+          isLoaded: _isLoaded && bannerAd != null,
+          size: bannerSize,
+          child: bannerAd == null
+              ? const SizedBox.shrink()
+              : AdWidget(ad: bannerAd),
         );
       },
     );
@@ -50,44 +82,62 @@ class _AdMobAdaptiveBannerState extends State<AdMobAdaptiveBanner> {
     _requestedWidth = width;
     _isLoaded = false;
 
-    final nextSize = await AdSize.getLargeAnchoredAdaptiveBannerAdSize(width);
-    if (!mounted || nextSize == null || _requestedWidth != width) {
-      _isLoading = false;
-      return;
-    }
+    try {
+      final nextSize = await AdSize.getLargeAnchoredAdaptiveBannerAdSize(width);
+      if (!mounted || _requestedWidth != width) {
+        _isLoading = false;
+        return;
+      }
+      if (nextSize == null) {
+        _collapseBanner();
+        return;
+      }
 
-    final previousAd = _bannerAd;
-    final nextAd = BannerAd(
-      adUnitId: widget.adUnitId,
-      size: nextSize,
-      request: const AdRequest(),
-      listener: BannerAdListener(
-        onAdLoaded: (ad) {
-          if (!mounted || !identical(ad, _bannerAd)) {
+      final previousAd = _bannerAd;
+      final nextAd = BannerAd(
+        adUnitId: widget.adUnitId,
+        size: nextSize,
+        request: const AdRequest(),
+        listener: BannerAdListener(
+          onAdLoaded: (ad) {
+            if (!mounted || !identical(ad, _bannerAd)) {
+              ad.dispose();
+              return;
+            }
+            setState(() {
+              _isLoaded = true;
+              _isLoading = false;
+            });
+          },
+          onAdFailedToLoad: (ad, error) {
             ad.dispose();
-            return;
-          }
-          setState(() {
-            _isLoaded = true;
-            _isLoading = false;
-          });
-        },
-        onAdFailedToLoad: (ad, error) {
-          ad.dispose();
-          if (!mounted || !identical(ad, _bannerAd)) {
-            return;
-          }
-          setState(() {
-            _isLoaded = false;
-            _isLoading = false;
-            _bannerAd = null;
-          });
-        },
-      ),
-    );
-    _bannerAd = nextAd;
-    unawaited(previousAd?.dispose());
-    await nextAd.load();
+            if (!mounted || !identical(ad, _bannerAd)) {
+              return;
+            }
+            setState(() {
+              _isLoaded = false;
+              _isLoading = false;
+              _bannerAd = null;
+            });
+          },
+        ),
+      );
+      _bannerAd = nextAd;
+      unawaited(previousAd?.dispose());
+      await nextAd.load();
+    } on MissingPluginException {
+      _collapseBanner();
+    } on PlatformException {
+      _collapseBanner();
+    }
+  }
+
+  void _collapseBanner() {
+    final ad = _bannerAd;
+    _bannerAd = null;
+    _isLoaded = false;
+    _isLoading = false;
+    unawaited(ad?.dispose());
   }
 
   @override

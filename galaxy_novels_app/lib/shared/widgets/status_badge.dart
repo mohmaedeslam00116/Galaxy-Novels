@@ -2,10 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../app/app_theme.dart';
 
-const _ongoingStatusColor = Color(0xFF22C55E);
-const _completedStatusColor = Color(0xFFEF4444);
-const _stoppedStatusColor = Color(0xFFA855F7);
-
 class StatusBadge extends StatelessWidget {
   const StatusBadge({
     required this.label,
@@ -24,17 +20,29 @@ class StatusBadge extends StatelessWidget {
 
     final theme = Theme.of(context);
     final tokens = theme.extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
-    final color =
-        _novelStatusColor(label) ??
-        (emphasis == StatusBadgeEmphasis.gold ? tokens.gold : tokens.primary);
+    final (background, foreground) = switch (_normalizedStatus(label)) {
+      _NovelStatus.ongoing => (tokens.brandContainer, tokens.onBrandContainer),
+      _NovelStatus.completed => (
+        tokens.successContainer,
+        tokens.onSuccessContainer,
+      ),
+      _NovelStatus.stopped => (
+        tokens.warningContainer,
+        tokens.onWarningContainer,
+      ),
+      null when emphasis == StatusBadgeEmphasis.gold => (
+        tokens.warningContainer,
+        tokens.onWarningContainer,
+      ),
+      null => (tokens.brandContainer, tokens.onBrandContainer),
+    };
 
     return ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 24),
+      constraints: const BoxConstraints(minHeight: 28),
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.16),
+          color: background,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: color.withValues(alpha: 0.42)),
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -43,9 +51,8 @@ class StatusBadge extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: theme.textTheme.labelSmall?.copyWith(
-              color: color,
-              fontWeight: FontWeight.w900,
-              height: 1.1,
+              color: foreground,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ),
@@ -56,14 +63,16 @@ class StatusBadge extends StatelessWidget {
 
 enum StatusBadgeEmphasis { primary, gold }
 
-Color? _novelStatusColor(String label) {
+enum _NovelStatus { ongoing, completed, stopped }
+
+_NovelStatus? _normalizedStatus(String label) {
   final normalized = label.trim().toLowerCase();
   if (normalized.isEmpty) {
     return null;
   }
 
   if (_matchesAny(normalized, const ['مستمرة', 'مستمر', 'ongoing'])) {
-    return _ongoingStatusColor;
+    return _NovelStatus.ongoing;
   }
   if (_matchesAny(normalized, const [
     'مكتملة',
@@ -72,7 +81,7 @@ Color? _novelStatusColor(String label) {
     'complete',
     'finished',
   ])) {
-    return _completedStatusColor;
+    return _NovelStatus.completed;
   }
   if (_matchesAny(normalized, const [
     'متوقفة',
@@ -83,7 +92,7 @@ Color? _novelStatusColor(String label) {
     'on hold',
     'on-hold',
   ])) {
-    return _stoppedStatusColor;
+    return _NovelStatus.stopped;
   }
 
   return null;

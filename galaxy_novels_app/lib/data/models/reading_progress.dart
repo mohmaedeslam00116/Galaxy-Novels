@@ -104,20 +104,22 @@ String _bestCoverFromJson(Map<String, dynamic> json) {
   if (cover is Map) {
     final map = cover.map((key, value) => MapEntry(key.toString(), value));
     return _firstNonEmptyString([
-      map['medium'],
       map['large'],
+      map['medium'],
       map['thumbnail'],
       map['url'],
     ]);
   }
 
   return _firstNonEmptyString([
-    json['coverUrl'],
-    json['cover_url'],
+    json['coverLarge'],
+    json['cover_large'],
     json['coverMedium'],
     json['cover_medium'],
     json['coverThumbnail'],
     json['cover_thumbnail'],
+    json['coverUrl'],
+    json['cover_url'],
   ]);
 }
 

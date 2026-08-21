@@ -1,75 +1,50 @@
 import 'package:flutter/material.dart';
 
+import '../../../app/app_dependencies.dart';
+import '../../../core/analytics/app_analytics.dart';
+import '../../account/presentation/account_screen.dart';
 import '../../catalog/presentation/catalog_screen.dart';
-import '../../downloads/presentation/downloads_screen.dart';
 import '../../history/presentation/history_screen.dart';
 import '../../home/presentation/home_screen.dart';
+import '../../downloads/presentation/downloads_screen.dart';
 import '../../rankings/presentation/rankings_screen.dart';
+import '../../reader_journey/presentation/reader_journey_screen.dart';
+import 'adaptive_app_shell.dart';
 import 'app_drawer.dart';
+import 'shell_destination.dart';
 
-class AppShell extends StatefulWidget {
-  const AppShell({super.key});
+class AppShell extends StatelessWidget {
+  const AppShell({this.analytics = const NoopAppAnalytics(), super.key});
 
-  @override
-  State<AppShell> createState() => _AppShellState();
-}
-
-class _AppShellState extends State<AppShell> {
-  int _index = 0;
-
-  static const _titles = [
-    'الرئيسية',
-    'المكتبة',
-    'التنزيلات',
-    'السجل',
-    'الترتيب',
-  ];
+  final AppAnalytics analytics;
 
   @override
   Widget build(BuildContext context) {
-    final screens = [
-      const HomeScreen(),
-      const CatalogScreen(),
-      DownloadsScreen(onOpenLibrary: () => setState(() => _index = 1)),
-      const HistoryScreen(),
-      const RankingsScreen(),
-    ];
-
-    return Scaffold(
-      drawer: const AppDrawer(),
-      appBar: AppBar(title: Text(_titles[_index])),
-      body: IndexedStack(index: _index, children: screens),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: (value) => setState(() => _index = value),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home),
-            label: 'الرئيسية',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.local_library_outlined),
-            selectedIcon: Icon(Icons.local_library),
-            label: 'المكتبة',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.download_outlined),
-            selectedIcon: Icon(Icons.download),
-            label: 'التنزيلات',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.history_outlined),
-            selectedIcon: Icon(Icons.history),
-            label: 'السجل',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.leaderboard_outlined),
-            selectedIcon: Icon(Icons.leaderboard),
-            label: 'الترتيب',
-          ),
-        ],
-      ),
+    return AdaptiveAppShell(
+      analytics: analytics,
+      drawerBuilder: (context) => const AppDrawer(),
+      screenBuilders: {
+        ShellDestination.home: (context, select) => const HomeScreen(),
+        ShellDestination.library: (context, select) => const CatalogScreen(),
+        ShellDestination.readerJourney: (context, select) {
+          final dependencies = AppDependencies.of(context);
+          return ReaderJourneyScreen(
+            history: HistoryScreen(
+              onOpenLibrary: () => select(ShellDestination.library),
+            ),
+            downloads: DownloadsView(
+              repository: dependencies.downloadRepository,
+              rewardedAds: dependencies.rewardedDownloadAdRepository,
+              readingHistoryRepository: dependencies.readingHistoryRepository,
+              onOpenLibrary: () => select(ShellDestination.library),
+              downloadAnalytics: dependencies.downloadAnalytics,
+            ),
+          );
+        },
+        ShellDestination.rankings: (context, select) => const RankingsScreen(),
+        ShellDestination.account: (context, select) =>
+            const AccountScreen(embedded: true),
+      },
     );
   }
 }

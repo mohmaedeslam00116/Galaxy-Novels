@@ -38,7 +38,7 @@ void main() {
 
     expect(requests.first.uri.path, '/wp-json/wor-reader-app/v1/auth/login');
     expect(requests.first.headers['Accept'], 'application/json');
-    expect(requests.first.headers['User-Agent'], 'WorReaderApp/1.0 Android');
+    expect(requests.first.headers['User-Agent'], 'WorReaderApp/1.0');
     expect(requests.first.headers['Cache-Control'], 'no-store');
     expect(requests.first.headers['Pragma'], 'no-cache');
     expect(requests.first.headers, isNot(contains('Cookie')));

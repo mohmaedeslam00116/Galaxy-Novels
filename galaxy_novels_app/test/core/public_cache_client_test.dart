@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:galaxy_novels_app/core/config/app_config.dart';
 import 'package:galaxy_novels_app/core/network/public_cache_client.dart';
@@ -46,7 +48,7 @@ void main() {
       ),
     );
     expect(requests.first.headers['Accept'], 'application/json');
-    expect(requests.first.headers['User-Agent'], 'WorReaderApp/1.0 Android');
+    expect(requests.first.headers['User-Agent'], 'WorReaderApp/1.0');
   });
 
   test('uses pack_url before pack when both are present', () async {
@@ -147,6 +149,28 @@ void main() {
       );
     },
   );
+
+  test('times out an injected JSON getter and falls back to cache', () async {
+    final store = _FakePublicCacheStore();
+    final networkResponse = Completer<Object?>();
+    await store.write(
+      'https://example.com/slow.json',
+      '{"data":{"source":"cache"}}',
+    );
+    final client = PublicCacheClient(
+      config: const AppConfig(siteBaseUrl: 'https://example.com/'),
+      cacheStore: store,
+      requestTimeout: const Duration(milliseconds: 10),
+      jsonGet: (uri, headers) => networkResponse.future,
+    );
+
+    final json = await client.loadJson('/slow.json');
+    networkResponse.complete({
+      'data': {'source': 'network'},
+    });
+
+    expect(json['data'], {'source': 'cache'});
+  });
 }
 
 class _FakePublicCacheStore implements PublicCacheStore {

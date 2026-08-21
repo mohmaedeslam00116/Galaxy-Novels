@@ -61,8 +61,8 @@ class _FavoriteIconButton extends StatelessWidget {
     final tokens =
         Theme.of(context).extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
     return SizedBox(
-      width: 56,
-      height: 56,
+      width: 48,
+      height: 48,
       child: IconButton(
         key: const ValueKey('novel-favorite-toggle'),
         tooltip: isFavorite ? 'إزالة من المفضلة' : 'إضافة إلى المفضلة',
@@ -74,8 +74,8 @@ class _FavoriteIconButton extends StatelessWidget {
               )
             : Icon(
                 isFavorite
-                    ? Icons.bookmark_rounded
-                    : Icons.bookmark_add_outlined,
+                    ? Icons.favorite_rounded
+                    : Icons.favorite_border_rounded,
               ),
         style: IconButton.styleFrom(
           backgroundColor: isFavorite ? tokens.primary : tokens.surface,
@@ -87,7 +87,7 @@ class _FavoriteIconButton extends StatelessWidget {
                 ? tokens.primary
                 : tokens.accent.withValues(alpha: 0.26),
           ),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          shape: const CircleBorder(),
         ),
       ),
     );

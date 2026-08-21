@@ -9,6 +9,7 @@ class FakeReaderPreferencesRepository extends ChangeNotifier
   }) : _value = initialValue;
 
   ReaderPreferences _value;
+  int updateCount = 0;
 
   @override
   ReaderPreferences get value => _value;
@@ -21,6 +22,7 @@ class FakeReaderPreferencesRepository extends ChangeNotifier
     if (_value == preferences) {
       return;
     }
+    updateCount += 1;
     _value = preferences;
     notifyListeners();
   }

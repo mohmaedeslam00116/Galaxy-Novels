@@ -2,6 +2,10 @@ import '../domain/download_models.dart';
 
 enum DownloadTransferKind { chapter, cover }
 
+class DownloadTransferUnavailableException implements Exception {
+  const DownloadTransferUnavailableException();
+}
+
 class DownloadTransferRequest {
   const DownloadTransferRequest({
     required this.transferId,

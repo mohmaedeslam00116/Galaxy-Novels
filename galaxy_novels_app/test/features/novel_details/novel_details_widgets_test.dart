@@ -3,55 +3,160 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:galaxy_novels_app/data/models/novel_details_data.dart';
 import 'package:galaxy_novels_app/features/novel_details/presentation/widgets/novel_chapter_tile.dart';
 import 'package:galaxy_novels_app/features/novel_details/presentation/widgets/novel_details_header.dart';
+import 'package:galaxy_novels_app/features/novel_engagement/application/novel_engagement_controller.dart';
+import 'package:galaxy_novels_app/features/novel_engagement/domain/novel_user_state.dart';
 
 void main() {
-  testWidgets('novel details header renders title and stats', (tester) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Directionality(
-          textDirection: TextDirection.rtl,
-          child: Scaffold(
-            body: ListView(children: [NovelDetailsHeader(details: _details)]),
-          ),
-        ),
+  testWidgets('details keep core metadata visible and reveal secondary data', (
+    tester,
+  ) async {
+    await _pumpHeader(
+      tester,
+      engagementState: const NovelEngagementState(
+        status: NovelEngagementStatus.ready,
+        novelId: 99,
+        userId: 7,
+        userState: _userState,
       ),
     );
 
+    expect(find.byKey(const ValueKey('novel-details-hero')), findsOneWidget);
+    expect(find.byKey(const ValueKey('galaxy-stats-rail')), findsOneWidget);
+    expect(find.text('المشاهدات'), findsOneWidget);
+    final table = find.byKey(const ValueKey('novel-details-metadata-table'));
+    expect(table, findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('novel-details-metadata-grid')),
+      findsNothing,
+    );
+    for (final key in const [
+      'novel-metadata-author',
+      'novel-metadata-translator',
+    ]) {
+      expect(
+        find.descendant(of: table, matching: find.byKey(ValueKey(key))),
+        findsOneWidget,
+      );
+    }
+    expect(
+      find.descendant(
+        of: table,
+        matching: find.byKey(const ValueKey('novel-metadata-chapters')),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: table,
+        matching: find.byKey(const ValueKey('novel-details-rating-action')),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('galaxy-stats-rail')),
+        matching: find.byKey(const ValueKey('novel-details-rating-action')),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('تفاصيل الاختبار'), findsOneWidget);
+    expect(find.text('Test Details'), findsNothing);
+    expect(find.text('الكاتب'), findsOneWidget);
+    expect(find.text('كاتب الاختبار'), findsOneWidget);
+    expect(find.text('المترجم'), findsOneWidget);
+    expect(find.text('غير متوفر'), findsOneWidget);
+    expect(find.text('عدد الفصول'), findsNothing);
+    expect(find.text('تقييمك: 4 من 5'), findsOneWidget);
+    expect(find.text('★ 4.2'), findsOneWidget);
+    expect(find.byTooltip('اضغط لإضافة أو تعديل تقييمك'), findsOneWidget);
+    expect(find.textContaining('2024'), findsNothing);
+
+    await tester.ensureVisible(find.text('عرض كل البيانات'));
+    await tester.pump();
+    await tester.tap(find.text('عرض كل البيانات'));
+    await tester.pumpAndSettle();
     expect(find.text('Test Details'), findsOneWidget);
-    expect(find.text('2'), findsOneWidget);
-    expect(find.text('فصل'), findsOneWidget);
-    expect(find.text('120'), findsOneWidget);
-    expect(find.text('مشاهدة'), findsOneWidget);
+    expect(find.text('الصين'), findsOneWidget);
   });
 
-  testWidgets(
-    'novel details header uses a rich hero panel with compact metadata',
-    (tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Directionality(
-            textDirection: TextDirection.rtl,
-            child: Scaffold(
-              body: ListView(children: [NovelDetailsHeader(details: _details)]),
-            ),
-          ),
-        ),
-      );
+  testWidgets('rating stats cell routes ready, guest, and failure actions', (
+    tester,
+  ) async {
+    var action = '';
 
-      expect(
-        find.byKey(const ValueKey('novel-details-hero-panel')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('novel-details-stats-strip')),
-        findsOneWidget,
-      );
-      expect(find.text('كاتب الاختبار'), findsOneWidget);
-      expect(find.text('الصينية'), findsOneWidget);
-      expect(find.text('5 تقييمات'), findsOneWidget);
-    },
-  );
+    Future<void> pump(NovelEngagementState state) => _pumpHeader(
+      tester,
+      engagementState: state,
+      onRate: () => action = 'rate',
+      onSignIn: () => action = 'sign-in',
+      onRetry: () => action = 'retry',
+    );
+
+    await pump(
+      const NovelEngagementState(
+        status: NovelEngagementStatus.ready,
+        novelId: 99,
+        userId: 7,
+        userState: _userState,
+      ),
+    );
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('novel-details-rating-action')),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('novel-details-rating-action')));
+    expect(action, 'rate');
+
+    action = '';
+    await pump(
+      const NovelEngagementState(
+        status: NovelEngagementStatus.guest,
+        novelId: 99,
+      ),
+    );
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('novel-details-rating-action')),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('novel-details-rating-action')));
+    expect(action, 'sign-in');
+
+    action = '';
+    await pump(
+      const NovelEngagementState(
+        status: NovelEngagementStatus.failure,
+        novelId: 99,
+        errorMessage: 'تعذر تحميل حالتك مع الرواية.',
+      ),
+    );
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('novel-details-rating-action')),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('novel-details-rating-action')));
+    expect(action, 'retry');
+  });
+
+  testWidgets('rating stats cell disables interaction while loading', (
+    tester,
+  ) async {
+    await _pumpHeader(
+      tester,
+      engagementState: const NovelEngagementState(
+        status: NovelEngagementStatus.loading,
+        novelId: 99,
+      ),
+    );
+
+    final rail = find.byKey(const ValueKey('galaxy-stats-rail'));
+    expect(
+      find.descendant(
+        of: rail,
+        matching: find.byType(CircularProgressIndicator),
+      ),
+      findsOneWidget,
+    );
+  });
 
   testWidgets('chapter tile calls onTap', (tester) async {
     var tapped = false;
@@ -75,28 +180,37 @@ void main() {
 
     expect(tapped, isTrue);
   });
+}
 
-  testWidgets('chapter tile can show a download action', (tester) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Directionality(
-          textDirection: TextDirection.rtl,
-          child: Scaffold(
-            body: NovelChapterTile(
-              chapter: _chapter,
-              onTap: () {},
-              trailingAction: IconButton(
-                onPressed: () {},
-                icon: const Icon(Icons.download_outlined),
+Future<void> _pumpHeader(
+  WidgetTester tester, {
+  required NovelEngagementState engagementState,
+  VoidCallback? onRate,
+  VoidCallback? onSignIn,
+  VoidCallback? onRetry,
+}) async {
+  await tester.pumpWidget(
+    MaterialApp(
+      theme: ThemeData.dark(),
+      home: Directionality(
+        textDirection: TextDirection.rtl,
+        child: Scaffold(
+          body: ListView(
+            children: [
+              NovelDetailsHeader(
+                details: _details,
+                chaptersCount: 2,
+                engagementState: engagementState,
+                onRate: onRate ?? () {},
+                onSignIn: onSignIn ?? () {},
+                onRetryEngagement: onRetry ?? () {},
               ),
-            ),
+            ],
           ),
         ),
       ),
-    );
-
-    expect(find.byIcon(Icons.download_outlined), findsOneWidget);
-  });
+    ),
+  );
 }
 
 const _details = NovelDetails(
@@ -139,4 +253,17 @@ const _chapter = NovelChapter(
   views: 0,
   comments: 0,
   search: '',
+);
+
+const _userState = NovelUserState(
+  novelId: 99,
+  favorite: false,
+  myRating: 4,
+  lastRead: NovelLastRead(
+    chapterId: 0,
+    chapterUrl: '',
+    progress: 0,
+    updatedAt: null,
+  ),
+  vip: NovelVipAccess(active: true, canReadPrivate: true),
 );

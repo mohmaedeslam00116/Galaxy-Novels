@@ -1,154 +1,301 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:galaxy_novels_app/app/app_theme_controller.dart';
 import 'package:galaxy_novels_app/app/app_theme.dart';
+import 'package:galaxy_novels_app/app/app_theme_controller.dart';
 
 void main() {
-  test('app theme choices map to the expected material theme mode', () {
-    expect(AppThemeChoice.system.themeMode, ThemeMode.system);
-    expect(AppThemeChoice.galaxyNoir.themeMode, ThemeMode.dark);
+  test('exposes the ten approved app theme presets', () {
+    expect(AppThemePreset.values, [
+      AppThemePreset.starlightPaper,
+      AppThemePreset.neutralDark,
+      AppThemePreset.galaxyNoir,
+      AppThemePreset.cosmicNight,
+      AppThemePreset.lightNature,
+      AppThemePreset.oceanAsh,
+      AppThemePreset.moonForest,
+      AppThemePreset.garnetVelvet,
+      AppThemePreset.copperDusk,
+      AppThemePreset.midnightTide,
+    ]);
+  });
+
+  test('theme choices expose the expected brightness', () {
+    expect(AppThemeChoice.values, [
+      AppThemeChoice.starlightPaper,
+      AppThemeChoice.neutralDark,
+      AppThemeChoice.galaxyNoir,
+      AppThemeChoice.cosmicNight,
+      AppThemeChoice.lightNature,
+      AppThemeChoice.oceanAsh,
+      AppThemeChoice.moonForest,
+      AppThemeChoice.garnetVelvet,
+      AppThemeChoice.copperDusk,
+      AppThemeChoice.midnightTide,
+    ]);
     expect(AppThemeChoice.starlightPaper.themeMode, ThemeMode.light);
-    expect(AppThemeChoice.deepSpace.themeMode, ThemeMode.dark);
-    expect(AppThemeChoice.crimsonPagoda.themeMode, ThemeMode.dark);
-    expect(AppThemeChoice.desertAstronaut.themeMode, ThemeMode.light);
-    expect(AppThemeChoice.blueberryNebula.themeMode, ThemeMode.dark);
+    expect(AppThemeChoice.neutralDark.themeMode, ThemeMode.dark);
+    expect(AppThemeChoice.galaxyNoir.themeMode, ThemeMode.dark);
+    expect(AppThemeChoice.cosmicNight.themeMode, ThemeMode.dark);
+    expect(AppThemeChoice.lightNature.themeMode, ThemeMode.light);
+    expect(AppThemeChoice.oceanAsh.themeMode, ThemeMode.dark);
+    expect(AppThemeChoice.moonForest.themeMode, ThemeMode.dark);
+    expect(AppThemeChoice.garnetVelvet.themeMode, ThemeMode.dark);
+    expect(AppThemeChoice.copperDusk.themeMode, ThemeMode.dark);
+    expect(AppThemeChoice.midnightTide.themeMode, ThemeMode.dark);
   });
 
-  test('Galaxy Noir exposes Velvet Cosmos dark theme tokens', () {
-    final theme = AppTheme.dark();
-    final tokens = theme.extension<AppThemeTokens>();
+  test('Galaxy Noir exposes the muted nebula semantic palette', () {
+    final tokens = AppTheme.dark().extension<AppThemeTokens>()!;
 
-    expect(tokens, isNotNull);
-    expect(tokens!.preset, AppThemePreset.galaxyNoir);
-    expect(tokens.background, const Color(0xFF0B0911));
-    expect(tokens.primary, const Color(0xFFDCCBFF));
-    expect(tokens.accent, const Color(0xFF55D6E8));
-    expect(tokens.gold, const Color(0xFFF2C66D));
+    expect(tokens.preset, AppThemePreset.galaxyNoir);
+    expect(tokens.canvas, const Color(0xFF0E1520));
+    expect(tokens.surface, const Color(0xFF141E2B));
+    expect(tokens.surfaceRaised, const Color(0xFF1B2838));
+    expect(tokens.contentPrimary, const Color(0xFFE8EDF4));
+    expect(tokens.contentSecondary, const Color(0xFFA8B3C2));
+    expect(tokens.brand, const Color(0xFF8EA9D1));
+    expect(tokens.onBrand, const Color(0xFF101820));
+    expect(tokens.brandContainer, const Color(0xFF263A52));
+    expect(tokens.onBrandContainer, const Color(0xFFDCE8F7));
+    expect(tokens.outline, const Color(0xFF34475D));
+    expect(tokens.warning, const Color(0xFFC5A568));
   });
 
-  test(
-    'Starlight Paper light theme is prepared for future theme switching',
-    () {
-      final theme = AppTheme.light();
-      final tokens = theme.extension<AppThemeTokens>();
+  test('Starlight Paper exposes the approved semantic palette', () {
+    final tokens = AppTheme.light().extension<AppThemeTokens>()!;
 
-      expect(tokens, isNotNull);
-      expect(tokens!.preset, AppThemePreset.starlightPaper);
-      expect(tokens.background, const Color(0xFFF8F6FC));
-      expect(tokens.primary, const Color(0xFF5C3EA5));
-      expect(tokens.accent, const Color(0xFF087C8E));
-    },
-  );
-
-  test('Deep Space matches the captured website dark palette', () {
-    final theme = AppTheme.deepSpaceTheme();
-    final tokens = theme.extension<AppThemeTokens>();
-
-    expect(tokens, isNotNull);
-    expect(tokens!.preset, AppThemePreset.deepSpace);
-    expect(tokens.background, const Color(0xFF000000));
-    expect(tokens.surface, const Color(0xFF040911));
-    expect(tokens.surfaceRaised, const Color(0xFF0F1218));
-    expect(tokens.surfaceSoft, const Color(0xFF1E283A));
-    expect(tokens.primary, const Color(0xFF60A8F8));
-    expect(tokens.textPrimary, const Color(0xFFFFFFFF));
+    expect(tokens.preset, AppThemePreset.starlightPaper);
+    expect(tokens.canvas, const Color(0xFFF3EFE7));
+    expect(tokens.surface, const Color(0xFFFAF7F0));
+    expect(tokens.surfaceRaised, const Color(0xFFFFFDF8));
+    expect(tokens.contentPrimary, const Color(0xFF252B33));
+    expect(tokens.contentSecondary, const Color(0xFF5E6872));
+    expect(tokens.brand, const Color(0xFF536C8C));
+    expect(tokens.onBrand, const Color(0xFFF7FAFF));
+    expect(tokens.warning, const Color(0xFF8A6C2D));
   });
 
-  test('Crimson Pagoda keeps red as an accent, not a full-screen surface', () {
-    final theme = AppTheme.crimsonPagodaTheme();
-    final tokens = theme.extension<AppThemeTokens>();
+  test('all presets expose their approved muted identity colors', () {
+    final expectations = <ThemeData, List<Color>>{
+      AppTheme.neutralDarkTheme(): const [
+        Color(0xFF111315),
+        Color(0xFF181B1E),
+        Color(0xFF22262A),
+        Color(0xFF9DABB7),
+      ],
+      AppTheme.cosmicNightTheme(): const [
+        Color(0xFF14131B),
+        Color(0xFF1B1924),
+        Color(0xFF252232),
+        Color(0xFFA99AC8),
+      ],
+      AppTheme.lightNatureTheme(): const [
+        Color(0xFFF1EBDD),
+        Color(0xFFF8F3E9),
+        Color(0xFFFFFAF2),
+        Color(0xFF5E7864),
+      ],
+      AppTheme.oceanAshTheme(): const [
+        Color(0xFF181E25),
+        Color(0xFF222B34),
+        Color(0xFF2D3843),
+        Color(0xFF91AFC8),
+      ],
+      AppTheme.moonForestTheme(): const [
+        Color(0xFF101915),
+        Color(0xFF17231D),
+        Color(0xFF213129),
+        Color(0xFF86A98D),
+      ],
+      AppTheme.garnetVelvetTheme(): const [
+        Color(0xFF1A1216),
+        Color(0xFF24191E),
+        Color(0xFF302228),
+        Color(0xFFC28F9C),
+      ],
+      AppTheme.copperDuskTheme(): const [
+        Color(0xFF1A1511),
+        Color(0xFF241D17),
+        Color(0xFF31271E),
+        Color(0xFFC39A72),
+      ],
+      AppTheme.midnightTideTheme(): const [
+        Color(0xFF0E191A),
+        Color(0xFF152426),
+        Color(0xFF1E3134),
+        Color(0xFF79AAA8),
+      ],
+    };
 
-    expect(tokens, isNotNull);
-    expect(tokens!.preset, AppThemePreset.crimsonPagoda);
-    expect(tokens.background, const Color(0xFF070709));
-    expect(tokens.surface, const Color(0xFF120B0D));
-    expect(tokens.surfaceRaised, const Color(0xFF211416));
-    expect(tokens.surfaceSoft, const Color(0xFF4B2D2E));
-    expect(tokens.primary, const Color(0xFFAE1918));
-    expect(tokens.accent, const Color(0xFFF42C1D));
+    for (final entry in expectations.entries) {
+      final tokens = entry.key.extension<AppThemeTokens>()!;
+      expect([
+        tokens.canvas,
+        tokens.surface,
+        tokens.surfaceRaised,
+        tokens.brand,
+      ], entry.value);
+    }
   });
 
-  test(
-    'Desert Astronaut uses sand as identity without flattening surfaces',
-    () {
-      final theme = AppTheme.desertAstronautTheme();
-      final tokens = theme.extension<AppThemeTokens>();
+  test('new dark themes expose their complete approved palettes', () {
+    final expectations = <ThemeData, List<Color>>{
+      AppTheme.oceanAshTheme(): const [
+        Color(0xFF181E25),
+        Color(0xFF222B34),
+        Color(0xFF2D3843),
+        Color(0xFFEDF2F6),
+        Color(0xFFABB8C5),
+        Color(0xFF91AFC8),
+        Color(0xFF12202B),
+        Color(0xFF33495D),
+        Color(0xFFE3EDF5),
+        Color(0xFF485A69),
+      ],
+      AppTheme.moonForestTheme(): const [
+        Color(0xFF101915),
+        Color(0xFF17231D),
+        Color(0xFF213129),
+        Color(0xFFE7EEE9),
+        Color(0xFFA6B6AA),
+        Color(0xFF86A98D),
+        Color(0xFF102017),
+        Color(0xFF294232),
+        Color(0xFFD9E9DD),
+        Color(0xFF3A5645),
+      ],
+      AppTheme.garnetVelvetTheme(): const [
+        Color(0xFF1A1216),
+        Color(0xFF24191E),
+        Color(0xFF302228),
+        Color(0xFFF1E8EB),
+        Color(0xFFC0AAB1),
+        Color(0xFFC28F9C),
+        Color(0xFF2A1118),
+        Color(0xFF4A2C35),
+        Color(0xFFF0DDE3),
+        Color(0xFF62404A),
+      ],
+      AppTheme.copperDuskTheme(): const [
+        Color(0xFF1A1511),
+        Color(0xFF241D17),
+        Color(0xFF31271E),
+        Color(0xFFF2ECE6),
+        Color(0xFFBFAFA0),
+        Color(0xFFC39A72),
+        Color(0xFF27170C),
+        Color(0xFF493522),
+        Color(0xFFF2DEC8),
+        Color(0xFF604A38),
+      ],
+      AppTheme.midnightTideTheme(): const [
+        Color(0xFF0E191A),
+        Color(0xFF152426),
+        Color(0xFF1E3134),
+        Color(0xFFE6EFF0),
+        Color(0xFFA4B7B9),
+        Color(0xFF79AAA8),
+        Color(0xFF0D2222),
+        Color(0xFF294447),
+        Color(0xFFD8EAEB),
+        Color(0xFF3C5B5E),
+      ],
+    };
 
-      expect(theme.brightness, Brightness.light);
-      expect(tokens, isNotNull);
-      expect(tokens!.preset, AppThemePreset.desertAstronaut);
-      expect(tokens.background, const Color(0xFFE9E5DE));
-      expect(tokens.surface, const Color(0xFFF4EFE7));
-      expect(tokens.surfaceRaised, const Color(0xFFE1D6CA));
-      expect(tokens.surfaceSoft, const Color(0xFFB9987C));
-      expect(tokens.primary, const Color(0xFF805539));
-      expect(tokens.accent, const Color(0xFF3C2C1E));
-    },
-  );
+    for (final entry in expectations.entries) {
+      final tokens = entry.key.extension<AppThemeTokens>()!;
+      expect([
+        tokens.canvas,
+        tokens.surface,
+        tokens.surfaceRaised,
+        tokens.contentPrimary,
+        tokens.contentSecondary,
+        tokens.brand,
+        tokens.onBrand,
+        tokens.brandContainer,
+        tokens.onBrandContainer,
+        tokens.outline,
+      ], entry.value);
+    }
+  });
 
-  test(
-    'Blueberry Nebula keeps blue surfaces calm enough for long browsing',
-    () {
-      final theme = AppTheme.blueberryNebulaTheme();
-      final tokens = theme.extension<AppThemeTokens>();
-
-      expect(tokens, isNotNull);
-      expect(tokens!.preset, AppThemePreset.blueberryNebula);
-      expect(tokens.background, const Color(0xFF111523));
-      expect(tokens.surface, const Color(0xFF101A2E));
-      expect(tokens.surfaceRaised, const Color(0xFF14233C));
-      expect(tokens.surfaceSoft, const Color(0xFF15326D));
-      expect(tokens.primary, const Color(0xFF5C9FD9));
-      expect(tokens.accent, const Color(0xFF255DAC));
-    },
-  );
-
-  test('theme foreground pairs keep readable contrast', () {
-    final themes = [
-      AppTheme.dark(),
+  test('themes use Readex Pro and the shared premium component geometry', () {
+    for (final theme in [
       AppTheme.light(),
-      AppTheme.deepSpaceTheme(),
-      AppTheme.crimsonPagodaTheme(),
-      AppTheme.desertAstronautTheme(),
-      AppTheme.blueberryNebulaTheme(),
-    ];
+      AppTheme.neutralDarkTheme(),
+      AppTheme.dark(),
+      AppTheme.cosmicNightTheme(),
+      AppTheme.lightNatureTheme(),
+      AppTheme.oceanAshTheme(),
+      AppTheme.moonForestTheme(),
+      AppTheme.garnetVelvetTheme(),
+      AppTheme.copperDuskTheme(),
+      AppTheme.midnightTideTheme(),
+    ]) {
+      expect(theme.textTheme.bodyMedium?.fontFamily, 'Readex Pro');
+      expect(theme.cardTheme.elevation, 0);
+      expect(theme.navigationBarTheme.height, 68);
+      expect(theme.dialogTheme.shape, isA<RoundedRectangleBorder>());
+    }
 
-    for (final theme in themes) {
+    expect(AppVisualMetrics.radiusSmall, 8);
+    expect(AppVisualMetrics.radiusControl, 12);
+    expect(AppVisualMetrics.radiusCard, 16);
+    expect(AppVisualMetrics.radiusOverlay, 24);
+    expect(AppVisualMetrics.minimumTouchTarget, 48);
+    expect(AppVisualMetrics.themeTransition, const Duration(milliseconds: 220));
+  });
+
+  test('semantic foreground pairs meet normal-text AA contrast', () {
+    for (final theme in [
+      AppTheme.light(),
+      AppTheme.neutralDarkTheme(),
+      AppTheme.dark(),
+      AppTheme.cosmicNightTheme(),
+      AppTheme.lightNatureTheme(),
+      AppTheme.oceanAshTheme(),
+      AppTheme.moonForestTheme(),
+      AppTheme.garnetVelvetTheme(),
+      AppTheme.copperDuskTheme(),
+      AppTheme.midnightTideTheme(),
+    ]) {
       final tokens = theme.extension<AppThemeTokens>()!;
       expect(
-        _contrastRatio(tokens.textPrimary, tokens.background),
+        _contrastRatio(tokens.contentPrimary, tokens.canvas),
         greaterThanOrEqualTo(4.5),
-        reason: '${tokens.preset.name} primary text on background',
       );
       expect(
-        _contrastRatio(tokens.textPrimary, tokens.surface),
+        _contrastRatio(tokens.contentSecondary, tokens.canvas),
         greaterThanOrEqualTo(4.5),
-        reason: '${tokens.preset.name} primary text on surface',
       );
       expect(
-        _contrastRatio(tokens.textSecondary, tokens.background),
-        greaterThanOrEqualTo(3),
-        reason: '${tokens.preset.name} secondary text on background',
+        _contrastRatio(tokens.onBrand, tokens.brand),
+        greaterThanOrEqualTo(4.5),
       );
     }
   });
 
-  test('system bar icons follow theme brightness for readable chrome', () {
-    final lightTheme = AppTheme.desertAstronautTheme();
-    final lightTokens = lightTheme.extension<AppThemeTokens>()!;
-    final lightOverlay = AppTheme.systemOverlayStyleFor(lightTheme);
+  test('system bar icons follow every theme brightness', () {
+    for (final theme in [AppTheme.light(), AppTheme.lightNatureTheme()]) {
+      final overlay = AppTheme.systemOverlayStyleFor(theme);
+      expect(overlay.statusBarIconBrightness, Brightness.dark);
+      expect(overlay.systemNavigationBarIconBrightness, Brightness.dark);
+    }
 
-    expect(lightOverlay.statusBarColor, lightTokens.background);
-    expect(lightOverlay.statusBarIconBrightness, Brightness.dark);
-    expect(lightOverlay.systemNavigationBarIconBrightness, Brightness.dark);
-
-    final darkTheme = AppTheme.crimsonPagodaTheme();
-    final darkTokens = darkTheme.extension<AppThemeTokens>()!;
-    final darkOverlay = AppTheme.systemOverlayStyleFor(darkTheme);
-
-    expect(darkOverlay.statusBarColor, darkTokens.background);
-    expect(darkOverlay.statusBarIconBrightness, Brightness.light);
-    expect(darkOverlay.systemNavigationBarIconBrightness, Brightness.light);
+    for (final theme in [
+      AppTheme.neutralDarkTheme(),
+      AppTheme.dark(),
+      AppTheme.cosmicNightTheme(),
+      AppTheme.oceanAshTheme(),
+      AppTheme.moonForestTheme(),
+      AppTheme.garnetVelvetTheme(),
+      AppTheme.copperDuskTheme(),
+      AppTheme.midnightTideTheme(),
+    ]) {
+      final overlay = AppTheme.systemOverlayStyleFor(theme);
+      expect(overlay.statusBarIconBrightness, Brightness.light);
+      expect(overlay.systemNavigationBarIconBrightness, Brightness.light);
+    }
   });
 }
 

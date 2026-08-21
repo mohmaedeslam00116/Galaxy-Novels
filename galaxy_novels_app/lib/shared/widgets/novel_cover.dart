@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/app_dependencies.dart';
-import '../../app/app_theme.dart';
+import '../../design_system/novel/galaxy_novel_cover.dart';
 
 class NovelCover extends StatelessWidget {
   const NovelCover({
@@ -10,6 +10,8 @@ class NovelCover extends StatelessWidget {
     required this.width,
     required this.height,
     this.borderRadius = 8,
+    this.fit = BoxFit.cover,
+    this.backgroundColor,
     super.key,
   });
 
@@ -63,59 +65,26 @@ class NovelCover extends StatelessWidget {
   final double width;
   final double height;
   final double borderRadius;
+  final BoxFit fit;
+  final Color? backgroundColor;
 
   @override
   Widget build(BuildContext context) {
     final resolvedUrl = _resolveImageUrl(context, imageUrl);
-    final devicePixelRatio = MediaQuery.maybeDevicePixelRatioOf(context) ?? 1;
-    final cacheWidth = _cacheDimension(width, devicePixelRatio);
-    final cacheHeight = _cacheDimension(height, devicePixelRatio);
-
     return SizedBox(
       width: width,
       height: height,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(borderRadius),
-        child: resolvedUrl == null
-            ? _CoverFallback(title: title)
-            : Image.network(
-                resolvedUrl,
-                fit: BoxFit.cover,
-                cacheWidth: cacheWidth,
-                cacheHeight: cacheHeight,
-                errorBuilder: (_, _, _) => _CoverFallback(title: title),
-              ),
-      ),
-    );
-  }
-}
-
-class _CoverFallback extends StatelessWidget {
-  const _CoverFallback({required this.title});
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final tokens = theme.extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
-
-    return DecoratedBox(
-      decoration: BoxDecoration(color: tokens.surfaceRaised),
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(8),
-          child: Text(
-            'غلاف',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: tokens.primary,
-              fontWeight: FontWeight.w900,
-              height: 1.25,
-            ),
+      child: ColoredBox(
+        color: backgroundColor ?? Colors.transparent,
+        child: GalaxyNovelCover(
+          artwork: GalaxyNovelArtwork(
+            title: title,
+            image: resolvedUrl == null ? null : NetworkImage(resolvedUrl),
           ),
+          presentation: fit == BoxFit.cover
+              ? GalaxyCoverPresentation.fill
+              : GalaxyCoverPresentation.fit,
+          radius: borderRadius,
         ),
       ),
     );
@@ -132,12 +101,4 @@ String? _resolveImageUrl(BuildContext context, String url) {
   } on Object {
     return null;
   }
-}
-
-int? _cacheDimension(double dimension, double devicePixelRatio) {
-  final scaledDimension = dimension * devicePixelRatio;
-  if (!scaledDimension.isFinite || scaledDimension <= 0) {
-    return null;
-  }
-  return scaledDimension.ceil();
 }

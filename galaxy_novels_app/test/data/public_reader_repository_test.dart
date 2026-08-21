@@ -8,7 +8,7 @@ void main() {
     final client = PublicCacheClient(
       config: const AppConfig(siteBaseUrl: 'https://example.com/'),
       jsonGet: (uri, headers) async {
-        expect(headers['User-Agent'], 'WorReaderApp/1.0 Android');
+        expect(headers['User-Agent'], 'WorReaderApp/1.0');
         expect(
           uri.toString(),
           'https://example.com/wp-json/wor-reader-app/v1/chapters/10',

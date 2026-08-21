@@ -5,6 +5,7 @@ class FakeAuthSessionStore implements AuthSessionStore {
   PrivateSessionSnapshot? session;
   int clearCount = 0;
   int writeCount = 0;
+  bool failClear = false;
 
   @override
   Future<PrivateSessionSnapshot?> read() async => session;
@@ -18,6 +19,9 @@ class FakeAuthSessionStore implements AuthSessionStore {
   @override
   Future<void> clear() async {
     clearCount += 1;
+    if (failClear) {
+      throw const AuthSessionStoreException();
+    }
     session = null;
   }
 }

@@ -1,6 +1,13 @@
 import '../../downloads/domain/download_models.dart';
 
-enum ChapterDownloadStatus { available, pending, downloaded, failed }
+enum ChapterDownloadStatus {
+  available,
+  queued,
+  downloading,
+  paused,
+  downloaded,
+  failed,
+}
 
 class ChapterDownloadState {
   const ChapterDownloadState(this.status, {this.retryJobId});
@@ -8,7 +15,11 @@ class ChapterDownloadState {
   static const available = ChapterDownloadState(
     ChapterDownloadStatus.available,
   );
-  static const pending = ChapterDownloadState(ChapterDownloadStatus.pending);
+  static const queued = ChapterDownloadState(ChapterDownloadStatus.queued);
+  static const downloading = ChapterDownloadState(
+    ChapterDownloadStatus.downloading,
+  );
+  static const paused = ChapterDownloadState(ChapterDownloadStatus.paused);
   static const downloaded = ChapterDownloadState(
     ChapterDownloadStatus.downloaded,
   );
@@ -31,7 +42,8 @@ ChapterDownloadState resolveChapterDownloadState(
   for (final group in dashboard.groups) {
     for (final job in group.jobs) {
       if (job.chapterKey != chapterKey) continue;
-      if (_isPending(job.status)) return ChapterDownloadState.pending;
+      final activeState = _activeDownloadState(job.status);
+      if (activeState != null) return activeState;
       if (job.status == DownloadJobStatus.failed) failedJobId = job.jobId;
     }
   }
@@ -43,13 +55,14 @@ ChapterDownloadState resolveChapterDownloadState(
         );
 }
 
-bool _isPending(DownloadJobStatus status) => switch (status) {
-  DownloadJobStatus.queued ||
-  DownloadJobStatus.reserved ||
-  DownloadJobStatus.transferring ||
-  DownloadJobStatus.processing ||
-  DownloadJobStatus.paused => true,
-  DownloadJobStatus.completed ||
-  DownloadJobStatus.failed ||
-  DownloadJobStatus.canceled => false,
-};
+ChapterDownloadState? _activeDownloadState(DownloadJobStatus status) =>
+    switch (status) {
+      DownloadJobStatus.queued ||
+      DownloadJobStatus.reserved => ChapterDownloadState.queued,
+      DownloadJobStatus.transferring ||
+      DownloadJobStatus.processing => ChapterDownloadState.downloading,
+      DownloadJobStatus.paused => ChapterDownloadState.paused,
+      DownloadJobStatus.completed ||
+      DownloadJobStatus.failed ||
+      DownloadJobStatus.canceled => null,
+    };

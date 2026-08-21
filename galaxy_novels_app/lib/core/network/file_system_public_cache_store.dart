@@ -2,15 +2,40 @@ import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 
+import 'app_cache_maintenance.dart';
 import 'public_cache_client.dart';
 
 typedef CacheDirectoryProvider = Future<Directory> Function();
 
-class FileSystemPublicCacheStore implements PublicCacheStore {
+class FileSystemPublicCacheStore
+    implements PublicCacheStore, AppCacheMaintenance {
   FileSystemPublicCacheStore({CacheDirectoryProvider? directoryProvider})
     : _directoryProvider = directoryProvider ?? _defaultDirectoryProvider;
 
   final CacheDirectoryProvider _directoryProvider;
+
+  @override
+  Future<int> cacheSizeBytes() async {
+    final root = await _directoryProvider();
+    if (!await root.exists()) {
+      return 0;
+    }
+    var total = 0;
+    await for (final entity in root.list(recursive: true, followLinks: false)) {
+      if (entity is File) {
+        total += await entity.length();
+      }
+    }
+    return total;
+  }
+
+  @override
+  Future<void> clearTemporaryCache() async {
+    final root = await _directoryProvider();
+    if (await root.exists()) {
+      await root.delete(recursive: true);
+    }
+  }
 
   @override
   Future<String?> read(String key) async {

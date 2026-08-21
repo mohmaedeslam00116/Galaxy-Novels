@@ -1,7 +1,7 @@
 class AppConfig {
   const AppConfig({
     this.siteBaseUrl = galaxyNovelsBaseUrl,
-    this.userAgent = 'WorReaderApp/1.0 Android',
+    this.userAgent = 'WorReaderApp/1.0',
   });
 
   static const galaxyNovelsBaseUrl = 'https://galaxynovels.com/';

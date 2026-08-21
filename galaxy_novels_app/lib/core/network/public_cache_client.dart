@@ -17,10 +17,14 @@ class PublicCacheClient {
     required this.config,
     JsonGet? jsonGet,
     PublicCacheStore? cacheStore,
-  }) : _jsonGet = jsonGet ?? _defaultJsonGet,
+    this.requestTimeout = const Duration(seconds: 20),
+  }) : _jsonGet =
+           jsonGet ??
+           ((uri, headers) => _defaultJsonGet(uri, headers, requestTimeout)),
        _cacheStore = cacheStore;
 
   final AppConfig config;
+  final Duration requestTimeout;
   final JsonGet _jsonGet;
   final PublicCacheStore? _cacheStore;
 
@@ -33,10 +37,13 @@ class PublicCacheClient {
     final uri = config.resolve(urlOrPath);
     final cacheKey = uri.toString();
     try {
-      final value = await _jsonGet(uri, publicJsonHeaders);
+      final value = await _jsonGet(
+        uri,
+        publicJsonHeaders,
+      ).timeout(requestTimeout);
       await _writeCache(cacheKey, value);
       return value;
-    } on Object {
+    } on Exception {
       final cached = await _readCache(cacheKey);
       if (cached != null) {
         return cached;
@@ -77,14 +84,18 @@ class PublicCacheClient {
   static Future<Object?> _defaultJsonGet(
     Uri uri,
     Map<String, String> headers,
+    Duration requestTimeout,
   ) async {
-    final client = HttpClient();
+    final client = HttpClient()..connectionTimeout = requestTimeout;
     try {
-      final request = await client.getUrl(uri);
+      final request = await client.getUrl(uri).timeout(requestTimeout);
       headers.forEach(request.headers.set);
 
-      final response = await request.close();
-      final body = await response.transform(utf8.decoder).join();
+      final response = await request.close().timeout(requestTimeout);
+      final body = await response
+          .transform(utf8.decoder)
+          .join()
+          .timeout(requestTimeout);
 
       if (response.statusCode < 200 || response.statusCode >= 300) {
         throw PublicCacheException(
@@ -106,7 +117,7 @@ class PublicCacheClient {
 
     try {
       await store.write(key, jsonEncode(value));
-    } on Object {
+    } on Exception {
       // Cache writes must not break fresh network data.
     }
   }
@@ -123,7 +134,7 @@ class PublicCacheClient {
         return null;
       }
       return jsonDecode(raw);
-    } on Object {
+    } on Exception {
       return null;
     }
   }

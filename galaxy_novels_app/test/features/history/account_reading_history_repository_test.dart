@@ -138,6 +138,114 @@ void main() {
     expect(newAccountHistory.single.novelId, 22);
     expect(settledHistory.single.novelId, 22);
   });
+
+  test('keeps guest and account local histories isolated', () async {
+    final guestProgress = _progress(
+      novelId: 30,
+      chapterId: 300,
+      updatedAt: DateTime.utc(2026, 6, 23, 10),
+    );
+    final firstUserProgress = _progress(
+      novelId: 31,
+      chapterId: 310,
+      updatedAt: DateTime.utc(2026, 6, 23, 11),
+    );
+    final secondUserProgress = _progress(
+      novelId: 32,
+      chapterId: 320,
+      updatedAt: DateTime.utc(2026, 6, 23, 12),
+    );
+    final authRepository = FakeAuthRepository();
+    final local = _MemoryReadingHistoryRepository.scoped({
+      ReadingHistoryScope.guest: [guestProgress],
+      ReadingHistoryScope.user(_firstUser.id): [firstUserProgress],
+      ReadingHistoryScope.user(_secondUser.id): [secondUserProgress],
+    });
+    final harness = _HistoryHarness(
+      localRepository: local,
+      auth: authRepository,
+    );
+    addTearDown(harness.dispose);
+
+    expect(await harness.repository.load(), [guestProgress]);
+
+    authRepository.value = const AuthSessionState.authenticated(_firstUser);
+    expect(await harness.repository.load(), [firstUserProgress]);
+
+    authRepository.value = const AuthSessionState.authenticated(_secondUser);
+    expect(await harness.repository.load(), [secondUserProgress]);
+  });
+
+  test(
+    'does not expose user A local history after switching to user B',
+    () async {
+      final firstScope = ReadingHistoryScope.user(_firstUser.id);
+      final secondScope = ReadingHistoryScope.user(_secondUser.id);
+      final firstProgress = _progress(
+        novelId: 41,
+        chapterId: 410,
+        updatedAt: DateTime.utc(2026, 6, 23, 11),
+      );
+      final secondProgress = _progress(
+        novelId: 42,
+        chapterId: 420,
+        updatedAt: DateTime.utc(2026, 6, 23, 12),
+      );
+      final firstLoadGate = Completer<void>();
+      final local =
+          _MemoryReadingHistoryRepository.scoped({
+              firstScope: [firstProgress],
+              secondScope: [secondProgress],
+            })
+            ..loadStarted = Completer<ReadingHistoryScope>()
+            ..loadGates[firstScope] = firstLoadGate;
+      final harness = _HistoryHarness(localRepository: local);
+      addTearDown(harness.dispose);
+
+      final staleLoad = harness.repository.load();
+      expect(await local.loadStarted!.future, firstScope);
+      harness.authRepository.value = const AuthSessionState.authenticated(
+        _secondUser,
+      );
+
+      final currentHistory = await harness.repository.load();
+      firstLoadGate.complete();
+      final staleHistory = await staleLoad;
+
+      expect(currentHistory, [secondProgress]);
+      expect(staleHistory, isEmpty);
+    },
+  );
+
+  test(
+    'record keeps the scope captured when the account changes mid-write',
+    () async {
+      final firstScope = ReadingHistoryScope.user(_firstUser.id);
+      final secondScope = ReadingHistoryScope.user(_secondUser.id);
+      final recordGate = Completer<void>();
+      final local = _MemoryReadingHistoryRepository()
+        ..recordStarted = Completer<ReadingHistoryScope>()
+        ..recordGate = recordGate;
+      final harness = _HistoryHarness(localRepository: local);
+      addTearDown(harness.dispose);
+      final progress = _progress(
+        novelId: 50,
+        chapterId: 500,
+        updatedAt: DateTime.utc(2026, 6, 23, 13),
+      );
+
+      final record = harness.repository.record(progress);
+      expect(await local.recordStarted!.future, firstScope);
+      harness.authRepository.value = const AuthSessionState.authenticated(
+        _secondUser,
+      );
+      recordGate.complete();
+      await record;
+
+      expect(local.itemsFor(firstScope), [progress]);
+      expect(local.itemsFor(secondScope), isEmpty);
+    },
+  );
 }
 
 class _HistoryHarness {
@@ -187,23 +295,61 @@ class _TrackingAuthRepository extends FakeAuthRepository {
 }
 
 class _MemoryReadingHistoryRepository extends ChangeNotifier
-    implements ReadingHistoryRepository {
+    implements ScopedReadingHistoryRepository {
   _MemoryReadingHistoryRepository([List<ReadingProgress> items = const []])
-    : _items = [...items];
+    : _itemsByScope = {
+        ReadingHistoryScope.user(_firstUser.id): [...items],
+      };
 
-  List<ReadingProgress> _items;
+  _MemoryReadingHistoryRepository.scoped(
+    Map<ReadingHistoryScope, List<ReadingProgress>> itemsByScope,
+  ) : _itemsByScope = {
+        for (final entry in itemsByScope.entries) entry.key: [...entry.value],
+      };
+
+  final Map<ReadingHistoryScope, List<ReadingProgress>> _itemsByScope;
+  final Map<ReadingHistoryScope, Completer<void>> loadGates = {};
+  Completer<ReadingHistoryScope>? loadStarted;
+  Completer<ReadingHistoryScope>? recordStarted;
+  Completer<void>? recordGate;
 
   @override
-  Future<List<ReadingProgress>> load() async => List.unmodifiable(_items);
+  Future<List<ReadingProgress>> loadForScope(ReadingHistoryScope scope) async {
+    final started = loadStarted;
+    if (started != null && !started.isCompleted) {
+      started.complete(scope);
+    }
+    final gate = loadGates[scope];
+    if (gate != null) {
+      await gate.future;
+    }
+    return List.unmodifiable(_itemsByScope[scope] ?? const []);
+  }
 
   @override
-  Future<void> record(ReadingProgress progress) async {
-    _items = [
+  Future<void> recordForScope(
+    ReadingHistoryScope scope,
+    ReadingProgress progress,
+  ) async {
+    final started = recordStarted;
+    if (started != null && !started.isCompleted) {
+      started.complete(scope);
+    }
+    final gate = recordGate;
+    if (gate != null) {
+      await gate.future;
+    }
+    final items = _itemsByScope[scope] ?? const [];
+    _itemsByScope[scope] = [
       progress,
-      for (final item in _items)
+      for (final item in items)
         if (item.novelId != progress.novelId) item,
     ];
     notifyListeners();
+  }
+
+  List<ReadingProgress> itemsFor(ReadingHistoryScope scope) {
+    return List.unmodifiable(_itemsByScope[scope] ?? const []);
   }
 }
 

@@ -4,16 +4,22 @@ import 'package:flutter/material.dart';
 
 import '../../../app/app_dependencies.dart';
 import '../../../app/app_theme.dart';
+import '../../../core/analytics/app_screen_names.dart';
+import '../../../shared/widgets/app_async_state.dart';
 import '../../account/application/auth_repository.dart';
 import '../../account/domain/auth_session.dart';
 import '../../account/presentation/account_screen.dart';
-import '../../novel_details/presentation/novel_details_screen.dart';
+import '../../catalog/presentation/catalog_screen.dart';
+import '../../novel_details/presentation/novel_details_navigation.dart';
 import '../application/favorites_repository.dart';
 import '../domain/favorite_item.dart';
 import 'widgets/favorite_novel_row.dart';
 
 class FavoritesScreen extends StatefulWidget {
-  const FavoritesScreen({super.key});
+  const FavoritesScreen({this.embedded = false, this.onOpenLibrary, super.key});
+
+  final bool embedded;
+  final VoidCallback? onOpenLibrary;
 
   @override
   State<FavoritesScreen> createState() => _FavoritesScreenState();
@@ -22,6 +28,7 @@ class FavoritesScreen extends StatefulWidget {
 class _FavoritesScreenState extends State<FavoritesScreen> {
   AuthRepository? _authRepository;
   FavoritesRepository? _favoritesRepository;
+  var _sessionGeneration = 0;
 
   @override
   void didChangeDependencies() {
@@ -40,33 +47,42 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   @override
   Widget build(BuildContext context) {
     final authRepository = _authRepository!;
+    final content = ValueListenableBuilder<AuthSessionState>(
+      valueListenable: authRepository,
+      builder: (context, session, _) {
+        return switch (session.status) {
+          AuthSessionStatus.idle ||
+          AuthSessionStatus.restoring ||
+          AuthSessionStatus.authenticating => const AppAsyncState.loading(
+            loadingLabel: 'جارٍ تحميل المفضلة',
+          ),
+          AuthSessionStatus.guest ||
+          AuthSessionStatus.failure => _SignInRequired(
+            message: session.errorMessage,
+            onOpenAccount: _openAccount,
+          ),
+          AuthSessionStatus.authenticated ||
+          AuthSessionStatus.signingOut => _AuthenticatedFavorites(
+            repository: _favoritesRepository!,
+            onOpen: _openFavorite,
+            onRemove: _removeFavorite,
+            onOpenLibrary: widget.onOpenLibrary ?? _openLibrary,
+          ),
+        };
+      },
+    );
+    if (widget.embedded) return content;
     return Scaffold(
       appBar: AppBar(title: const Text('المفضلة')),
-      body: ValueListenableBuilder<AuthSessionState>(
-        valueListenable: authRepository,
-        builder: (context, session, _) {
-          return switch (session.status) {
-            AuthSessionStatus.idle ||
-            AuthSessionStatus.restoring ||
-            AuthSessionStatus.authenticating => const _FavoritesSkeleton(),
-            AuthSessionStatus.guest ||
-            AuthSessionStatus.failure => _SignInRequired(
-              message: session.errorMessage,
-              onOpenAccount: _openAccount,
-            ),
-            AuthSessionStatus.authenticated ||
-            AuthSessionStatus.signingOut => _AuthenticatedFavorites(
-              repository: _favoritesRepository!,
-              onOpen: _openFavorite,
-              onRemove: _removeFavorite,
-            ),
-          };
-        },
-      ),
+      body: content,
     );
   }
 
   void _handleAuthChanged() {
+    _sessionGeneration += 1;
+    if (mounted) {
+      ScaffoldMessenger.maybeOf(context)?.hideCurrentSnackBar();
+    }
     if (_authRepository?.value.status == AuthSessionStatus.authenticated) {
       unawaited(_favoritesRepository?.load());
     }
@@ -82,27 +98,130 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   }
 
   void _openAccount() {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute<void>(builder: (_) => const AccountScreen()));
-  }
-
-  void _openFavorite(FavoriteItem item) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => NovelDetailsScreen(manifestPath: item.manifestPath),
+        settings: const RouteSettings(name: AppScreenNames.account),
+        builder: (_) => const AccountScreen(),
       ),
     );
   }
 
+  void _openLibrary() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(name: AppScreenNames.library),
+        builder: (_) => Scaffold(
+          appBar: AppBar(title: const Text('المكتبة')),
+          body: const CatalogScreen(),
+        ),
+      ),
+    );
+  }
+
+  void _openFavorite(FavoriteItem item) {
+    unawaited(
+      NovelDetailsNavigation.open(context, manifestPath: item.manifestPath),
+    );
+  }
+
   Future<void> _removeFavorite(FavoriteItem item) async {
-    final result = await _favoritesRepository!.toggle(item);
-    if (mounted && result == FavoriteToggleResult.failed) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تعذر حفظ التغيير على الجهاز.')),
+    final repository = _favoritesRepository!;
+    final authRepository = _authRepository!;
+    final userId = authRepository.value.user?.id;
+    final generation = _sessionGeneration;
+    final result = await repository.toggle(item);
+    if (!_isCurrentSession(repository, authRepository, userId, generation)) {
+      return;
+    }
+
+    if (result == FavoriteToggleResult.removed &&
+        !repository.value.contains(item.id)) {
+      _showRemovedFavoriteSnackBar(
+        item,
+        repository,
+        authRepository,
+        userId!,
+        generation,
       );
+      return;
+    }
+    _showMutationMessage(_messageFor(result));
+  }
+
+  bool _isCurrentSession(
+    FavoritesRepository repository,
+    AuthRepository authRepository,
+    int? userId,
+    int generation,
+  ) {
+    final session = authRepository.value;
+    return mounted &&
+        userId != null &&
+        generation == _sessionGeneration &&
+        identical(repository, _favoritesRepository) &&
+        identical(authRepository, _authRepository) &&
+        session.user?.id == userId &&
+        repository.value.userId == userId;
+  }
+
+  void _showRemovedFavoriteSnackBar(
+    FavoriteItem item,
+    FavoritesRepository repository,
+    AuthRepository authRepository,
+    int userId,
+    int generation,
+  ) {
+    final messenger = ScaffoldMessenger.of(context)..hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: const Text('أُزيلت الرواية من المفضلة.'),
+        action: SnackBarAction(
+          label: 'تراجع',
+          onPressed: () => unawaited(
+            _restoreFavorite(
+              item,
+              repository,
+              authRepository,
+              userId,
+              generation,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _restoreFavorite(
+    FavoriteItem item,
+    FavoritesRepository repository,
+    AuthRepository authRepository,
+    int userId,
+    int generation,
+  ) async {
+    if (!_isCurrentSession(repository, authRepository, userId, generation) ||
+        repository.value.contains(item.id)) {
+      return;
+    }
+    final result = await repository.toggle(item);
+    if (_isCurrentSession(repository, authRepository, userId, generation) &&
+        result != FavoriteToggleResult.added) {
+      _showMutationMessage(_messageFor(result));
     }
   }
+
+  void _showMutationMessage(String message) {
+    final messenger = ScaffoldMessenger.of(context)..hideCurrentSnackBar();
+    messenger.showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  String _messageFor(FavoriteToggleResult result) => switch (result) {
+    FavoriteToggleResult.added => 'الرواية موجودة في المفضلة.',
+    FavoriteToggleResult.removed => 'تم تحديث المفضلة.',
+    FavoriteToggleResult.signInRequired => 'سجّل الدخول لتحديث المفضلة.',
+    FavoriteToggleResult.limitReached =>
+      'وصلت إلى الحد الأقصى للروايات المفضلة.',
+    FavoriteToggleResult.failed => 'تعذر حفظ التغيير على الجهاز.',
+  };
 
   @override
   void dispose() {
@@ -116,11 +235,13 @@ class _AuthenticatedFavorites extends StatelessWidget {
     required this.repository,
     required this.onOpen,
     required this.onRemove,
+    this.onOpenLibrary,
   });
 
   final FavoritesRepository repository;
   final ValueChanged<FavoriteItem> onOpen;
   final ValueChanged<FavoriteItem> onRemove;
+  final VoidCallback? onOpenLibrary;
 
   @override
   Widget build(BuildContext context) {
@@ -128,7 +249,9 @@ class _AuthenticatedFavorites extends StatelessWidget {
       valueListenable: repository,
       builder: (context, state, _) {
         if (state.status != FavoritesLoadStatus.ready) {
-          return const _FavoritesSkeleton();
+          return const AppAsyncState.loading(
+            loadingLabel: 'جارٍ تحميل المفضلة',
+          );
         }
         return RefreshIndicator(
           onRefresh: repository.refresh,
@@ -149,7 +272,12 @@ class _AuthenticatedFavorites extends StatelessWidget {
                 const SizedBox(height: 12),
               ],
               if (state.items.isEmpty)
-                const _EmptyFavorites()
+                AppAsyncState.empty(
+                  title: 'لا توجد روايات مفضلة بعد',
+                  message: 'أضف رواياتك من صفحة التفاصيل لتجدها هنا.',
+                  actionLabel: 'فتح المكتبة',
+                  onAction: onOpenLibrary,
+                )
               else
                 for (var index = 0; index < state.items.length; index++) ...[
                   FavoriteNovelRow(
@@ -209,41 +337,6 @@ class _SignInRequired extends StatelessWidget {
   }
 }
 
-class _EmptyFavorites extends StatelessWidget {
-  const _EmptyFavorites();
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens =
-        Theme.of(context).extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 96, horizontal: 24),
-      child: Column(
-        children: [
-          Icon(
-            Icons.bookmark_add_outlined,
-            size: 52,
-            color: tokens.textSecondary,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'لا توجد روايات مفضلة بعد',
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'أضف رواياتك من صفحة التفاصيل لتجدها هنا.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: tokens.textSecondary),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _SyncNotice extends StatelessWidget {
   const _SyncNotice({required this.message, required this.icon});
 
@@ -269,27 +362,6 @@ class _SyncNotice extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _FavoritesSkeleton extends StatelessWidget {
-  const _FavoritesSkeleton();
-
-  @override
-  Widget build(BuildContext context) {
-    final color = Theme.of(context).colorScheme.primary.withValues(alpha: 0.10);
-    return ListView.separated(
-      padding: const EdgeInsets.all(16),
-      itemCount: 5,
-      separatorBuilder: (_, _) => const SizedBox(height: 10),
-      itemBuilder: (_, _) => Container(
-        height: 112,
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(8),
-        ),
       ),
     );
   }

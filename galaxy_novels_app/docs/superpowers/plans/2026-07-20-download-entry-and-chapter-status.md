@@ -195,7 +195,7 @@ git commit -m "feat(downloads): show live chapter action states"
 
 **Interfaces:**
 - Consumes: `AppDependencies.of(context).downloadRepository` and the Task 1 resolver.
-- Produces: `AllChaptersScreen(initialSelectionMode: true)` from a visible details-page button and live state updates in both chapter lists.
+- Produces: `AllChaptersScreen.selecting(...)` from a visible details-page button and live state updates in both chapter lists.
 
 - [ ] **Step 1: Write failing details integration tests**
 
@@ -228,7 +228,7 @@ Place an `OutlinedButton.icon` immediately before `_ChapterDiscoveryControls`:
 ```dart
 OutlinedButton.icon(
   key: const ValueKey('novel-details-bulk-download'),
-  onPressed: () => _openAllChapters(initialSelectionMode: true),
+  onPressed: _openAllChaptersForSelection,
   icon: const Icon(Icons.download_for_offline_outlined),
   label: const Text('تنزيل عدة فصول'),
 )
@@ -238,13 +238,19 @@ Keep its minimum height at 48 and use `NovelDetailsVisualTokens` for border and 
 
 - [ ] **Step 4: Let the full list start in selection mode**
 
-Add to `AllChaptersScreen`:
+Add a named constructor to `AllChaptersScreen`:
 
 ```dart
-final bool initialSelectionMode;
+const AllChaptersScreen.selecting({
+  required this.result,
+  required this.vipController,
+  required this.canReadPrivate,
+  required this.isVipDirectContentRouteAvailable,
+  super.key,
+}) : _startsSelecting = true;
 ```
 
-Default it to `false` for existing callers and set `_selectionMode = widget.initialSelectionMode` in `initState`. The existing toolbar entry still toggles selection normally.
+Keep the default constructor with `_startsSelecting = false`, and set `_selectionMode = widget._startsSelecting` in `initState`. The existing toolbar entry still toggles selection normally.
 
 - [ ] **Step 5: Subscribe both lists to repository state**
 

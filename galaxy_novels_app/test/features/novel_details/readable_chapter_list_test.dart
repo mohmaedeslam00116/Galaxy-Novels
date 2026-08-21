@@ -78,6 +78,50 @@ void main() {
     ]);
   });
 
+  test('filters readable chapters in Arabic and reverses the result', () {
+    final chapters = mergeReadableChapters(
+      publicChapters: [
+        _publicChapter(1, title: 'البداية'),
+        _publicChapter(2, title: 'السر الغامض'),
+      ],
+      vipChapters: const [],
+    );
+
+    expect(
+      readableChaptersForDisplay(
+        chapters,
+        query: 'غامض',
+        descending: false,
+      ).map((chapter) => chapter.number),
+      ['2'],
+    );
+    expect(
+      readableChaptersForDisplay(
+        chapters,
+        query: '',
+        descending: true,
+      ).map((chapter) => chapter.number),
+      ['2', '1'],
+    );
+  });
+
+  test('selects every readable chapter inside an inclusive position range', () {
+    final chapters = mergeReadableChapters(
+      publicChapters: List.generate(60, (index) => _publicChapter(index + 1)),
+      vipChapters: const [],
+    );
+
+    final selected = readableChaptersInPositionRange(
+      chapters,
+      start: 11,
+      end: 50,
+    );
+
+    expect(selected, hasLength(40));
+    expect(selected.first.number, '11');
+    expect(selected.last.number, '50');
+  });
+
   test('does not open VIP chapters through the wrong public next fallback', () {
     final chapters = mergeReadableChapters(
       publicChapters: [_publicChapter(274)],
@@ -110,30 +154,33 @@ void main() {
     );
   });
 
-  test('cannot open the first VIP chapter without a previous chapter fallback', () {
-    final chapters = mergeReadableChapters(
-      publicChapters: const [],
-      vipChapters: [_vipChapter(1)],
-    );
+  test(
+    'cannot open the first VIP chapter without a previous chapter fallback',
+    () {
+      final chapters = mergeReadableChapters(
+        publicChapters: const [],
+        vipChapters: [_vipChapter(1)],
+      );
 
-    expect(
-      readableChapterOpenContentApi(
-        chapters,
-        0,
-        directVipChapterRouteAvailable: false,
-      ),
-      isEmpty,
-    );
-  });
+      expect(
+        readableChapterOpenContentApi(
+          chapters,
+          0,
+          directVipChapterRouteAvailable: false,
+        ),
+        isEmpty,
+      );
+    },
+  );
 }
 
-NovelChapter _publicChapter(int number) {
+NovelChapter _publicChapter(int number, {String? title}) {
   return NovelChapter(
     id: number,
     position: number,
     number: '$number',
     label: 'الفصل $number',
-    title: 'عنوان الفصل $number',
+    title: title ?? 'عنوان الفصل $number',
     url: '/chapter-$number/',
     contentApi: '/wp-json/wor-reader-app/v1/chapters/$number',
     dateLabel: '',

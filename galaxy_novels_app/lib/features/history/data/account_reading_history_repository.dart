@@ -13,7 +13,7 @@ import 'reading_history_remote_service.dart';
 class AccountReadingHistoryRepository extends ChangeNotifier
     implements ReadingHistoryRepository {
   AccountReadingHistoryRepository({
-    required ReadingHistoryRepository localRepository,
+    required ScopedReadingHistoryRepository localRepository,
     required ReadingHistoryRemoteService remoteService,
     required AuthRepository authRepository,
     Duration remoteCacheDuration = const Duration(minutes: 3),
@@ -24,7 +24,7 @@ class AccountReadingHistoryRepository extends ChangeNotifier
     _authRepository.addListener(_handleAuthChanged);
   }
 
-  final ReadingHistoryRepository _localRepository;
+  final ScopedReadingHistoryRepository _localRepository;
   final ReadingHistoryRemoteService _remoteService;
   final AuthRepository _authRepository;
   final Duration _remoteCacheDuration;
@@ -37,20 +37,34 @@ class AccountReadingHistoryRepository extends ChangeNotifier
 
   @override
   Future<List<ReadingProgress>> load() async {
-    final localHistory = await _localRepository.load();
     final userId = _authenticatedUserId;
+    final scope = _scopeFor(userId);
+    final localHistory = await _localRepository.loadForScope(scope);
+    if (_scopeFor(_authenticatedUserId) != scope) {
+      return const [];
+    }
     if (userId == null) {
       return localHistory;
     }
     _activateUser(userId);
     await _loadRemoteIfStale(userId);
+    if (_scopeFor(_authenticatedUserId) != scope) {
+      return const [];
+    }
     return mergeReadingHistory(localHistory, _remoteHistory);
   }
 
   @override
   Future<void> record(ReadingProgress progress) async {
-    await _localRepository.record(progress);
+    final scope = _scopeFor(_authenticatedUserId);
+    await _localRepository.recordForScope(scope, progress);
     notifyListeners();
+  }
+
+  ReadingHistoryScope _scopeFor(int? userId) {
+    return userId == null
+        ? ReadingHistoryScope.guest
+        : ReadingHistoryScope.user(userId);
   }
 
   int? get _authenticatedUserId {

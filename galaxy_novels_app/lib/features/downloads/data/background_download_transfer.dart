@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:background_downloader/background_downloader.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as path;
 
@@ -64,7 +65,14 @@ class BackgroundDownloadTransfer implements DownloadTransfer {
       metaData: request.kind.name,
     );
     _tasks[request.transferId] = task;
-    final accepted = await _client.enqueue(task);
+    final bool accepted;
+    try {
+      accepted = await _client.enqueue(task);
+    } on PlatformException catch (platformError) {
+      _tasks.remove(request.transferId);
+      debugPrint('Native download enqueue failed (${platformError.code}).');
+      throw const DownloadTransferUnavailableException();
+    }
     if (!accepted) _tasks.remove(request.transferId);
     return accepted;
   }

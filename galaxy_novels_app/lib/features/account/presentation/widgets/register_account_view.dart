@@ -8,6 +8,7 @@ class RegisterAccountView extends StatefulWidget {
     required this.onRegister,
     required this.onShowLogin,
     this.errorMessage,
+    this.onBackToGuest,
     super.key,
   });
 
@@ -15,6 +16,7 @@ class RegisterAccountView extends StatefulWidget {
   final String? errorMessage;
   final Future<void> Function(RegisterCredentials credentials) onRegister;
   final VoidCallback onShowLogin;
+  final VoidCallback? onBackToGuest;
 
   @override
   State<RegisterAccountView> createState() => _RegisterAccountViewState();
@@ -34,154 +36,201 @@ class _RegisterAccountViewState extends State<RegisterAccountView> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return AutofillGroup(
+      key: const ValueKey('register-account-form'),
       child: Form(
         key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
-          children: [
-            Icon(
-              Icons.person_add_alt_1_rounded,
-              size: 54,
-              color: theme.colorScheme.primary,
-            ),
-            const SizedBox(height: 14),
-            Text(
-              'إنشاء حساب',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'أنشئ حساب مجرة الروايات واستخدمه مباشرة داخل التطبيق.',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 22),
-            TextFormField(
-              key: const ValueKey('register-username'),
-              controller: _usernameController,
-              enabled: !widget.isSubmitting,
-              autofillHints: const [AutofillHints.newUsername],
-              textInputAction: TextInputAction.next,
-              decoration: const InputDecoration(
-                labelText: 'اسم المستخدم',
-                prefixIcon: Icon(Icons.alternate_email_rounded),
-              ),
-              validator: _required('أدخل اسم المستخدم.'),
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              key: const ValueKey('register-email'),
-              controller: _emailController,
-              enabled: !widget.isSubmitting,
-              autofillHints: const [AutofillHints.email],
-              keyboardType: TextInputType.emailAddress,
-              textInputAction: TextInputAction.next,
-              decoration: const InputDecoration(
-                labelText: 'البريد الإلكتروني',
-                prefixIcon: Icon(Icons.mail_outline_rounded),
-              ),
-              validator: _validateEmail,
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              key: const ValueKey('register-display-name'),
-              controller: _displayNameController,
-              enabled: !widget.isSubmitting,
-              autofillHints: const [AutofillHints.name],
-              textInputAction: TextInputAction.next,
-              decoration: const InputDecoration(
-                labelText: 'الاسم الظاهر',
-                prefixIcon: Icon(Icons.badge_outlined),
-              ),
-              validator: _required('أدخل الاسم الظاهر.'),
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              key: const ValueKey('register-password'),
-              controller: _passwordController,
-              enabled: !widget.isSubmitting,
-              autofillHints: const [AutofillHints.newPassword],
-              obscureText: _obscurePassword,
-              enableSuggestions: false,
-              autocorrect: false,
-              textInputAction: TextInputAction.next,
-              decoration: InputDecoration(
-                labelText: 'كلمة المرور',
-                prefixIcon: const Icon(Icons.lock_outline_rounded),
-                suffixIcon: IconButton(
-                  onPressed: widget.isSubmitting
-                      ? null
-                      : () => setState(
-                          () => _obscurePassword = !_obscurePassword,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final sidePadding = constraints.maxWidth >= 560 ? 28.0 : 16.0;
+            return ListView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              padding: EdgeInsets.fromLTRB(sidePadding, 20, sidePadding, 32),
+              children: [
+                Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 520),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (widget.onBackToGuest != null) ...[
+                          Align(
+                            alignment: AlignmentDirectional.centerStart,
+                            child: TextButton.icon(
+                              key: const ValueKey('register-back-to-guest'),
+                              onPressed: widget.isSubmitting
+                                  ? null
+                                  : widget.onBackToGuest,
+                              icon: const Icon(Icons.arrow_back_rounded),
+                              label: const Text('العودة لوضع الزائر'),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                        ],
+                        Icon(
+                          Icons.person_add_alt_1_rounded,
+                          size: 44,
+                          color: theme.colorScheme.primary,
                         ),
-                  tooltip: _obscurePassword
-                      ? 'إظهار كلمة المرور'
-                      : 'إخفاء كلمة المرور',
-                  icon: Icon(
-                    _obscurePassword
-                        ? Icons.visibility_outlined
-                        : Icons.visibility_off_outlined,
+                        const SizedBox(height: 14),
+                        Text(
+                          'إنشاء حساب',
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'أنشئ حساب مجرة الروايات واستخدمه مباشرة داخل التطبيق.',
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(height: 22),
+                        TextFormField(
+                          key: const ValueKey('register-username'),
+                          controller: _usernameController,
+                          enabled: !widget.isSubmitting,
+                          autofillHints: const [AutofillHints.newUsername],
+                          textInputAction: TextInputAction.next,
+                          textDirection: TextDirection.ltr,
+                          textAlign: TextAlign.left,
+                          decoration: const InputDecoration(
+                            labelText: 'اسم المستخدم',
+                            prefixIcon: Icon(Icons.alternate_email_rounded),
+                          ),
+                          validator: _required('أدخل اسم المستخدم.'),
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          key: const ValueKey('register-email'),
+                          controller: _emailController,
+                          enabled: !widget.isSubmitting,
+                          autofillHints: const [AutofillHints.email],
+                          keyboardType: TextInputType.emailAddress,
+                          textInputAction: TextInputAction.next,
+                          textDirection: TextDirection.ltr,
+                          textAlign: TextAlign.left,
+                          decoration: const InputDecoration(
+                            labelText: 'البريد الإلكتروني',
+                            prefixIcon: Icon(Icons.mail_outline_rounded),
+                          ),
+                          validator: _validateEmail,
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          key: const ValueKey('register-display-name'),
+                          controller: _displayNameController,
+                          enabled: !widget.isSubmitting,
+                          autofillHints: const [AutofillHints.name],
+                          textInputAction: TextInputAction.next,
+                          decoration: const InputDecoration(
+                            labelText: 'الاسم الظاهر',
+                            prefixIcon: Icon(Icons.badge_outlined),
+                          ),
+                          validator: _required('أدخل الاسم الظاهر.'),
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          key: const ValueKey('register-password'),
+                          controller: _passwordController,
+                          enabled: !widget.isSubmitting,
+                          autofillHints: const [AutofillHints.newPassword],
+                          obscureText: _obscurePassword,
+                          enableSuggestions: false,
+                          autocorrect: false,
+                          textInputAction: TextInputAction.next,
+                          textDirection: TextDirection.ltr,
+                          textAlign: TextAlign.left,
+                          decoration: InputDecoration(
+                            labelText: 'كلمة المرور',
+                            prefixIcon: const Icon(Icons.lock_outline_rounded),
+                            suffixIcon: IconButton(
+                              onPressed: widget.isSubmitting
+                                  ? null
+                                  : () => setState(
+                                      () =>
+                                          _obscurePassword = !_obscurePassword,
+                                    ),
+                              tooltip: _obscurePassword
+                                  ? 'إظهار كلمة المرور'
+                                  : 'إخفاء كلمة المرور',
+                              icon: Icon(
+                                _obscurePassword
+                                    ? Icons.visibility_outlined
+                                    : Icons.visibility_off_outlined,
+                              ),
+                            ),
+                          ),
+                          validator: _validatePassword,
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          key: const ValueKey('register-confirm-password'),
+                          controller: _confirmPasswordController,
+                          enabled: !widget.isSubmitting,
+                          obscureText: _obscurePassword,
+                          enableSuggestions: false,
+                          autocorrect: false,
+                          textInputAction: TextInputAction.done,
+                          textDirection: TextDirection.ltr,
+                          textAlign: TextAlign.left,
+                          onFieldSubmitted: (_) => _submit(),
+                          decoration: const InputDecoration(
+                            labelText: 'تأكيد كلمة المرور',
+                            prefixIcon: Icon(Icons.lock_reset_rounded),
+                          ),
+                          validator: _validateConfirmPassword,
+                        ),
+                        CheckboxListTile(
+                          contentPadding: EdgeInsets.zero,
+                          value: _rememberSession,
+                          onChanged: widget.isSubmitting
+                              ? null
+                              : (value) => setState(
+                                  () => _rememberSession = value ?? false,
+                                ),
+                          controlAffinity: ListTileControlAffinity.leading,
+                          title: const Text('تذكرني على هذا الجهاز'),
+                        ),
+                        if (widget.errorMessage case final message?) ...[
+                          _RegisterError(message: message),
+                          const SizedBox(height: 14),
+                        ],
+                        FilledButton.icon(
+                          key: const ValueKey('register-submit'),
+                          onPressed: widget.isSubmitting ? null : _submit,
+                          icon: widget.isSubmitting
+                              ? const SizedBox.square(
+                                  dimension: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.person_add_alt_1_rounded),
+                          label: Text(
+                            widget.isSubmitting
+                                ? 'جارٍ إنشاء الحساب...'
+                                : 'إنشاء الحساب',
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        TextButton.icon(
+                          key: const ValueKey('register-show-login'),
+                          onPressed: widget.isSubmitting
+                              ? null
+                              : widget.onShowLogin,
+                          icon: const Icon(Icons.login_rounded),
+                          label: const Text('لديك حساب؟ تسجيل الدخول'),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              validator: _validatePassword,
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              key: const ValueKey('register-confirm-password'),
-              controller: _confirmPasswordController,
-              enabled: !widget.isSubmitting,
-              obscureText: _obscurePassword,
-              enableSuggestions: false,
-              autocorrect: false,
-              textInputAction: TextInputAction.done,
-              onFieldSubmitted: (_) => _submit(),
-              decoration: const InputDecoration(
-                labelText: 'تأكيد كلمة المرور',
-                prefixIcon: Icon(Icons.lock_reset_rounded),
-              ),
-              validator: _validateConfirmPassword,
-            ),
-            CheckboxListTile(
-              contentPadding: EdgeInsets.zero,
-              value: _rememberSession,
-              onChanged: widget.isSubmitting
-                  ? null
-                  : (value) =>
-                        setState(() => _rememberSession = value ?? false),
-              controlAffinity: ListTileControlAffinity.leading,
-              title: const Text('تذكرني على هذا الجهاز'),
-            ),
-            if (widget.errorMessage case final message?) ...[
-              _RegisterError(message: message),
-              const SizedBox(height: 14),
-            ],
-            FilledButton.icon(
-              key: const ValueKey('register-submit'),
-              onPressed: widget.isSubmitting ? null : _submit,
-              icon: widget.isSubmitting
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.person_add_alt_1_rounded),
-              label: Text(
-                widget.isSubmitting ? 'جارٍ إنشاء الحساب...' : 'إنشاء الحساب',
-              ),
-            ),
-            const SizedBox(height: 10),
-            TextButton.icon(
-              key: const ValueKey('register-show-login'),
-              onPressed: widget.isSubmitting ? null : widget.onShowLogin,
-              icon: const Icon(Icons.login_rounded),
-              label: const Text('لديك حساب؟ تسجيل الدخول'),
-            ),
-          ],
+              ],
+            );
+          },
         ),
       ),
     );

@@ -1,11 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:galaxy_novels_app/data/models/novel_details_data.dart';
+import 'package:galaxy_novels_app/design_system/components/galaxy_surface.dart';
 import 'package:galaxy_novels_app/features/novel_details/domain/readable_chapter.dart';
 import 'package:galaxy_novels_app/features/novel_details/presentation/chapter_download_state.dart';
 import 'package:galaxy_novels_app/features/novel_details/presentation/widgets/readable_chapter_tile.dart';
 
 void main() {
+  testWidgets('chapter tile keeps a visible card frame', (tester) async {
+    await tester.pumpWidget(
+      const _TestTile(downloadState: ChapterDownloadState.available),
+    );
+
+    final surface = tester.widget<GalaxySurface>(find.byType(GalaxySurface));
+    expect(surface.variant, GalaxySurfaceVariant.base);
+    expect(surface.radius, 16);
+  });
+
   testWidgets('chapter tile exposes a compact download action', (tester) async {
     var downloads = 0;
     await tester.pumpWidget(
@@ -21,16 +32,40 @@ void main() {
     expect(downloads, 1);
   });
 
-  testWidgets('pending chapter replaces download action with progress', (
+  testWidgets('queued chapter exposes a waiting state', (tester) async {
+    await tester.pumpWidget(
+      const _TestTile(
+        downloadState: ChapterDownloadState(ChapterDownloadStatus.queued),
+      ),
+    );
+
+    expect(find.byIcon(Icons.schedule_rounded), findsOneWidget);
+    expect(find.byTooltip('الفصل في طابور التنزيل'), findsOneWidget);
+  });
+
+  testWidgets('downloading chapter replaces action with progress', (
     tester,
   ) async {
     await tester.pumpWidget(
-      const _TestTile(downloadState: ChapterDownloadState.pending),
+      const _TestTile(
+        downloadState: ChapterDownloadState(ChapterDownloadStatus.downloading),
+      ),
     );
 
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
     expect(find.bySemanticsLabel('الفصل قيد التنزيل'), findsOneWidget);
     expect(find.byIcon(Icons.download_rounded), findsNothing);
+  });
+
+  testWidgets('paused chapter exposes its paused state', (tester) async {
+    await tester.pumpWidget(
+      const _TestTile(
+        downloadState: ChapterDownloadState(ChapterDownloadStatus.paused),
+      ),
+    );
+
+    expect(find.byIcon(Icons.pause_circle_outline_rounded), findsOneWidget);
+    expect(find.byTooltip('تنزيل الفصل متوقف مؤقتًا'), findsOneWidget);
   });
 
   testWidgets('downloaded chapter shows a disabled completion action', (

@@ -92,7 +92,7 @@ class CommentsController extends ChangeNotifier
   Future<void>? _initialFuture;
   CommentsSort? _initialSort;
   Future<void>? _loadMoreFuture;
-  int _generation = 0;
+  int _loadGeneration = 0;
   bool _disposed = false;
 
   @override
@@ -123,13 +123,15 @@ class CommentsController extends ChangeNotifier
       return active;
     }
 
-    final generation = ++_generation;
+    final generation = ++_loadGeneration;
     _loadMoreFuture = null;
     _publish(
       CommentsState(
         target: _target,
         sort: sort,
         status: CommentsStatus.loading,
+        isSubmitting: _value.isSubmitting,
+        isInteracting: _value.isInteracting,
       ),
     );
 
@@ -152,7 +154,7 @@ class CommentsController extends ChangeNotifier
         sort: sort,
         page: 1,
       );
-      if (!_isCurrent(sort, generation)) {
+      if (!_isCurrentLoad(sort, generation)) {
         return;
       }
       _publish(
@@ -165,10 +167,12 @@ class CommentsController extends ChangeNotifier
           totalPages: page.totalPages,
           totalComments: page.totalComments,
           reactions: _reactionCountsFromPage(page.reactions),
+          isSubmitting: _value.isSubmitting,
+          isInteracting: _value.isInteracting,
         ),
       );
     } on Exception catch (error) {
-      if (!_isCurrent(sort, generation)) {
+      if (!_isCurrentLoad(sort, generation)) {
         return;
       }
       _publish(
@@ -176,6 +180,8 @@ class CommentsController extends ChangeNotifier
           target: _target,
           sort: sort,
           status: CommentsStatus.failure,
+          isSubmitting: _value.isSubmitting,
+          isInteracting: _value.isInteracting,
           errorMessage: commentsMessageFor(error),
         ),
       );
@@ -195,7 +201,7 @@ class CommentsController extends ChangeNotifier
       return Future.value();
     }
 
-    final generation = _generation;
+    final generation = _loadGeneration;
     final nextPage = current.page + 1;
     _publish(
       CommentsState(
@@ -209,6 +215,8 @@ class CommentsController extends ChangeNotifier
         reactions: current.reactions,
         myReaction: current.myReaction,
         isLoadingMore: true,
+        isSubmitting: current.isSubmitting,
+        isInteracting: current.isInteracting,
       ),
     );
 
@@ -264,8 +272,6 @@ class CommentsController extends ChangeNotifier
       );
     }
 
-    final sort = _value.sort;
-    final generation = _generation;
     _publishSubmitting();
 
     try {
@@ -275,7 +281,8 @@ class CommentsController extends ChangeNotifier
         parentId: parentId,
         isSpoiler: isSpoiler,
       );
-      if (!_isCurrent(sort, generation)) {
+      await _awaitActiveInitialLoad();
+      if (_disposed) {
         return const CommentSubmitOutcome(CommentSubmitStatus.failed);
       }
       _publishSubmittedComment(comment);
@@ -285,21 +292,21 @@ class CommentsController extends ChangeNotifier
         await authRepository?.restoreSession();
       }
       final message = commentSubmitMessageFor(error);
-      _finishFailedSubmit(sort, generation, message);
+      _finishFailedSubmit(message);
       return CommentSubmitOutcome(
         CommentSubmitStatus.failed,
         errorMessage: message,
       );
     } on FormatException {
       const message = 'أرسل الموقع تعليقًا غير صالح. حاول مجددًا.';
-      _finishFailedSubmit(sort, generation, message);
+      _finishFailedSubmit(message);
       return const CommentSubmitOutcome(
         CommentSubmitStatus.failed,
         errorMessage: message,
       );
     } on ArgumentError {
       const message = 'اكتب تعليقًا أولًا.';
-      _finishFailedSubmit(sort, generation, message);
+      _finishFailedSubmit(message);
       return const CommentSubmitOutcome(
         CommentSubmitStatus.failed,
         errorMessage: message,
@@ -335,8 +342,6 @@ class CommentsController extends ChangeNotifier
       );
     }
 
-    final sort = _value.sort;
-    final generation = _generation;
     _publishInteracting();
 
     try {
@@ -344,7 +349,8 @@ class CommentsController extends ChangeNotifier
         commentId: commentId,
         vote: vote,
       );
-      if (!_isCurrent(sort, generation)) {
+      await _awaitActiveInitialLoad();
+      if (_disposed) {
         return const CommentInteractionOutcome(CommentInteractionStatus.failed);
       }
       _publishVotedComment(result);
@@ -354,28 +360,28 @@ class CommentsController extends ChangeNotifier
         await authRepository?.restoreSession();
       }
       final message = commentInteractionMessageFor(error);
-      _finishFailedInteraction(sort, generation, message);
+      _finishFailedInteraction(message);
       return CommentInteractionOutcome(
         CommentInteractionStatus.failed,
         errorMessage: message,
       );
     } on FormatException {
       const message = 'أرسل الموقع بيانات تفاعل غير صالحة.';
-      _finishFailedInteraction(sort, generation, message);
+      _finishFailedInteraction(message);
       return const CommentInteractionOutcome(
         CommentInteractionStatus.failed,
         errorMessage: message,
       );
     } on RangeError {
       const message = 'تعذر تحديد التعليق.';
-      _finishFailedInteraction(sort, generation, message);
+      _finishFailedInteraction(message);
       return const CommentInteractionOutcome(
         CommentInteractionStatus.failed,
         errorMessage: message,
       );
     } on ArgumentError {
       const message = 'تعذر تنفيذ التفاعل الآن.';
-      _finishFailedInteraction(sort, generation, message);
+      _finishFailedInteraction(message);
       return const CommentInteractionOutcome(
         CommentInteractionStatus.failed,
         errorMessage: message,
@@ -402,8 +408,6 @@ class CommentsController extends ChangeNotifier
       );
     }
 
-    final sort = _value.sort;
-    final generation = _generation;
     _publishInteracting();
 
     try {
@@ -411,7 +415,8 @@ class CommentsController extends ChangeNotifier
         target: _target,
         reaction: reaction,
       );
-      if (!_isCurrent(sort, generation)) {
+      await _awaitActiveInitialLoad();
+      if (_disposed) {
         return const CommentInteractionOutcome(CommentInteractionStatus.failed);
       }
       _publishReactedTarget(result);
@@ -421,21 +426,21 @@ class CommentsController extends ChangeNotifier
         await authRepository?.restoreSession();
       }
       final message = commentInteractionMessageFor(error);
-      _finishFailedInteraction(sort, generation, message);
+      _finishFailedInteraction(message);
       return CommentInteractionOutcome(
         CommentInteractionStatus.failed,
         errorMessage: message,
       );
     } on FormatException {
       const message = 'أرسل الموقع بيانات تفاعل غير صالحة.';
-      _finishFailedInteraction(sort, generation, message);
+      _finishFailedInteraction(message);
       return const CommentInteractionOutcome(
         CommentInteractionStatus.failed,
         errorMessage: message,
       );
     } on ArgumentError {
       const message = 'تعذر تنفيذ التفاعل الآن.';
-      _finishFailedInteraction(sort, generation, message);
+      _finishFailedInteraction(message);
       return const CommentInteractionOutcome(
         CommentInteractionStatus.failed,
         errorMessage: message,
@@ -454,7 +459,7 @@ class CommentsController extends ChangeNotifier
         sort: sort,
         page: nextPage,
       );
-      if (!_isCurrent(sort, generation)) {
+      if (!_isCurrentLoad(sort, generation)) {
         return;
       }
 
@@ -469,10 +474,12 @@ class CommentsController extends ChangeNotifier
           totalComments: page.totalComments,
           reactions: _reactionCountsFromPage(page.reactions),
           myReaction: _value.myReaction,
+          isSubmitting: _value.isSubmitting,
+          isInteracting: _value.isInteracting,
         ),
       );
     } on Exception catch (error) {
-      if (!_isCurrent(sort, generation)) {
+      if (!_isCurrentLoad(sort, generation)) {
         return;
       }
       final current = _value;
@@ -487,6 +494,8 @@ class CommentsController extends ChangeNotifier
           totalComments: current.totalComments,
           reactions: current.reactions,
           myReaction: current.myReaction,
+          isSubmitting: current.isSubmitting,
+          isInteracting: current.isInteracting,
           loadMoreErrorMessage: commentsMessageFor(error),
         ),
       );
@@ -613,6 +622,8 @@ class CommentsController extends ChangeNotifier
         totalComments: current.totalComments + 1,
         reactions: current.reactions,
         myReaction: current.myReaction,
+        isLoadingMore: current.isLoadingMore,
+        isInteracting: current.isInteracting,
       ),
     );
   }
@@ -637,8 +648,8 @@ class CommentsController extends ChangeNotifier
     );
   }
 
-  void _finishFailedSubmit(CommentsSort sort, int generation, String message) {
-    if (!_isCurrent(sort, generation)) {
+  void _finishFailedSubmit(String message) {
+    if (_disposed) {
       return;
     }
     _publishSubmitFailure(message);
@@ -722,20 +733,28 @@ class CommentsController extends ChangeNotifier
     );
   }
 
-  void _finishFailedInteraction(
-    CommentsSort sort,
-    int generation,
-    String message,
-  ) {
-    if (!_isCurrent(sort, generation)) {
+  void _finishFailedInteraction(String message) {
+    if (_disposed) {
       return;
     }
     _publishInteractionFailure(message);
   }
 
-  bool _isCurrent(CommentsSort sort, int generation) {
+  Future<void> _awaitActiveInitialLoad() async {
+    final active = _initialFuture;
+    if (active == null) {
+      return;
+    }
+    try {
+      await active;
+    } on Object {
+      // A list failure must not turn a successful mutation into a failure.
+    }
+  }
+
+  bool _isCurrentLoad(CommentsSort sort, int generation) {
     return !_disposed &&
-        generation == _generation &&
+        generation == _loadGeneration &&
         _value.target == _target &&
         _value.sort == sort;
   }
@@ -761,7 +780,7 @@ class CommentsController extends ChangeNotifier
       return;
     }
     _disposed = true;
-    _generation++;
+    _loadGeneration++;
     super.dispose();
   }
 }

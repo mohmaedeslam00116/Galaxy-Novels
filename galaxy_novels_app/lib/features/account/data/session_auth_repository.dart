@@ -64,7 +64,15 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
     _client.clearSession();
 
     try {
-      final session = await _loadServerSession();
+      final storedSession = await _sessionStore.read();
+      _persistSession = storedSession != null;
+      _authLog('load-server-session stored=${storedSession != null}');
+      if (_isLocallyExpired(storedSession)) {
+        _authLog('restore:locally-expired');
+        await _clearSessionAfterExpiry();
+        return;
+      }
+      final session = await _loadServerSession(storedSession);
       if (session == null) {
         _authLog('restore:no-server-session');
         await _clearSession();
@@ -80,6 +88,10 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
       _authLog(
         'restore:api-error status=${error.statusCode} code=${error.code}',
       );
+      if (_isExpiredSessionFailure(error)) {
+        await _clearSessionAfterExpiry();
+        return;
+      }
       _publishState(AuthSessionState.failure(restoreMessageFor(error)));
     } on AuthSessionStoreException {
       _authLog('restore:store-error');
@@ -99,10 +111,9 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
     }
   }
 
-  Future<AuthSessionPayload?> _loadServerSession() async {
-    final storedSession = await _sessionStore.read();
-    _persistSession = storedSession != null;
-    _authLog('load-server-session stored=${storedSession != null}');
+  Future<AuthSessionPayload?> _loadServerSession(
+    PrivateSessionSnapshot? storedSession,
+  ) async {
     if (storedSession != null) {
       _client.importSessionSnapshot(storedSession);
     }
@@ -114,6 +125,19 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
     final session = AuthSessionPayload.fromResponse(response);
     _applySessionAccessToken(session, requireToken: false);
     return session;
+  }
+
+  bool _isLocallyExpired(PrivateSessionSnapshot? snapshot) {
+    final expiresAt = snapshot?.expiresAt;
+    return expiresAt != null &&
+        !expiresAt.toUtc().isAfter(DateTime.now().toUtc());
+  }
+
+  bool _isExpiredSessionFailure(PrivateApiException error) {
+    final code = error.code?.trim().toLowerCase();
+    return error.statusCode == 401 ||
+        error.statusCode == 403 ||
+        code == 'wor_reader_app_login_required';
   }
 
   @override
@@ -488,32 +512,7 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
     _sessionGeneration += 1;
     _publishState(AuthSessionState.signingOut(user));
 
-    try {
-      await _client.postAuthenticated('auth/logout');
-      await _completeLogout();
-    } on PrivateApiException catch (error) {
-      if (error.statusCode == 401) {
-        await _clearSessionAfterExpiry();
-        return;
-      }
-      _publishState(
-        AuthSessionState.authenticated(
-          user,
-          noticeMessage: logoutMessageFor(error),
-        ),
-      );
-    } on FormatException {
-      _publishState(
-        AuthSessionState.authenticated(
-          user,
-          noticeMessage: 'تعذر تحديث الجلسة لتسجيل الخروج.',
-        ),
-      );
-    }
-  }
-
-  Future<void> _completeLogout() async {
-    _authLog('logout:complete');
+    final remoteLogout = _revokeRemoteSessionBestEffort();
     _client.clearSession();
     _persistSession = false;
     try {
@@ -525,6 +524,17 @@ class SessionAuthRepository extends ChangeNotifier implements AuthRepository {
           errorMessage: 'تم تسجيل الخروج، لكن تعذر تنظيف الجلسة المحفوظة.',
         ),
       );
+    }
+    unawaited(remoteLogout);
+  }
+
+  Future<void> _revokeRemoteSessionBestEffort() async {
+    try {
+      await _client.postAuthenticated('auth/logout');
+    } on PrivateApiException {
+      // Local logout is authoritative.
+    } on FormatException {
+      // Local logout is authoritative.
     }
   }
 

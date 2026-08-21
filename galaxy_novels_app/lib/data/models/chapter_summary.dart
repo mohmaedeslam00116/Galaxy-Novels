@@ -10,7 +10,11 @@ class ChapterSummary {
     this.chapters = const [],
     this.novelUrl = '',
     this.coverUrl = '',
+    this.coverThumbnail = '',
+    this.coverMedium = '',
+    this.coverLarge = '',
     this.contentApi = '',
+    this.manifest = '',
   });
 
   factory ChapterSummary.fromJson(Map<String, dynamic> json) {
@@ -22,6 +26,7 @@ class ChapterSummary {
               .toList(growable: false)
         : const <ChapterSummaryItem>[];
     final firstChapter = chapterItems.isNotEmpty ? chapterItems.first : null;
+    final cover = _asMap(json['cover']);
 
     return ChapterSummary(
       id: firstChapter?.id ?? _asInt(json['id']),
@@ -36,9 +41,19 @@ class ChapterSummary {
       chapters: chapterItems,
       novelUrl: _asString(json['novel_url']),
       coverUrl: _asString(json['cover_url']),
+      coverThumbnail: _asString(
+        cover['thumbnail'] ?? json['cover_thumbnail'] ?? json['coverThumbnail'],
+      ),
+      coverMedium: _asString(
+        cover['medium'] ?? json['cover_medium'] ?? json['coverMedium'],
+      ),
+      coverLarge: _asString(
+        cover['large'] ?? json['cover_large'] ?? json['coverLarge'],
+      ),
       contentApi: firstChapter != null && firstChapter.contentApi.isNotEmpty
           ? firstChapter.contentApi
           : _asString(json['content_api']),
+      manifest: _asString(json['manifest'] ?? json['novel_manifest']),
     );
   }
 
@@ -52,7 +67,19 @@ class ChapterSummary {
   final List<ChapterSummaryItem> chapters;
   final String novelUrl;
   final String coverUrl;
+  final String coverThumbnail;
+  final String coverMedium;
+  final String coverLarge;
   final String contentApi;
+  final String manifest;
+
+  String get bestCover => coverLarge.isNotEmpty
+      ? coverLarge
+      : coverMedium.isNotEmpty
+      ? coverMedium
+      : coverUrl.isNotEmpty
+      ? coverUrl
+      : coverThumbnail;
 
   String get effectiveContentApi {
     if (contentApi.isNotEmpty) {
@@ -125,3 +152,10 @@ int _asInt(Object? value) {
 }
 
 String _asString(Object? value) => value?.toString() ?? '';
+
+Map<String, dynamic> _asMap(Object? value) {
+  if (value is Map<String, dynamic>) {
+    return value;
+  }
+  return const {};
+}

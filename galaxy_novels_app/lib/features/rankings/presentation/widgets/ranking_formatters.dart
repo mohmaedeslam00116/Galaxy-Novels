@@ -1,18 +1,7 @@
 import '../../../../data/models/catalog_data.dart';
 
-String rankingSubtitle(CatalogNovel novel) {
-  final genres = novel.genres.take(2).map((genre) => genre.name).join('، ');
-  if (genres.isNotEmpty) {
-    return genres;
-  }
-  return novel.statusLabel;
-}
-
 String rankingCoverUrl(CatalogNovel novel) {
-  if (novel.coverMedium.isNotEmpty) {
-    return novel.coverMedium;
-  }
-  return novel.coverThumbnail;
+  return novel.bestCover;
 }
 
 String rankingPeriodLabel(String period) {
@@ -44,4 +33,16 @@ String compactRankingNumber(int value) {
     return '${(value / 1000).toStringAsFixed(1)}K';
   }
   return value.toString();
+}
+
+String? rankingRatingLabel(CatalogNovel novel) {
+  if (novel.ratingAverage <= 0) return null;
+  return novel.ratingAverage.toStringAsFixed(1);
+}
+
+String rankingSemanticLabel(CatalogNovel novel, int rank) {
+  final rating = rankingRatingLabel(novel);
+  final ratingText = rating == null ? '' : '، التقييم $rating من 5';
+  return '${novel.title}، الترتيب $rank، '
+      '${compactRankingNumber(novel.views)} مشاهدة$ratingText';
 }

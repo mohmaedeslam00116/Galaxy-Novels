@@ -4,6 +4,8 @@ class NovelSummary {
     required this.title,
     required this.url,
     required this.coverThumbnail,
+    this.coverMedium = '',
+    this.coverLarge = '',
     required this.statusLabel,
     required this.genres,
     required this.chaptersCount,
@@ -22,6 +24,12 @@ class NovelSummary {
       coverThumbnail: cover is Map<String, dynamic>
           ? _asString(cover['thumbnail'])
           : _asString(json['cover_thumbnail'] ?? json['c']),
+      coverMedium: cover is Map<String, dynamic>
+          ? _asString(cover['medium'])
+          : _asString(json['cover_medium'] ?? json['coverMedium']),
+      coverLarge: cover is Map<String, dynamic>
+          ? _asString(cover['large'])
+          : _asString(json['cover_large'] ?? json['coverLarge']),
       statusLabel: status is Map<String, dynamic>
           ? _asString(status['label'])
           : _asString(json['status_label'] ?? json['st']),
@@ -45,10 +53,18 @@ class NovelSummary {
   final String title;
   final String url;
   final String coverThumbnail;
+  final String coverMedium;
+  final String coverLarge;
   final String statusLabel;
   final List<String> genres;
   final int chaptersCount;
   final String manifest;
+
+  String get bestCover => coverLarge.isNotEmpty
+      ? coverLarge
+      : coverMedium.isNotEmpty
+      ? coverMedium
+      : coverThumbnail;
 }
 
 int _asInt(Object? value) {

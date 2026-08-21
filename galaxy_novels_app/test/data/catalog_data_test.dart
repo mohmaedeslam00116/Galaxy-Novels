@@ -39,6 +39,7 @@ void main() {
           'cover': {
             'thumbnail': '/uploads/thumb.jpg',
             'medium': '/uploads/medium.jpg',
+            'large': '/uploads/large.jpg',
           },
           'status': {'key': 'ongoing', 'label': 'مستمرة'},
           'genres': [
@@ -64,6 +65,8 @@ void main() {
     expect(novel.url, '/novel/test-stars/');
     expect(novel.coverThumbnail, '/uploads/thumb.jpg');
     expect(novel.coverMedium, '/uploads/medium.jpg');
+    expect(novel.coverLarge, '/uploads/large.jpg');
+    expect(novel.bestCover, '/uploads/large.jpg');
     expect(novel.statusKey, 'ongoing');
     expect(novel.statusLabel, 'مستمرة');
     expect(novel.genres.map((genre) => genre.name), ['أكشن', 'خيال']);
@@ -85,6 +88,8 @@ void main() {
     expect(novel.url, '');
     expect(novel.coverThumbnail, '');
     expect(novel.coverMedium, '');
+    expect(novel.coverLarge, '');
+    expect(novel.bestCover, '');
     expect(novel.statusKey, '');
     expect(novel.statusLabel, '');
     expect(novel.genres, isEmpty);

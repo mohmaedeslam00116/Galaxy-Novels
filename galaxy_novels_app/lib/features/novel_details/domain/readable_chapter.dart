@@ -1,4 +1,5 @@
 import '../../../data/models/novel_details_data.dart';
+import '../../../core/text/arabic_search_normalizer.dart';
 import '../../vip/data/vip_reader_request.dart';
 import '../../vip/domain/vip_chapter.dart';
 
@@ -112,6 +113,49 @@ List<ReadableChapter> mergeReadableChapters({
     });
 
   return List.unmodifiable(merged);
+}
+
+List<ReadableChapter> readableChaptersForDisplay(
+  Iterable<ReadableChapter> chapters, {
+  required String query,
+  required bool descending,
+}) {
+  final normalizedQuery = normalizeArabicSearch(query);
+  final matchingChapters = chapters
+      .where((chapter) {
+        if (normalizedQuery.isEmpty) return true;
+        final searchable = normalizeArabicSearch(
+          [
+            chapter.number,
+            chapter.label,
+            chapter.title,
+            chapter.dateLabel,
+            if (chapter.isVip) 'vip',
+          ].join(' '),
+        );
+        return searchable.contains(normalizedQuery);
+      })
+      .toList(growable: false);
+
+  if (descending) return List.unmodifiable(matchingChapters.reversed);
+  return List.unmodifiable(matchingChapters);
+}
+
+List<ReadableChapter> readableChaptersInPositionRange(
+  Iterable<ReadableChapter> chapters, {
+  required int start,
+  required int end,
+}) {
+  if (start <= 0 || end < start) {
+    return const [];
+  }
+
+  return List.unmodifiable(
+    chapters.where((chapter) {
+      final position = chapter.sortPosition;
+      return position >= start && position <= end;
+    }),
+  );
 }
 
 int chapterPageCount(List<ReadableChapter> chapters) {

@@ -4,12 +4,13 @@ import 'package:galaxy_novels_app/app/galaxy_novels_app.dart';
 import 'package:galaxy_novels_app/data/models/catalog_data.dart';
 import 'package:galaxy_novels_app/data/models/novel_details_data.dart';
 import 'package:galaxy_novels_app/data/repositories/fake_catalog_repository.dart';
-import 'package:galaxy_novels_app/data/repositories/fake_downloads_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/fake_home_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/fake_novel_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/novel_repository.dart';
 import 'package:galaxy_novels_app/features/account/domain/auth_session.dart';
+import 'package:galaxy_novels_app/features/catalog/presentation/catalog_screen.dart';
 import 'package:galaxy_novels_app/features/favorites/domain/favorite_item.dart';
+import 'package:galaxy_novels_app/features/shell/presentation/app_shell.dart';
 
 import '../../helpers/fake_auth_repository.dart';
 import '../../helpers/fake_favorites_repository.dart';
@@ -18,6 +19,10 @@ void main() {
   testWidgets('opens account favorites from the drawer and removes an item', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     final favoritesRepository = FakeFavoritesRepository(
       userId: 7,
       items: [_favoriteItem],
@@ -25,9 +30,11 @@ void main() {
     await tester.pumpWidget(_testApp(favoritesRepository: favoritesRepository));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.menu));
+    await tester.tap(find.byKey(const ValueKey('home-drawer-button')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('المفضلة'));
+    await tester.tap(
+      find.byKey(const ValueKey('drawer-destination-favorites')),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('رواية محفوظة'), findsOneWidget);
@@ -40,7 +47,7 @@ void main() {
     expect(favoritesRepository.value.contains(99), isFalse);
   });
 
-  testWidgets('toggles the loaded novel from the fixed details action bar', (
+  testWidgets('toggles the loaded novel from the details action row', (
     tester,
   ) async {
     final favoritesRepository = FakeFavoritesRepository(userId: 7);
@@ -53,6 +60,12 @@ void main() {
     await tester.pumpAndSettle();
 
     final toggle = find.byKey(const ValueKey('novel-favorite-toggle'));
+    await tester.scrollUntilVisible(
+      toggle,
+      280,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pumpAndSettle();
     expect(toggle, findsOneWidget);
     await tester.tap(toggle);
     await tester.pumpAndSettle();
@@ -61,7 +74,7 @@ void main() {
     expect(
       find.descendant(
         of: toggle,
-        matching: find.byIcon(Icons.bookmark_rounded),
+        matching: find.byIcon(Icons.favorite_rounded),
       ),
       findsOneWidget,
     );
@@ -74,6 +87,38 @@ void main() {
 
     expect(favoritesRepository.value.contains(99), isFalse);
   });
+
+  testWidgets('empty drawer favorites opens library without replacing shell', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final favoritesRepository = FakeFavoritesRepository(userId: 7);
+    await tester.pumpWidget(_testApp(favoritesRepository: favoritesRepository));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('home-drawer-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('drawer-destination-favorites')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('فتح المكتبة'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AppShell, skipOffstage: false), findsOneWidget);
+    expect(find.byType(CatalogScreen), findsOneWidget);
+    expect(
+      tester
+          .widget<NavigationBar>(
+            find.byType(NavigationBar, skipOffstage: false),
+          )
+          .selectedIndex,
+      0,
+    );
+  });
 }
 
 Widget _testApp({required FakeFavoritesRepository favoritesRepository}) {
@@ -81,7 +126,6 @@ Widget _testApp({required FakeFavoritesRepository favoritesRepository}) {
     homeRepository: const FakeHomeRepository(),
     catalogRepository: const FakeCatalogRepository([_catalogNovel]),
     novelRepository: const FakeNovelRepository(result: _novelResult),
-    downloadsRepository: FakeDownloadsRepository(),
     authRepository: FakeAuthRepository(
       initialState: const AuthSessionState.authenticated(_user),
     ),

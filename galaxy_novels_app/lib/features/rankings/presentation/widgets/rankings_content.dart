@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../../../../data/models/rankings_data.dart';
 import '../../../../shared/widgets/section_title.dart';
+import '../../../ads/application/inline_native_ad_repository.dart';
+import '../../../ads/presentation/inline_native_ad_slot.dart';
 import 'ranking_formatters.dart';
 import 'ranking_list_row.dart';
 import 'rankings_header.dart';
-import 'top_rankings_strip.dart';
+import 'rankings_podium.dart';
 
 class RankingsContent extends StatelessWidget {
   const RankingsContent({
@@ -28,27 +30,18 @@ class RankingsContent extends StatelessWidget {
         SliverToBoxAdapter(
           child: RankingsHeader(
             periodLabel: rankingPeriodLabel(rankings.period),
-            novelsCount: rankings.items.length,
-            totalViews: rankings.items.fold<int>(
-              0,
-              (sum, novel) => sum + novel.views,
-            ),
           ),
         ),
         if (topNovels.isNotEmpty) ...[
-          const SliverToBoxAdapter(
-            child: SectionTitle(
-              title: 'الأكثر شهرة',
-              leadingIcon: Icons.workspace_premium_outlined,
-            ),
-          ),
           SliverToBoxAdapter(
-            child: TopRankingsStrip(
-              novels: topNovels,
-              onOpenNovel: onOpenNovel,
-            ),
+            child: RankingsPodium(novels: topNovels, onOpenNovel: onOpenNovel),
           ),
         ],
+        const SliverToBoxAdapter(
+          child: InlineNativeAdSlot(
+            placement: InlineNativeAdPlacement.rankings,
+          ),
+        ),
         if (remainingNovels.isNotEmpty)
           const SliverToBoxAdapter(
             child: SectionTitle(
@@ -56,24 +49,40 @@ class RankingsContent extends StatelessWidget {
               leadingIcon: Icons.format_list_numbered_rtl,
             ),
           ),
-        SliverList(
-          delegate: SliverChildBuilderDelegate((context, index) {
-            final rank = index + topNovels.length + 1;
-            final novel = remainingNovels[index];
-            return RepaintBoundary(
-              child: RankingListRow(
-                key: ValueKey('ranking-list-row-$rank'),
-                rank: rank,
-                novel: novel,
-                onTap: novel.manifest.isEmpty
-                    ? null
-                    : () => onOpenNovel(novel.manifest),
-              ),
-            );
-          }, childCount: remainingNovels.length),
-        ),
+        if (remainingNovels.isNotEmpty)
+          SliverPadding(
+            key: const ValueKey('rankings-table'),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate((context, index) {
+                final rank = index + topNovels.length + 1;
+                final novel = remainingNovels[index];
+                return RepaintBoundary(
+                  child: RankingListRow(
+                    key: ValueKey('ranking-list-row-$rank'),
+                    rank: rank,
+                    novel: novel,
+                    position: _rankingRowPosition(
+                      index,
+                      remainingNovels.length,
+                    ),
+                    onTap: novel.manifest.isEmpty
+                        ? null
+                        : () => onOpenNovel(novel.manifest),
+                  ),
+                );
+              }, childCount: remainingNovels.length),
+            ),
+          ),
         const SliverToBoxAdapter(child: SizedBox(height: 24)),
       ],
     );
   }
+}
+
+RankingRowPosition _rankingRowPosition(int index, int rowCount) {
+  if (rowCount == 1) return RankingRowPosition.only;
+  if (index == 0) return RankingRowPosition.first;
+  if (index == rowCount - 1) return RankingRowPosition.last;
+  return RankingRowPosition.middle;
 }

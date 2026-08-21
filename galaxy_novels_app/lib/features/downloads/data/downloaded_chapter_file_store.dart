@@ -8,6 +8,14 @@ import '../../../data/models/reader_content_data.dart';
 import 'reader_content_codec.dart';
 import 'secure_download_key_store.dart';
 
+Future<void> deleteDownloadTemporaryFile(File file) async {
+  try {
+    await file.delete();
+  } on PathNotFoundException {
+    // A late or duplicate native completion may have already removed it.
+  }
+}
+
 class DownloadedChapterFileStore {
   DownloadedChapterFileStore({
     required Directory rootDirectory,

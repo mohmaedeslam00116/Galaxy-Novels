@@ -15,7 +15,6 @@ import 'package:galaxy_novels_app/data/models/reading_progress.dart'
 import 'package:galaxy_novels_app/data/models/rankings_data.dart';
 import 'package:galaxy_novels_app/data/models/search_index_data.dart';
 import 'package:galaxy_novels_app/data/repositories/catalog_repository.dart';
-import 'package:galaxy_novels_app/data/repositories/fake_downloads_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/home_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/novel_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/reader_repository.dart';
@@ -24,11 +23,15 @@ import 'package:galaxy_novels_app/data/repositories/rankings_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/search_repository.dart';
 import 'package:galaxy_novels_app/features/about/presentation/about_screen.dart';
 import 'package:galaxy_novels_app/features/account/domain/auth_session.dart';
+import 'package:galaxy_novels_app/features/ads/application/home_ad_repository.dart';
+import 'package:galaxy_novels_app/features/downloads/presentation/downloads_screen.dart';
+import 'package:galaxy_novels_app/features/history/presentation/history_screen.dart';
+import 'package:galaxy_novels_app/features/novel_details/presentation/novel_details_screen.dart';
 import 'package:galaxy_novels_app/features/novel_engagement/application/novel_engagement_repository.dart';
 import 'package:galaxy_novels_app/features/novel_engagement/domain/novel_user_state.dart';
-import 'package:galaxy_novels_app/features/rewards/data/stored_reader_rewards_repository.dart';
 import 'package:galaxy_novels_app/features/shell/presentation/app_shell.dart';
-import 'package:galaxy_novels_app/shared/widgets/novel_list_row.dart';
+import 'package:galaxy_novels_app/features/reader_journey/presentation/reader_journey_screen.dart';
+import 'package:galaxy_novels_app/shared/widgets/novel_cover.dart';
 
 import 'helpers/fake_auth_repository.dart';
 import 'helpers/fake_comments_repository.dart';
@@ -50,16 +53,100 @@ void main() {
 
     expect(find.text('الرئيسية'), findsWidgets);
     expect(find.text('المكتبة'), findsOneWidget);
-    expect(find.text('التنزيلات'), findsOneWidget);
-    expect(find.text('السجل'), findsOneWidget);
+    expect(find.text('رحلة القارئ'), findsOneWidget);
     expect(find.text('الترتيب'), findsOneWidget);
+    expect(find.text('حسابي'), findsOneWidget);
     expect(
       find.descendant(
         of: find.byType(NavigationBar),
-        matching: find.text('حسابي'),
+        matching: find.text('التنزيلات'),
       ),
       findsNothing,
     );
+  });
+
+  testWidgets('guest opens lazy reader journey and account inside the shell', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      GalaxyNovelsApp(
+        homeRepository: _TestHomeRepository(_homeData),
+        catalogRepository: const _TestCatalogRepository(),
+        novelRepository: const _TestNovelRepository(),
+        searchRepository: const _TestSearchRepository.empty(),
+        authRepository: FakeAuthRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(_shellDestination('رحلة القارئ'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ReaderJourneyScreen), findsOneWidget);
+    expect(find.byType(HistoryScreen), findsOneWidget);
+    expect(find.text('سجل القراءة'), findsOneWidget);
+
+    await tester.tap(find.text('التنزيلات'));
+    await tester.pumpAndSettle();
+    expect(find.byType(DownloadsView), findsOneWidget);
+
+    await tester.tap(find.text('سجل القراءة'));
+    await tester.pumpAndSettle();
+    expect(find.byType(NavigationBar), findsOneWidget);
+    expect(find.byType(Scaffold), findsOneWidget);
+    expect(find.byType(AppBar), findsOneWidget);
+
+    await tester.tap(_shellDestination('حسابي'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('تتصفح كزائر'), findsOneWidget);
+    expect(find.byKey(const ValueKey('login-submit')), findsNothing);
+    expect(find.byKey(const ValueKey('auth-show-login')), findsOneWidget);
+    expect(find.byType(NavigationBar), findsOneWidget);
+    expect(find.byType(Scaffold), findsOneWidget);
+    expect(find.byType(AppBar), findsOneWidget);
+
+    await tester.tap(_shellDestination('رحلة القارئ'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(HistoryScreen), findsOneWidget);
+    expect(find.byType(Scaffold), findsOneWidget);
+    expect(find.byType(AppBar), findsOneWidget);
+  });
+
+  testWidgets('startup shows only splash then opens the home shell', (
+    tester,
+  ) async {
+    final authRepository = FakeAuthRepository();
+    addTearDown(authRepository.dispose);
+    await tester.pumpWidget(
+      GalaxyNovelsApp(
+        splashDuration: const Duration(milliseconds: 1200),
+        homeRepository: _TestHomeRepository(_homeData),
+        catalogRepository: const _TestCatalogRepository(),
+        novelRepository: const _TestNovelRepository(),
+        searchRepository: const _TestSearchRepository.empty(),
+        authRepository: authRepository,
+      ),
+    );
+
+    expect(find.byKey(const ValueKey('galaxy-splash-screen')), findsOneWidget);
+    expect(find.text('مجرة الروايات'), findsOneWidget);
+    expect(find.text('الرئيسية'), findsNothing);
+    expect(find.byKey(const ValueKey('login-submit')), findsNothing);
+    expect(find.byKey(const ValueKey('auth-show-register')), findsNothing);
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1200));
+    await tester.pump(const Duration(milliseconds: 241));
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('galaxy-splash-screen')), findsNothing);
+    expect(find.text('الرئيسية'), findsWidgets);
   });
 
   testWidgets('injects the configured novel engagement repository', (
@@ -118,6 +205,52 @@ void main() {
     expect(AppDependencies.of(shellContext).vipRepository, same(vipRepository));
   });
 
+  testWidgets('defers ad initialization until after startup paint', (
+    tester,
+  ) async {
+    final homeAds = _CountingHomeAdRepository();
+
+    await tester.pumpWidget(
+      GalaxyNovelsApp(
+        homeRepository: _TestHomeRepository(_homeData),
+        catalogRepository: const _TestCatalogRepository(),
+        novelRepository: const _TestNovelRepository(),
+        homeAdRepository: homeAds,
+      ),
+    );
+
+    expect(homeAds.initializeCalls, 0);
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1199));
+
+    expect(homeAds.initializeCalls, 0);
+
+    await tester.pump(const Duration(milliseconds: 1));
+
+    expect(homeAds.initializeCalls, 1);
+  });
+
+  testWidgets('cancels deferred ad initialization timer when app is disposed', (
+    tester,
+  ) async {
+    final homeAds = _CountingHomeAdRepository();
+
+    await tester.pumpWidget(
+      GalaxyNovelsApp(
+        homeRepository: _TestHomeRepository(_homeData),
+        catalogRepository: const _TestCatalogRepository(),
+        novelRepository: const _TestNovelRepository(),
+        homeAdRepository: homeAds,
+      ),
+    );
+    await tester.pump();
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+
+    expect(homeAds.initializeCalls, 0);
+  });
+
   testWidgets('restores the saved account session when the app starts', (
     tester,
   ) async {
@@ -155,15 +288,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.menu));
+    await tester.tap(_shellDestination('حسابي'));
     await tester.pumpAndSettle();
+    await _showOptionalLogin(tester);
 
-    expect(find.text('حسابي'), findsOneWidget);
-
-    await tester.tap(find.text('حسابي'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('تسجيل الدخول'), findsNWidgets(2));
+    expect(find.text('تسجيل الدخول'), findsOneWidget);
     await tester.enterText(
       find.byKey(const ValueKey('login-username')),
       'reader@example.com',
@@ -172,6 +301,12 @@ void main() {
       find.byKey(const ValueKey('login-password')),
       'secret-value',
     );
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('login-submit')),
+      120,
+      scrollable: _verticalScrollable(),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('login-submit')));
     await tester.pump();
 
@@ -196,9 +331,13 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.menu));
+    await tester.tap(_shellDestination('حسابي'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('حسابي'));
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('auth-show-register')),
+      120,
+      scrollable: _verticalScrollable(),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('auth-show-register')));
     await tester.pumpAndSettle();
@@ -226,7 +365,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('register-submit')),
       120,
-      scrollable: find.byType(Scrollable).last,
+      scrollable: _verticalScrollable(),
     );
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('register-submit')));
@@ -255,10 +394,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.menu));
+    await tester.tap(_shellDestination('حسابي'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('حسابي'));
-    await tester.pumpAndSettle();
+    await _showOptionalLogin(tester);
 
     await tester.enterText(
       find.byKey(const ValueKey('login-username')),
@@ -268,16 +406,20 @@ void main() {
       find.byKey(const ValueKey('login-password')),
       'secret-value',
     );
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('login-submit')),
+      120,
+      scrollable: _verticalScrollable(),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('login-submit')));
     await tester.pumpAndSettle();
 
     expect(find.text('قارئ الاختبار'), findsOneWidget);
 
-    await tester.tap(find.byType(BackButton));
+    await tester.tap(_shellDestination('الرئيسية'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byIcon(Icons.menu));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('حسابي'));
+    await tester.tap(_shellDestination('حسابي'));
     await tester.pumpAndSettle();
 
     expect(find.text('قارئ الاختبار'), findsOneWidget);
@@ -298,9 +440,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byIcon(Icons.menu));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('حسابي'));
+    await tester.tap(_shellDestination('حسابي'));
     await tester.pumpAndSettle();
 
     expect(find.text('قارئ الاختبار'), findsOneWidget);
@@ -309,7 +449,9 @@ void main() {
     await tester.tap(find.text('تسجيل الخروج'));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('login-submit')), findsOneWidget);
+    expect(find.text('تتصفح كزائر'), findsOneWidget);
+    expect(find.byKey(const ValueKey('login-submit')), findsNothing);
+    expect(find.byKey(const ValueKey('auth-show-login')), findsOneWidget);
   });
 
   testWidgets('signed in account shows cached XP statistics without refresh', (
@@ -333,20 +475,18 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byIcon(Icons.menu));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('حسابي'));
+    await tester.tap(_shellDestination('حسابي'));
     await tester.pumpAndSettle();
 
     expect(authRepository.refreshProfileCalls, 0);
     expect(find.text('نقاط XP'), findsOneWidget);
     expect(find.text('XP اليوم'), findsOneWidget);
-    expect(find.text('فصول مقروءة'), findsOneWidget);
+    expect(find.text('الفصول المقروءة'), findsOneWidget);
     expect(find.text('مستكشف'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('drawer exposes only working destinations and opens about', (
+  testWidgets('drawer keeps the light destinations and settings opens about', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(360, 720);
@@ -365,12 +505,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.menu));
+    await tester.tap(find.byKey(const ValueKey('home-drawer-button')));
     await tester.pumpAndSettle();
 
     expect(
       find.byKey(const ValueKey('drawer-destination-account')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.byKey(const ValueKey('drawer-destination-favorites')),
@@ -381,19 +521,43 @@ void main() {
       findsOneWidget,
     );
     expect(
+      find.byKey(const ValueKey('drawer-destination-downloads')),
+      findsNothing,
+    );
+    expect(
       find.byKey(const ValueKey('drawer-destination-about')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('drawer-destination-privacy')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('drawer-destination-discord')),
       findsOneWidget,
     );
-    expect(find.text('المفضلة'), findsOneWidget);
+    expect(find.text('مجتمع Discord'), findsOneWidget);
+    expect(
+      find.descendant(of: find.byType(Drawer), matching: find.text('المفضلة')),
+      findsOneWidget,
+    );
     expect(find.text('الإعدادات'), findsOneWidget);
     expect(find.text('إعدادات القراءة'), findsNothing);
     expect(find.text('الاشتراك و VIP'), findsNothing);
 
-    await tester.tap(find.text('حول التطبيق'));
+    await tester.tap(find.byKey(const ValueKey('drawer-destination-settings')));
+    await tester.pumpAndSettle();
+    final about = find.byKey(const ValueKey('settings-about'));
+    await tester.ensureVisible(about);
+    await tester.pumpAndSettle();
+    await tester.tap(about);
     await tester.pumpAndSettle();
 
     expect(find.byType(AboutScreen), findsOneWidget);
-    expect(find.text('الإصدار 0.1.0 (1)'), findsOneWidget);
+    final version = tester.widget<Text>(
+      find.byKey(const ValueKey('about-app-version')),
+    );
+    expect(version.data, startsWith('الإصدار '));
     expect(find.text('تراخيص البرمجيات المفتوحة'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -401,6 +565,12 @@ void main() {
   testWidgets('settings screen keeps reader settings shared after reopening', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(360, 720);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
     final preferencesRepository = FakeReaderPreferencesRepository();
     await tester.pumpWidget(
       GalaxyNovelsApp(
@@ -412,15 +582,15 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.menu));
+    await tester.tap(find.byKey(const ValueKey('home-drawer-button')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('الإعدادات'));
     await tester.pumpAndSettle();
 
     expect(find.text('الإعدادات'), findsWidgets);
     expect(find.text('إعدادات القراءة'), findsOneWidget);
-    expect(find.text('إعدادات التطبيق'), findsOneWidget);
-    expect(find.text('حجم الخط، تباعد الأسطر، ووضع القراءة'), findsOneWidget);
+    expect(find.byKey(const ValueKey('settings-hub-screen')), findsOneWidget);
+    expect(find.text('الخط والتمرير والمصطلحات وألوان الفصل'), findsOneWidget);
 
     await tester.scrollUntilVisible(
       find.text('إعدادات القراءة'),
@@ -437,7 +607,11 @@ void main() {
     );
     expect(find.text('100%'), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('reader-font-increase')));
+    final fontIncrease = find.byKey(const ValueKey('reader-font-increase'));
+    await tester.ensureVisible(fontIncrease);
+    await tester.pumpAndSettle();
+    expect(fontIncrease.hitTestable(), findsOneWidget);
+    await tester.tap(fontIncrease);
     await tester.pumpAndSettle();
 
     expect(preferencesRepository.value.fontScale, 1.1);
@@ -448,9 +622,11 @@ void main() {
     ).pop();
     await tester.pumpAndSettle();
 
-    Navigator.of(tester.element(find.text('إعدادات التطبيق'))).pop();
+    Navigator.of(
+      tester.element(find.byKey(const ValueKey('settings-hub-screen'))),
+    ).pop();
     await tester.pumpAndSettle();
-    await tester.tap(find.byIcon(Icons.menu));
+    await tester.tap(find.byKey(const ValueKey('home-drawer-button')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('الإعدادات'));
     await tester.pumpAndSettle();
@@ -466,9 +642,15 @@ void main() {
     expect(find.text('110%'), findsOneWidget);
   });
 
-  testWidgets('settings screen changes and applies app theme choice', (
+  testWidgets('settings applies the saved app themes immediately', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(360, 720);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
     final appThemeController = _TestAppThemeController();
     await tester.pumpWidget(
       GalaxyNovelsApp(
@@ -480,118 +662,61 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.menu));
+    await tester.tap(find.byKey(const ValueKey('home-drawer-button')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('الإعدادات'));
     await tester.pumpAndSettle();
 
-    expect(find.text('مظهر التطبيق'), findsOneWidget);
-    expect(find.text('حسب النظام'), findsOneWidget);
-    expect(find.text('الفضاء السحيق / Deep Space'), findsOneWidget);
-    expect(find.text('Galaxy Noir'), findsOneWidget);
-    expect(find.text('Starlight Paper'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('theme-choice-card-system')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('theme-choice-card-galaxyNoir')),
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey('theme-choice-card-deepSpace')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('theme-choice-palette-deepSpace')),
-      findsOneWidget,
-    );
-
-    await tester.tap(find.byKey(const ValueKey('theme-choice-card-deepSpace')));
-    await tester.pumpAndSettle();
-
-    expect(appThemeController.value, AppThemeChoice.deepSpace);
-    final siteTokens = Theme.of(
-      tester.element(find.text('الفضاء السحيق / Deep Space')),
-    ).extension<AppThemeTokens>();
-    expect(siteTokens!.preset, AppThemePreset.deepSpace);
-    expect(siteTokens.background, const Color(0xFF000000));
-
-    await tester.scrollUntilVisible(
       find.byKey(const ValueKey('theme-choice-card-starlightPaper')),
-      120,
-      scrollable: _verticalScrollable(),
+      findsOneWidget,
     );
-    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('theme-choice-card-neutralDark')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('theme-choice-card-cosmicNight')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('theme-choice-card-lightNature')),
+      findsOneWidget,
+    );
+    expect(find.text('الفضاء السحيق / Deep Space'), findsNothing);
+
     await tester.tap(
       find.byKey(const ValueKey('theme-choice-card-starlightPaper')),
     );
     await tester.pumpAndSettle();
 
     expect(appThemeController.value, AppThemeChoice.starlightPaper);
-    final lightTokens = Theme.of(
-      tester.element(find.text('Starlight Paper')),
-    ).extension<AppThemeTokens>();
-    expect(lightTokens!.preset, AppThemePreset.starlightPaper);
+    expect(
+      Theme.of(
+        tester.element(
+          find.byKey(const ValueKey('theme-choice-card-starlightPaper')),
+        ),
+      ).extension<AppThemeTokens>()!.preset,
+      AppThemePreset.starlightPaper,
+    );
 
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('theme-choice-card-galaxyNoir')),
-      120,
-      scrollable: _verticalScrollable(),
+    final galaxyNoirChoice = find.byKey(
+      const ValueKey('theme-choice-card-galaxyNoir'),
     );
+    await tester.ensureVisible(galaxyNoirChoice);
     await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(const ValueKey('theme-choice-card-galaxyNoir')),
-    );
+    await tester.tap(galaxyNoirChoice);
     await tester.pumpAndSettle();
 
     expect(appThemeController.value, AppThemeChoice.galaxyNoir);
-    final darkTokens = Theme.of(
-      tester.element(find.text('Galaxy Noir')),
-    ).extension<AppThemeTokens>();
-    expect(darkTokens!.preset, AppThemePreset.galaxyNoir);
-
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('theme-choice-card-crimsonPagoda')),
-      120,
-      scrollable: _verticalScrollable(),
-    );
-    await tester.pumpAndSettle();
-    expect(
-      find.byKey(const ValueKey('theme-choice-card-crimsonPagoda')),
-      findsOneWidget,
-    );
-    expect(find.text('الكسوف القرمزي / Crimson Eclipse'), findsOneWidget);
-    expect(find.text('المعبد القرمزي / Crimson Pagoda'), findsNothing);
-
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('theme-choice-card-desertAstronaut')),
-      120,
-      scrollable: _verticalScrollable(),
-    );
-    await tester.pumpAndSettle();
-    expect(
-      find.byKey(const ValueKey('theme-choice-card-desertAstronaut')),
-      findsOneWidget,
-    );
-
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('theme-choice-card-blueberryNebula')),
-      120,
-      scrollable: _verticalScrollable(),
-    );
-    await tester.pumpAndSettle();
-    expect(
-      find.byKey(const ValueKey('theme-choice-palette-blueberryNebula')),
-      findsOneWidget,
-    );
-
-    await tester.tap(
-      find.byKey(const ValueKey('theme-choice-card-blueberryNebula')),
-    );
-    await tester.pumpAndSettle();
-
-    expect(appThemeController.value, AppThemeChoice.blueberryNebula);
-    final blueberryTokens = Theme.of(
-      tester.element(find.text('سديم التوت الأزرق / Blueberry Nebula')),
-    ).extension<AppThemeTokens>();
-    expect(blueberryTokens!.preset, AppThemePreset.blueberryNebula);
   });
 
   testWidgets('settings theme cards fit a narrow phone', (tester) async {
@@ -611,30 +736,21 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.menu));
+    await tester.tap(find.byKey(const ValueKey('home-drawer-button')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('الإعدادات'));
     await tester.pumpAndSettle();
 
     expect(
-      find.byKey(const ValueKey('theme-choice-card-deepSpace')),
+      find.byKey(const ValueKey('theme-choice-card-system')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('theme-choice-card-galaxyNoir')),
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey('theme-choice-palette-deepSpace')),
-      findsOneWidget,
-    );
-    expect(tester.takeException(), isNull);
-
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('theme-choice-card-blueberryNebula')),
-      240,
-      scrollable: _verticalScrollable(),
-    );
-    await tester.pumpAndSettle();
-
-    expect(
-      find.byKey(const ValueKey('theme-choice-card-blueberryNebula')),
+      find.byKey(const ValueKey('theme-choice-card-starlightPaper')),
       findsOneWidget,
     );
     expect(tester.takeException(), isNull);
@@ -651,7 +767,7 @@ void main() {
       ),
     );
 
-    expect(find.text('جار تحميل الرئيسية...'), findsOneWidget);
+    expect(find.bySemanticsLabel('جار تحميل الرئيسية...'), findsOneWidget);
 
     await tester.pumpAndSettle();
 
@@ -666,7 +782,13 @@ void main() {
 
     await _scrollHomeDown(tester);
 
-    expect(find.text('الفصل 5'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('latest-update-5')),
+        matching: find.text('الفصل 5'),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('home fits a narrow phone without recent novel overflow', (
@@ -747,7 +869,6 @@ void main() {
           onLoad: (value) => requestedContentApi = value,
         ),
         readingHistoryRepository: historyRepository,
-        downloadsRepository: FakeDownloadsRepository(),
       ),
     );
     await tester.pumpAndSettle();
@@ -769,13 +890,66 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('رواية السجل المحلي'), findsOneWidget);
-    expect(find.text('2%'), findsOneWidget);
+    expect(find.text('الفصل 2 من 100'), findsOneWidget);
     expect(find.text('اختبار المجرة'), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('continue-reading-tile')));
     await tester.pumpAndSettle();
 
     expect(requestedContentApi, '/wp-json/wor-reader-app/v1/chapters/2');
+    expect(find.text('قارئ تجريبي'), findsOneWidget);
+  });
+
+  testWidgets('home opens the selected entry from the reading history strip', (
+    tester,
+  ) async {
+    String? requestedContentApi;
+    final historyRepository = _TestReadingHistoryRepository(
+      items: [
+        local_progress.ReadingProgress(
+          novelId: 99,
+          novelTitle: 'رواية السجل الأولى',
+          chapterId: 7,
+          chapterTitle: 'الفصل 7',
+          contentApi: '/chapters/7',
+          chapterPosition: 7,
+          chaptersTotal: 40,
+          updatedAt: DateTime.utc(2026, 7, 19, 12),
+        ),
+        local_progress.ReadingProgress(
+          novelId: 100,
+          novelTitle: 'رواية السجل الثانية',
+          chapterId: 3,
+          chapterTitle: 'الفصل 3',
+          contentApi: '/chapters/3',
+          chapterPosition: 3,
+          chaptersTotal: 20,
+          updatedAt: DateTime.utc(2026, 7, 19, 11),
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      GalaxyNovelsApp(
+        homeRepository: _TestHomeRepository(_homeData),
+        catalogRepository: const _TestCatalogRepository(),
+        novelRepository: const _TestNovelRepository(),
+        readerRepository: _TestReaderRepository(
+          onLoad: (contentApi) => requestedContentApi = contentApi,
+        ),
+        readingHistoryRepository: historyRepository,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.drag(
+      find.byKey(const ValueKey('continue-reading-deck-draggable')),
+      const Offset(-360, 0),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('continue-reading-tile')));
+    await tester.pumpAndSettle();
+
+    expect(requestedContentApi, '/chapters/3');
     expect(find.text('قارئ تجريبي'), findsOneWidget);
   });
 
@@ -808,14 +982,15 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final row = tester.widget<NovelListRow>(find.byType(NovelListRow).first);
-    expect(row.title, 'رواية بغلاف');
-    expect(row.imageUrl, '/wp-content/uploads/covers/local-cover.jpg');
+    final card = find.byKey(const ValueKey('continue-reading-card-0'));
+    final cover = tester.widget<NovelCover>(
+      find.descendant(of: card, matching: find.byType(NovelCover)),
+    );
+    expect(cover.title, 'رواية بغلاف');
+    expect(cover.imageUrl, '/wp-content/uploads/covers/local-cover.jpg');
   });
 
-  testWidgets('latest update opens its newest chapter in native reader', (
-    tester,
-  ) async {
+  testWidgets('latest update opens the novel details screen', (tester) async {
     String? requestedContentApi;
     await tester.pumpWidget(
       GalaxyNovelsApp(
@@ -826,7 +1001,6 @@ void main() {
           onLoad: (value) => requestedContentApi = value,
         ),
         readingHistoryRepository: _TestReadingHistoryRepository(),
-        downloadsRepository: FakeDownloadsRepository(),
       ),
     );
     await tester.pumpAndSettle();
@@ -838,41 +1012,90 @@ void main() {
     await tester.tap(latestUpdate);
     await tester.pumpAndSettle();
 
-    expect(requestedContentApi, '/wp-json/wor-reader-app/v1/chapters/5');
-    expect(find.text('قارئ تجريبي'), findsOneWidget);
+    expect(requestedContentApi, isNull);
+    expect(find.byType(NovelDetailsScreen), findsOneWidget);
+    expect(find.text('تفاصيل الاختبار'), findsWidgets);
   });
 
-  testWidgets('latest updates can switch between list and three-column grid', (
+  testWidgets('latest update opens details when home pack omits its manifest', (
     tester,
   ) async {
+    String? requestedManifestPath;
+    const homeData = HomeData(
+      continueReading: null,
+      latestChapters: [
+        ChapterSummary(
+          id: 82,
+          novelId: 130585,
+          novelTitle: 'تحديث بلا manifest',
+          label: 'الفصل 82',
+          title: '',
+          dateLabel: 'الآن',
+          url: '/chapter-82/',
+        ),
+      ],
+      recentNovels: [],
+    );
+
     await tester.pumpWidget(
       GalaxyNovelsApp(
-        homeRepository: _TestHomeRepository(_homeData),
+        homeRepository: const _TestHomeRepository(homeData),
         catalogRepository: const _TestCatalogRepository(),
-        novelRepository: const _TestNovelRepository(),
+        novelRepository: _TestNovelRepository(
+          onLoad: (value) => requestedManifestPath = value,
+        ),
+        readingHistoryRepository: _TestReadingHistoryRepository(),
       ),
     );
     await tester.pumpAndSettle();
 
-    await _scrollHomeDown(tester);
-
-    expect(find.text('آخر تحديثات الروايات'), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('latest-updates-count-chip')),
-      findsNothing,
-    );
-    expect(find.text('الفصل 5'), findsOneWidget);
-    expect(find.byTooltip('عرض كجرد ثلاثي'), findsOneWidget);
-
-    await tester.tap(find.byTooltip('عرض كجرد ثلاثي'));
+    await tester.tap(find.byKey(const ValueKey('latest-update-82')));
     await tester.pumpAndSettle();
 
-    expect(find.byTooltip('عرض كقائمة'), findsOneWidget);
-    expect(find.text('نجوم الاختبار'), findsWidgets);
-    expect(find.text('الفصل 5'), findsNothing);
+    expect(
+      requestedManifestPath,
+      '/wp-content/uploads/wor-reader-cache/app/manifest/novel-130585.json',
+    );
+    expect(find.byType(NovelDetailsScreen), findsOneWidget);
   });
 
-  testWidgets('latest update card keeps the novel title on one line', (
+  testWidgets(
+    'latest updates use the configured list without an inline toggle',
+    (tester) async {
+      await tester.pumpWidget(
+        GalaxyNovelsApp(
+          homeRepository: _TestHomeRepository(_homeData),
+          catalogRepository: const _TestCatalogRepository(),
+          novelRepository: const _TestNovelRepository(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await _scrollHomeDown(tester);
+
+      expect(find.text('آخر تحديثات الروايات'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('latest-updates-count-chip')),
+        findsNothing,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('latest-update-5')),
+          matching: find.text('الفصل 5'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.byTooltip('عرض كشبكة'), findsNothing);
+      expect(find.byTooltip('عرض كقائمة'), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('latest-update-5')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(NovelDetailsScreen), findsOneWidget);
+    },
+  );
+
+  testWidgets('latest update card keeps the novel title bounded', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -891,7 +1114,7 @@ void main() {
         (widget) =>
             widget is Text &&
             widget.data == 'نجوم الاختبار' &&
-            widget.maxLines == 1 &&
+            widget.maxLines == 2 &&
             widget.overflow == TextOverflow.ellipsis,
       ),
       findsOneWidget,
@@ -1107,10 +1330,13 @@ void main() {
       ),
       engagementRepository: engagementRepository,
     );
-    await _revealPersonalState(tester);
+    await _revealPersonalState(
+      tester,
+      find.byKey(const ValueKey('novel-details-rating-action')),
+    );
 
     expect(engagementRepository.loadedNovelIds, [99]);
-    expect(find.text('تقييمك'), findsOneWidget);
+    expect(find.text('تقييمك: 4 من 5'), findsOneWidget);
   });
 
   testWidgets('matching last read chapter becomes the native continue action', (
@@ -1138,6 +1364,7 @@ void main() {
       readerRepository: _TestReaderRepository(onLoad: (api) => openedApi = api),
     );
 
+    await _revealPersonalState(tester, find.text('متابعة الفصل 2'));
     expect(find.text('متابعة الفصل 2'), findsOneWidget);
     await tester.tap(find.text('متابعة الفصل 2'));
     await tester.pumpAndSettle();
@@ -1158,9 +1385,12 @@ void main() {
       ),
       engagementRepository: engagementRepository,
     );
-    await _revealPersonalState(tester);
+    await _revealPersonalState(
+      tester,
+      find.byKey(const ValueKey('novel-details-rating-action')),
+    );
 
-    await tester.tap(find.byKey(const ValueKey('personal-rating-action')));
+    await tester.tap(find.byKey(const ValueKey('novel-details-rating-action')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('personal-rating-5')));
     await tester.tap(find.text('حفظ التقييم'));
@@ -1176,13 +1406,18 @@ void main() {
       authRepository: FakeAuthRepository(),
       engagementRepository: FakeNovelEngagementRepository(),
     );
-    await _revealPersonalState(tester);
+    await _revealPersonalState(
+      tester,
+      find.byKey(const ValueKey('novel-details-rating-action')),
+    );
 
-    await tester.tap(find.text('سجّل الدخول للتقييم'));
+    await tester.tap(find.byKey(const ValueKey('novel-details-rating-action')));
     await tester.pumpAndSettle();
 
     expect(find.text('حسابي'), findsOneWidget);
-    expect(find.byKey(const ValueKey('login-submit')), findsOneWidget);
+    expect(find.text('تتصفح كزائر'), findsOneWidget);
+    expect(find.byKey(const ValueKey('login-submit')), findsNothing);
+    expect(find.byKey(const ValueKey('auth-show-login')), findsOneWidget);
   });
 
   testWidgets('opens novel details from the catalog', (tester) async {
@@ -1192,7 +1427,6 @@ void main() {
         catalogRepository: const _TestCatalogRepository(),
         novelRepository: const _TestNovelRepository(),
         readerRepository: const _TestReaderRepository(),
-        downloadsRepository: FakeDownloadsRepository(),
       ),
     );
     await tester.pumpAndSettle();
@@ -1202,7 +1436,7 @@ void main() {
     await tester.tap(find.text('مكتبة الاختبار'));
     await tester.pumpAndSettle();
 
-    expect(find.text('تفاصيل الاختبار'), findsOneWidget);
+    expect(find.byKey(const ValueKey('novel-details-hero')), findsOneWidget);
 
     await tester.scrollUntilVisible(
       find.text('هذه نبذة تفاصيل الاختبار.'),
@@ -1231,115 +1465,6 @@ void main() {
     expect(find.text('القارئ سيكون في المرحلة التالية'), findsNothing);
   });
 
-  testWidgets('downloads a chapter from novel details', (tester) async {
-    final downloadsRepository = FakeDownloadsRepository();
-    await tester.pumpWidget(
-      GalaxyNovelsApp(
-        homeRepository: _TestHomeRepository(_homeData),
-        catalogRepository: const _TestCatalogRepository(),
-        novelRepository: const _TestNovelRepository(),
-        readerRepository: const _TestReaderRepository(),
-        downloadsRepository: downloadsRepository,
-        readerRewardsRepository: StoredReaderRewardsRepository.memory(
-          initialPoints: 10,
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('المكتبة'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('مكتبة الاختبار'));
-    await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-      find.byTooltip('تحميل الفصل'),
-      320,
-      scrollable: _verticalScrollable(),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byTooltip('تحميل الفصل'));
-    await tester.pumpAndSettle();
-
-    expect(downloadsRepository.state.value.downloadedCount, 1);
-    expect(find.byTooltip('محمل'), findsOneWidget);
-  });
-
-  testWidgets('opens batch download picker from novel details', (tester) async {
-    await tester.pumpWidget(
-      GalaxyNovelsApp(
-        homeRepository: _TestHomeRepository(_homeData),
-        catalogRepository: const _TestCatalogRepository(),
-        novelRepository: const _TestNovelRepository(),
-        readerRepository: const _TestReaderRepository(),
-        downloadsRepository: FakeDownloadsRepository(),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('المكتبة'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('مكتبة الاختبار'));
-    await tester.pumpAndSettle();
-    final batchDownloadButton = find.widgetWithText(TextButton, 'تحميل الفصول');
-    await tester.scrollUntilVisible(
-      batchDownloadButton,
-      320,
-      scrollable: _verticalScrollable(),
-    );
-    await tester.ensureVisible(batchDownloadButton);
-    await tester.pumpAndSettle();
-    await tester.tap(batchDownloadButton);
-    await tester.pumpAndSettle();
-
-    expect(find.text('0 محدد'), findsOneWidget);
-    expect(find.text('آخر 10 فصول'), findsOneWidget);
-    expect(find.text('غير المحمل'), findsOneWidget);
-  });
-
-  testWidgets('shows batch download progress over novel details', (
-    tester,
-  ) async {
-    final downloadsRepository = FakeDownloadsRepository();
-    await tester.pumpWidget(
-      GalaxyNovelsApp(
-        homeRepository: _TestHomeRepository(_homeData),
-        catalogRepository: const _TestCatalogRepository(),
-        novelRepository: const _TestNovelRepository(),
-        readerRepository: const _TestReaderRepository(),
-        downloadsRepository: downloadsRepository,
-        readerRewardsRepository: StoredReaderRewardsRepository.memory(
-          initialPoints: 10,
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('المكتبة'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('مكتبة الاختبار'));
-    await tester.pumpAndSettle();
-    final batchDownloadButton = find.widgetWithText(TextButton, 'تحميل الفصول');
-    await tester.scrollUntilVisible(
-      batchDownloadButton,
-      320,
-      scrollable: _verticalScrollable(),
-    );
-    await tester.ensureVisible(batchDownloadButton);
-    await tester.pumpAndSettle();
-    await tester.tap(batchDownloadButton);
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byKey(const ValueKey('download-chapter-1')));
-    await tester.pump();
-    await tester.tap(find.text('تحميل 1 فصل • 1 نقطة'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('اكتمل التنزيل'), findsOneWidget);
-    expect(find.text('تم تحميل 1 فصل بنجاح'), findsOneWidget);
-    expect(downloadsRepository.state.value.downloadedCount, 1);
-  });
-
   testWidgets('opens novel details from the home screen', (tester) async {
     await tester.pumpWidget(
       GalaxyNovelsApp(
@@ -1350,10 +1475,13 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('رواية الاختبار').first);
+    final homeNovelTitle = find.text('رواية الاختبار').first;
+    await tester.ensureVisible(homeNovelTitle);
+    await tester.pumpAndSettle();
+    await tester.tap(homeNovelTitle);
     await tester.pumpAndSettle();
 
-    expect(find.text('تفاصيل الاختبار'), findsOneWidget);
+    expect(find.byKey(const ValueKey('novel-details-hero')), findsOneWidget);
 
     await tester.scrollUntilVisible(
       find.text('هذه نبذة تفاصيل الاختبار.'),
@@ -1381,7 +1509,6 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('مكتبة الاختبار'));
       await tester.pumpAndSettle();
-
       await tester.scrollUntilVisible(
         find.text('لا توجد فصول متاحة للعرض الآن'),
         420,
@@ -1394,7 +1521,7 @@ void main() {
     },
   );
 
-  testWidgets('rankings tab renders repository-provided novels', (
+  testWidgets('rankings destination renders repository-provided novels', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -1407,16 +1534,19 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('الترتيب'));
+    await tester.tap(_shellDestination('الترتيب'));
     await tester.pumpAndSettle();
 
     expect(find.text('ترتيب الاختبار'), findsOneWidget);
     expect(find.text('#1'), findsOneWidget);
-    expect(find.textContaining('150 فصل'), findsOneWidget);
+    expect(find.text('15.0K مشاهدة'), findsOneWidget);
+    expect(find.textContaining('150 فصل'), findsNothing);
     expect(find.text('حارس النجوم'), findsNothing);
   });
 
-  testWidgets('rankings tab highlights the top three novels', (tester) async {
+  testWidgets('rankings destination highlights the top three novels', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       GalaxyNovelsApp(
         homeRepository: _TestHomeRepository(_homeData),
@@ -1427,13 +1557,14 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('الترتيب'));
+    await tester.tap(_shellDestination('الترتيب'));
     await tester.pumpAndSettle();
 
-    expect(find.text('إحصاء الروايات'), findsOneWidget);
+    expect(find.text('ترتيب الروايات'), findsOneWidget);
+    expect(find.text('الأعلى مشاهدة داخل المجرة'), findsOneWidget);
     expect(find.text('هذا الشهر'), findsOneWidget);
     expect(
-      find.byKey(const ValueKey('rankings-featured-top-three')),
+      find.byKey(const ValueKey('rankings-podium-horizontal')),
       findsOneWidget,
     );
     expect(find.byKey(const ValueKey('ranking-top-pick-1')), findsOneWidget);
@@ -1447,9 +1578,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('ranking-list-row-4')), findsOneWidget);
+    expect(find.byKey(const ValueKey('rankings-table')), findsOneWidget);
   });
 
-  testWidgets('rankings tab fits a narrow phone without overflow', (
+  testWidgets('rankings destination fits a narrow phone without overflow', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(360, 720);
@@ -1469,13 +1601,25 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('الترتيب'));
+    await tester.tap(_shellDestination('الترتيب'));
     await tester.pumpAndSettle();
     await tester.drag(_verticalScrollable(), const Offset(0, -420));
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
   });
+}
+
+Finder _shellDestination(String label) {
+  return find.descendant(
+    of: find.byWidgetPredicate(
+      (widget) =>
+          widget is NavigationBar ||
+          widget is NavigationRail ||
+          widget is NavigationDrawer,
+    ),
+    matching: find.text(label),
+  );
 }
 
 Future<void> _pumpOpenedDetails(
@@ -1490,7 +1634,6 @@ Future<void> _pumpOpenedDetails(
       catalogRepository: const _TestCatalogRepository(),
       novelRepository: const _TestNovelRepository(includeSecondChapter: true),
       readerRepository: readerRepository,
-      downloadsRepository: FakeDownloadsRepository(),
       authRepository: authRepository,
       novelEngagementRepository: engagementRepository,
     ),
@@ -1502,8 +1645,13 @@ Future<void> _pumpOpenedDetails(
   await tester.pumpAndSettle();
 }
 
-Future<void> _revealPersonalState(WidgetTester tester) async {
-  await tester.drag(find.byType(CustomScrollView), const Offset(0, -440));
+Future<void> _revealPersonalState(WidgetTester tester, Finder target) async {
+  await tester.scrollUntilVisible(
+    target,
+    160,
+    scrollable: _verticalScrollable(),
+  );
+  await tester.ensureVisible(target);
   await tester.pumpAndSettle();
 }
 
@@ -1527,9 +1675,12 @@ NovelUserState _personalState({
 }
 
 Future<void> _scrollHomeDown(WidgetTester tester) async {
-  final mainList = find.byWidgetPredicate(
-    (widget) => widget is ListView && widget.scrollDirection == Axis.vertical,
-  );
+  final mainList = find
+      .descendant(
+        of: find.byKey(const ValueKey('home-scroll-view')),
+        matching: find.byType(Scrollable),
+      )
+      .first;
 
   await tester.drag(mainList, const Offset(0, -640));
   await tester.pumpAndSettle();
@@ -1540,6 +1691,14 @@ Finder _verticalScrollable() {
     (widget) =>
         widget is Scrollable && widget.axisDirection == AxisDirection.down,
   );
+}
+
+Future<void> _showOptionalLogin(WidgetTester tester) async {
+  final action = find.byKey(const ValueKey('auth-show-login'));
+  await tester.ensureVisible(action);
+  await tester.pumpAndSettle();
+  await tester.tap(action);
+  await tester.pumpAndSettle();
 }
 
 const _homeData = HomeData(
@@ -1942,12 +2101,14 @@ class _EmptyNovelRepository implements NovelRepository {
 }
 
 class _TestNovelRepository implements NovelRepository {
-  const _TestNovelRepository({this.includeSecondChapter = false});
+  const _TestNovelRepository({this.includeSecondChapter = false, this.onLoad});
 
   final bool includeSecondChapter;
+  final ValueChanged<String>? onLoad;
 
   @override
   Future<NovelDetailsLoadResult> loadNovel(String manifestPath) async {
+    onLoad?.call(manifestPath);
     return NovelDetailsLoadResult(
       details: const NovelDetails(
         id: 99,
@@ -2061,11 +2222,23 @@ class _TestReadingHistoryRepository extends ChangeNotifier
   }
 }
 
+class _CountingHomeAdRepository implements HomeAdRepository {
+  int initializeCalls = 0;
+
+  @override
+  Future<void> initialize() async {
+    initializeCalls += 1;
+  }
+
+  @override
+  Widget? buildHomeNativeAd(BuildContext context) => null;
+}
+
 class _TestAppThemeController extends ChangeNotifier
     implements AppThemeController {
   _TestAppThemeController();
 
-  AppThemeChoice _value = AppThemeChoice.system;
+  AppThemeChoice _value = AppThemeChoice.galaxyNoir;
 
   @override
   AppThemeChoice get value => _value;

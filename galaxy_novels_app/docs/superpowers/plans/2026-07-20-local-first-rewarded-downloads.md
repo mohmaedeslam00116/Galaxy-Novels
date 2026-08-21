@@ -6,7 +6,7 @@
 
 **Architecture:** يفصل التنفيذ بين سياسة الاستحقاق النقية، ودفتر SQLite الذري، ومخزن ملفات المحتوى، وبوابة النقل الخلفي، ومستودع واحد يعرض حالة قابلة للمراقبة للواجهات. يستخدم `background_downloader` لنقل الملفات والإشعارات وشرط Wi-Fi، و`workmanager` لإيقاظ الطابور بعد منتصف الليل، وAES-GCM مع مفتاح محفوظ عبر `flutter_secure_storage` لفصول VIP.
 
-**Tech Stack:** Flutter 3.41.7، Dart 3.11.5، Material 3، `sqflite 2.4.3`، `background_downloader 9.5.6`، `workmanager 0.9.0+3`، `cryptography 2.9.0`، `cryptography_flutter 2.3.4`، Google Mobile Ads 9.x، Android Java 17/Kotlin 2.2.20.
+**Tech Stack:** Flutter 3.41.7، Dart 3.11.5، Material 3، `sqflite 2.4.2+1`، `background_downloader 9.5.6`، `workmanager 0.9.0+3`، `cryptography 2.9.0`، `cryptography_flutter 2.3.4`، Google Mobile Ads 9.x، Android Java 17/Kotlin 2.2.20.
 
 ## Global Constraints
 
@@ -103,14 +103,14 @@ dependencies:
   cryptography: ^2.9.0
   cryptography_flutter: ^2.3.4
   path: ^1.9.1
-  sqflite: ^2.4.3
+  sqflite: 2.4.2+1
   workmanager: ^0.9.0+3
 
 dev_dependencies:
   sqflite_common_ffi: 2.4.0+3
 ```
 
-Use `2.4.0+3` for FFI tests because `2.4.2` requires Dart 3.12 while this app uses Dart 3.11.5.
+Use `sqflite 2.4.2+1` and `sqflite_common_ffi 2.4.0+3` because their newer releases require Dart 3.12 while this app uses Dart 3.11.5.
 
 - [ ] **Step 4: Add Android declarations and Arabic downloader strings**
 

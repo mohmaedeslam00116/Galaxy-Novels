@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/auth_repository.dart';
 import '../../domain/auth_session.dart';
+import 'account_loading_state.dart';
 import 'auth_entry_view.dart';
 import 'signed_in_account_view.dart';
 
@@ -10,7 +11,6 @@ class AccountSessionView extends StatelessWidget {
     required this.repository,
     this.onOpenFavorites,
     this.onOpenHistory,
-    this.onOpenDownloads,
     this.onOpenReaderSettings,
     super.key,
   });
@@ -18,7 +18,6 @@ class AccountSessionView extends StatelessWidget {
   final AuthRepository repository;
   final VoidCallback? onOpenFavorites;
   final VoidCallback? onOpenHistory;
-  final VoidCallback? onOpenDownloads;
   final VoidCallback? onOpenReaderSettings;
 
   @override
@@ -28,7 +27,7 @@ class AccountSessionView extends StatelessWidget {
       builder: (context, state, _) {
         return switch (state.status) {
           AuthSessionStatus.idle ||
-          AuthSessionStatus.restoring => const _LoadingAccount(),
+          AuthSessionStatus.restoring => const AccountLoadingState(),
           AuthSessionStatus.guest ||
           AuthSessionStatus.authenticating => AuthEntryView(
             errorMessage: state.errorMessage,
@@ -49,58 +48,10 @@ class AccountSessionView extends StatelessWidget {
             onRefreshProfile: repository.refreshProfile,
             onOpenFavorites: onOpenFavorites,
             onOpenHistory: onOpenHistory,
-            onOpenDownloads: onOpenDownloads,
             onOpenReaderSettings: onOpenReaderSettings,
           ),
         };
       },
-    );
-  }
-}
-
-class _LoadingAccount extends StatelessWidget {
-  const _LoadingAccount();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final placeholder = theme.colorScheme.surfaceContainerHighest;
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(24, 40, 24, 24),
-      children: [
-        Align(
-          child: Container(
-            width: 72,
-            height: 72,
-            decoration: BoxDecoration(
-              color: placeholder,
-              shape: BoxShape.circle,
-            ),
-          ),
-        ),
-        const SizedBox(height: 24),
-        Align(
-          child: Container(
-            width: 160,
-            height: 20,
-            decoration: BoxDecoration(
-              color: placeholder,
-              borderRadius: BorderRadius.circular(6),
-            ),
-          ),
-        ),
-        const SizedBox(height: 28),
-        for (var index = 0; index < 2; index++) ...[
-          Container(
-            height: 56,
-            decoration: BoxDecoration(
-              color: placeholder,
-              borderRadius: BorderRadius.circular(8),
-            ),
-          ),
-          const SizedBox(height: 12),
-        ],
-      ],
     );
   }
 }

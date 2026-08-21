@@ -7,6 +7,8 @@ class ChapterTextBlock {
   final String text;
 }
 
+typedef ChapterHtmlParser = List<ChapterTextBlock> Function(String html);
+
 List<ChapterTextBlock> parseChapterHtml(String html) {
   final blocks = <ChapterTextBlock>[];
   final pattern = RegExp(

@@ -3,12 +3,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../app/app_dependencies.dart';
+import '../../../core/analytics/app_screen_names.dart';
 import '../../../data/models/novel_details_data.dart';
-import '../../../data/repositories/downloads_repository.dart';
+import '../../../data/models/reading_progress.dart';
 import '../../../data/repositories/novel_repository.dart';
-import '../../downloads/application/download_manager.dart';
-import '../../downloads/presentation/download_chapters_sheet.dart';
-import '../../rewards/application/reader_rewards_repository.dart';
+import '../../../data/repositories/reading_history_repository.dart';
 import '../../account/application/auth_repository.dart';
 import '../../account/domain/auth_session.dart';
 import '../../account/presentation/account_screen.dart';
@@ -21,14 +20,22 @@ import '../../novel_engagement/presentation/novel_rating_sheet.dart';
 import '../../reader/presentation/reader_screen.dart';
 import '../../vip/application/vip_chapters_controller.dart';
 import '../../vip/application/vip_repository.dart';
+import 'novel_details_visual_tokens.dart';
+import 'novel_details_transition.dart';
+import 'widgets/favorite_toggle_button.dart';
 import 'widgets/novel_details_content.dart';
 
 const _isVipDirectContentRouteAvailable = true;
 
 class NovelDetailsScreen extends StatefulWidget {
-  const NovelDetailsScreen({required this.manifestPath, super.key});
+  const NovelDetailsScreen({
+    required this.manifestPath,
+    this.transition,
+    super.key,
+  });
 
   final String manifestPath;
+  final NovelDetailsTransitionData? transition;
 
   @override
   State<NovelDetailsScreen> createState() => _NovelDetailsScreenState();
@@ -37,18 +44,19 @@ class NovelDetailsScreen extends StatefulWidget {
 class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
   Future<NovelDetailsLoadResult>? _future;
   NovelRepository? _repository;
-  DownloadsRepository? _downloadsRepository;
-  DownloadManager? _downloadManager;
   AuthRepository? _authRepository;
   FavoritesRepository? _favoritesRepository;
   NovelEngagementRepository? _novelEngagementRepository;
   CommentsRepository? _commentsRepository;
+  ReadingHistoryRepository? _readingHistoryRepository;
   VipRepository? _vipRepository;
   NovelEngagementController? _novelEngagementController;
   VipChaptersController? _vipChaptersController;
   int? _loadedNovelId;
   String _loadedNovelTitle = '';
   String _loadedNovelCover = '';
+  ReadingProgress? _readingProgress;
+  int _readingProgressGeneration = 0;
 
   @override
   void didChangeDependencies() {
@@ -80,6 +88,14 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
     _commentsRepository = dependencies.commentsRepository;
     _loadFavoritesIfAuthenticated();
 
+    final readingHistoryRepository = dependencies.readingHistoryRepository;
+    if (_readingHistoryRepository != readingHistoryRepository) {
+      _readingHistoryRepository?.removeListener(_handleReadingHistoryChanged);
+      _readingHistoryRepository = readingHistoryRepository;
+      readingHistoryRepository.addListener(_handleReadingHistoryChanged);
+      unawaited(_refreshReadingProgress());
+    }
+
     final engagementRepository = dependencies.novelEngagementRepository;
     if (_novelEngagementRepository != engagementRepository ||
         authRepositoryChanged) {
@@ -94,57 +110,75 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
         unawaited(_novelEngagementController!.loadNovel(novelId));
       }
     }
-
-    final downloadsRepository = dependencies.downloadsRepository;
-    if (_downloadsRepository != downloadsRepository) {
-      _downloadsRepository = downloadsRepository;
-      unawaited(downloadsRepository.load());
-    }
-    _downloadManager = dependencies.downloadManager;
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('تفاصيل الرواية')),
-      body: FutureBuilder<NovelDetailsLoadResult>(
-        future: _future,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const NovelDetailsSkeleton();
-          }
+    return FutureBuilder<NovelDetailsLoadResult>(
+      future: _future,
+      builder: (context, snapshot) {
+        final loadResult = snapshot.data;
+        final tokens = NovelDetailsVisualTokens.of(context);
+        final motionTransition = MediaQuery.disableAnimationsOf(context)
+            ? null
+            : widget.transition;
+        return Scaffold(
+          backgroundColor: tokens.background,
+          appBar: loadResult == null
+              ? AppBar(
+                  backgroundColor: tokens.background,
+                  surfaceTintColor: Colors.transparent,
+                  title: Text(widget.transition?.title ?? 'تفاصيل الرواية'),
+                )
+              : null,
+          body: _buildBody(snapshot, motionTransition),
+        );
+      },
+    );
+  }
 
-          if (snapshot.hasError || !snapshot.hasData) {
-            return NovelDetailsMessage(
-              title: 'تعذر تحميل تفاصيل الرواية الآن',
-              actionLabel: 'إعادة المحاولة',
-              onAction: _retry,
-            );
-          }
+  Widget _buildBody(
+    AsyncSnapshot<NovelDetailsLoadResult> snapshot,
+    NovelDetailsTransitionData? transition,
+  ) {
+    if (snapshot.connectionState != ConnectionState.done) {
+      return NovelDetailsSkeleton(transition: transition);
+    }
 
-          final engagementController = _novelEngagementController!;
-          return ValueListenableBuilder<NovelEngagementState>(
-            valueListenable: engagementController,
-            builder: (context, engagementState, _) {
-              return NovelDetailsContent(
-                loadResult: snapshot.data!,
-                engagementState: engagementState,
-                commentsRepository: _commentsRepository!,
-                authRepository: _authRepository!,
-                vipController: _vipChaptersController!,
-                isVipNativeReaderAvailable: _isVipDirectContentRouteAvailable,
-                onRead: _openReader,
-                onOpenVipChapter: _openVipReader,
-                onDownloadChapters: () => _openDownloadSheet(snapshot.data!),
-                onToggleFavorite: () => _toggleFavorite(snapshot.data!.details),
-                onRate: _openRatingSheet,
-                onSignIn: _openAccountScreen,
-                onRetryEngagement: engagementController.retry,
-              );
-            },
-          );
-        },
-      ),
+    if (snapshot.hasError || !snapshot.hasData) {
+      return NovelDetailsMessage(
+        title: 'تعذر تحميل تفاصيل الرواية الآن',
+        actionLabel: 'إعادة المحاولة',
+        onAction: _retry,
+      );
+    }
+
+    final engagementController = _novelEngagementController!;
+    return ValueListenableBuilder<NovelEngagementState>(
+      valueListenable: engagementController,
+      builder: (context, engagementState, _) {
+        return NovelDetailsContent(
+          loadResult: snapshot.data!,
+          engagementState: engagementState,
+          readingProgress: _readingProgress,
+          commentsRepository: _commentsRepository!,
+          authRepository: _authRepository!,
+          vipController: _vipChaptersController!,
+          isVipNativeReaderAvailable: _isVipDirectContentRouteAvailable,
+          onRead: _openReader,
+          onOpenVipChapter: _openVipReader,
+          onRate: _openRatingSheet,
+          onSignIn: _openAccountScreen,
+          onRetryEngagement: engagementController.retry,
+          favoriteAction: FavoriteToggleButton(
+            novelId: snapshot.data!.details.id,
+            authRepository: _authRepository!,
+            favoritesRepository: _favoritesRepository!,
+            onPressed: () => _toggleFavorite(snapshot.data!.details),
+          ),
+          heroTag: transition?.heroTag,
+        );
+      },
     );
   }
 
@@ -166,6 +200,7 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
       _loadedNovelCover = novelLoad.details.bestCover;
       _recreateVipController(novelLoad.details.id);
       unawaited(_novelEngagementController?.loadNovel(novelLoad.details.id));
+      unawaited(_refreshReadingProgress());
     }
     return novelLoad;
   }
@@ -176,6 +211,46 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
     if (_authRepository?.value.status == AuthSessionStatus.authenticated) {
       unawaited(_favoritesRepository?.load());
     }
+  }
+
+  void _handleReadingHistoryChanged() {
+    unawaited(_refreshReadingProgress());
+  }
+
+  Future<void> _refreshReadingProgress() async {
+    final repository = _readingHistoryRepository;
+    if (repository == null) {
+      return;
+    }
+
+    final generation = ++_readingProgressGeneration;
+    late final List<ReadingProgress> history;
+    try {
+      history = await repository.load();
+    } catch (_) {
+      return;
+    }
+    if (!mounted ||
+        generation != _readingProgressGeneration ||
+        !identical(repository, _readingHistoryRepository)) {
+      return;
+    }
+
+    final novelId = _loadedNovelId;
+    ReadingProgress? nextProgress;
+    if (novelId != null) {
+      for (final progress in history) {
+        if (progress.novelId == novelId) {
+          nextProgress = progress;
+          break;
+        }
+      }
+    }
+
+    if (_sameReadingProgress(_readingProgress, nextProgress)) {
+      return;
+    }
+    setState(() => _readingProgress = nextProgress);
   }
 
   Future<void> _toggleFavorite(NovelDetails details) async {
@@ -193,7 +268,7 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
     }
 
     await _favoritesRepository!.load();
-    final result = await _favoritesRepository!.toggle(
+    final toggleResult = await _favoritesRepository!.toggle(
       FavoriteItem(
         id: details.id,
         title: details.title,
@@ -205,22 +280,22 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
         addedAt: DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
       ),
     );
-    if (!mounted || result == FavoriteToggleResult.signInRequired) {
+    if (!mounted || toggleResult == FavoriteToggleResult.signInRequired) {
       return;
     }
-    if (result == FavoriteToggleResult.failed) {
+    if (toggleResult == FavoriteToggleResult.failed) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('تعذر حفظ المفضلة على الجهاز.')),
       );
       return;
     }
-    if (result == FavoriteToggleResult.limitReached) {
+    if (toggleResult == FavoriteToggleResult.limitReached) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('الحد الأقصى للمفضلة هو 300 رواية.')),
       );
       return;
     }
-    final message = result == FavoriteToggleResult.added
+    final message = toggleResult == FavoriteToggleResult.added
         ? 'أضيفت الرواية إلى المفضلة'
         : 'أزيلت الرواية من المفضلة';
     ScaffoldMessenger.of(
@@ -230,18 +305,30 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
 
   void _showSignInMessage() {
     final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
     messenger.showSnackBar(
       SnackBar(
         content: const Text('سجّل الدخول لإضافة الرواية إلى مفضلتك.'),
-        action: SnackBarAction(label: 'حسابي', onPressed: _openAccountScreen),
+        action: SnackBarAction(
+          label: 'حسابي',
+          onPressed: () => _pushAccountScreen(navigator),
+        ),
       ),
     );
   }
 
   void _openAccountScreen() {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute<void>(builder: (_) => const AccountScreen()));
+    _pushAccountScreen(Navigator.of(context));
+  }
+
+  void _pushAccountScreen(NavigatorState navigator) {
+    if (!navigator.mounted) return;
+    navigator.push(
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(name: AppScreenNames.account),
+        builder: (_) => const AccountScreen(),
+      ),
+    );
   }
 
   Future<void> _openRatingSheet() async {
@@ -274,6 +361,7 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
   void _openReader(NovelChapter chapter, String novelTitle) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
+        settings: const RouteSettings(name: AppScreenNames.reader),
         builder: (context) => ReaderScreen(
           contentApi: chapter.effectiveContentApi,
           chapterTitle: chapter.label,
@@ -287,6 +375,7 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
   void _openVipReader(String contentApi, String title) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
+        settings: const RouteSettings(name: AppScreenNames.reader),
         builder: (context) => ReaderScreen(
           contentApi: contentApi,
           chapterTitle: title,
@@ -309,84 +398,20 @@ class _NovelDetailsScreenState extends State<NovelDetailsScreen> {
     );
   }
 
-  Future<void> _openDownloadSheet(NovelDetailsLoadResult result) async {
-    final repository = _downloadsRepository;
-    if (repository == null || result.chapters.isEmpty) {
-      return;
-    }
-    if (_downloadManager?.state.value.isActive ?? false) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('يوجد تنزيل جار بالفعل')));
-      return;
-    }
-
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (sheetContext) {
-        return ValueListenableBuilder<DownloadsState>(
-          valueListenable: repository.state,
-          builder: (context, downloadsState, _) {
-            return ValueListenableBuilder<ReaderRewardsState>(
-              valueListenable: AppDependencies.of(
-                context,
-              ).readerRewardsRepository.state,
-              builder: (context, rewardsState, _) {
-                return DownloadChaptersSheet(
-                  details: result.details,
-                  chapters: result.chapters,
-                  downloadsState: downloadsState,
-                  rewardsState: rewardsState,
-                  onStart: (chapters) => _startBatchDownload(result, chapters),
-                );
-              },
-            );
-          },
-        );
-      },
-    );
-  }
-
-  void _startBatchDownload(
-    NovelDetailsLoadResult result,
-    List<NovelChapter> chapters,
-  ) {
-    final manager = _downloadManager;
-    if (manager == null || chapters.isEmpty) {
-      return;
-    }
-
-    final requests = chapters
-        .map(
-          (chapter) => ChapterDownloadRequest(
-            novelId: result.details.id,
-            novelTitle: result.details.title,
-            novelCover: result.details.bestCover,
-            chapter: chapter,
-          ),
-        )
-        .toList(growable: false);
-
-    try {
-      unawaited(manager.startBatch(requests).catchError((_) {}));
-    } on DownloadJobInProgressException {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('يوجد تنزيل جار بالفعل')));
-    } on InsufficientDownloadPointsException {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('رصيد النقاط لا يكفي لتحميل هذه الفصول')),
-      );
-    }
-  }
-
   @override
   void dispose() {
+    _readingProgressGeneration++;
+    _readingHistoryRepository?.removeListener(_handleReadingHistoryChanged);
     _authRepository?.removeListener(_handleAuthChanged);
     _novelEngagementController?.dispose();
     _vipChaptersController?.dispose();
     super.dispose();
   }
+}
+
+bool _sameReadingProgress(ReadingProgress? current, ReadingProgress? next) {
+  return current?.novelId == next?.novelId &&
+      current?.chapterId == next?.chapterId &&
+      current?.contentApi == next?.contentApi &&
+      current?.updatedAt == next?.updatedAt;
 }

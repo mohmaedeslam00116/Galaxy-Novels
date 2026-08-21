@@ -1,0 +1,16 @@
+{
+  "remoteconfig": {
+    "template": "remoteconfig.template.json"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "galaxy-novels-app-4720",
+          "appId": "1:184724821028:android:e5f4c4333e1e28b20ff4b1",
+          "fileOutput": "android/app/google-services.json"
+        }
+      }
+    }
+  }
+}

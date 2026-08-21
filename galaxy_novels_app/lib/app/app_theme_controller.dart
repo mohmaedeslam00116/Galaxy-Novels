@@ -4,37 +4,48 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 enum AppThemeChoice {
-  system,
-  deepSpace,
-  crimsonPagoda,
-  desertAstronaut,
-  blueberryNebula,
+  starlightPaper,
+  neutralDark,
   galaxyNoir,
-  starlightPaper;
+  cosmicNight,
+  lightNature,
+  oceanAsh,
+  moonForest,
+  garnetVelvet,
+  copperDusk,
+  midnightTide;
 
-  ThemeMode get themeMode {
-    return switch (this) {
-      AppThemeChoice.system => ThemeMode.system,
-      AppThemeChoice.deepSpace => ThemeMode.dark,
-      AppThemeChoice.crimsonPagoda => ThemeMode.dark,
-      AppThemeChoice.desertAstronaut => ThemeMode.light,
-      AppThemeChoice.blueberryNebula => ThemeMode.dark,
-      AppThemeChoice.galaxyNoir => ThemeMode.dark,
-      AppThemeChoice.starlightPaper => ThemeMode.light,
-    };
-  }
+  ThemeMode get themeMode => switch (this) {
+    AppThemeChoice.starlightPaper ||
+    AppThemeChoice.lightNature => ThemeMode.light,
+    AppThemeChoice.neutralDark ||
+    AppThemeChoice.galaxyNoir ||
+    AppThemeChoice.cosmicNight ||
+    AppThemeChoice.oceanAsh ||
+    AppThemeChoice.moonForest ||
+    AppThemeChoice.garnetVelvet ||
+    AppThemeChoice.copperDusk ||
+    AppThemeChoice.midnightTide => ThemeMode.dark,
+  };
 
   static AppThemeChoice fromStorageValue(String? value) {
-    if (value == 'siteNoir') {
-      return AppThemeChoice.deepSpace;
-    }
-
-    for (final choice in AppThemeChoice.values) {
-      if (choice.name == value) {
-        return choice;
-      }
-    }
-    return AppThemeChoice.system;
+    return switch (value) {
+      'galaxyNoir' ||
+      'siteNoir' ||
+      'deepSpace' ||
+      'crimsonPagoda' ||
+      'blueberryNebula' => AppThemeChoice.galaxyNoir,
+      'starlightPaper' || 'desertAstronaut' => AppThemeChoice.starlightPaper,
+      'neutralDark' => AppThemeChoice.neutralDark,
+      'cosmicNight' => AppThemeChoice.cosmicNight,
+      'lightNature' => AppThemeChoice.lightNature,
+      'oceanAsh' => AppThemeChoice.oceanAsh,
+      'moonForest' => AppThemeChoice.moonForest,
+      'garnetVelvet' => AppThemeChoice.garnetVelvet,
+      'copperDusk' => AppThemeChoice.copperDusk,
+      'midnightTide' => AppThemeChoice.midnightTide,
+      _ => AppThemeChoice.galaxyNoir,
+    };
   }
 }
 
@@ -56,7 +67,7 @@ class StoredAppThemeController extends ChangeNotifier
 
   final AppThemeStore _store;
 
-  AppThemeChoice _value = AppThemeChoice.system;
+  AppThemeChoice _value = AppThemeChoice.galaxyNoir;
   Future<void>? _loadOperation;
   Future<void> _pendingWrite = Future.value();
   bool _didLoad = false;
@@ -170,6 +181,15 @@ class AppThemeControllerScope extends InheritedNotifier<AppThemeController> {
     final scope = context
         .dependOnInheritedWidgetOfExactType<AppThemeControllerScope>();
     assert(scope != null, 'AppThemeControllerScope was not found in context.');
-    return scope!.notifier!;
+    if (scope == null) {
+      throw StateError('AppThemeControllerScope was not found in context.');
+    }
+    final controller = scope.notifier;
+    if (controller == null) {
+      throw StateError(
+        'AppThemeController was not found in AppThemeControllerScope.',
+      );
+    }
+    return controller;
   }
 }

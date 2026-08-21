@@ -9,20 +9,30 @@ class ReaderFontSelector extends StatelessWidget {
     required this.readerScheme,
     required this.onChanged,
     super.key,
-  });
+  }) : _layout = _ReaderFontSelectorLayout.page;
+
+  const ReaderFontSelector.compact({
+    required this.selected,
+    required this.readerScheme,
+    required this.onChanged,
+    super.key,
+  }) : _layout = _ReaderFontSelectorLayout.sheet;
 
   final ReaderFontFamily selected;
   final ColorScheme readerScheme;
   final ValueChanged<ReaderFontFamily> onChanged;
+  final _ReaderFontSelectorLayout _layout;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final previewStyle = theme.textTheme.bodyLarge?.copyWith(
-      color: readerScheme.onSurface,
-      fontFamily: selected.fontFamily,
-      height: 1.8,
-      fontWeight: FontWeight.w700,
+    final previewStyle = readerFontTextStyle(
+      (theme.textTheme.bodyLarge ?? const TextStyle()).copyWith(
+        color: readerScheme.onSurface,
+        height: 1.8,
+        fontWeight: FontWeight.w700,
+      ),
+      fontFamily: selected,
     );
 
     return Column(
@@ -53,21 +63,34 @@ class ReaderFontSelector extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 10),
-        SizedBox(
-          height: 88,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: ReaderFontFamily.values.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 8),
-            itemBuilder: (context, index) {
-              final font = ReaderFontFamily.values[index];
-              return _FontOptionTile(
-                font: font,
-                selected: selected == font,
-                onTap: () => onChanged(font),
-              );
-            },
-          ),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            const spacing = 8.0;
+            final scaled = MediaQuery.textScalerOf(context).scale(1) >= 1.5;
+            final compact = _layout == _ReaderFontSelectorLayout.sheet;
+            final columns = compact && scaled
+                ? 1
+                : (constraints.maxWidth >= 520 ? 3 : 2);
+            final tileWidth =
+                (constraints.maxWidth - spacing * (columns - 1)) / columns;
+            return Wrap(
+              key: const ValueKey('reader-font-grid'),
+              spacing: spacing,
+              runSpacing: spacing,
+              children: [
+                for (final font in ReaderFontFamily.values)
+                  SizedBox(
+                    width: tileWidth,
+                    child: _FontOptionTile(
+                      font: font,
+                      selected: selected == font,
+                      layout: _layout,
+                      onTap: () => onChanged(font),
+                    ),
+                  ),
+              ],
+            );
+          },
         ),
       ],
     );
@@ -78,11 +101,13 @@ class _FontOptionTile extends StatelessWidget {
   const _FontOptionTile({
     required this.font,
     required this.selected,
+    required this.layout,
     required this.onTap,
   });
 
   final ReaderFontFamily font;
   final bool selected;
+  final _ReaderFontSelectorLayout layout;
   final VoidCallback onTap;
 
   @override
@@ -108,11 +133,14 @@ class _FontOptionTile extends StatelessWidget {
           key: ValueKey('reader-font-${font.name}'),
           borderRadius: BorderRadius.circular(8),
           onTap: onTap,
-          child: SizedBox(
-            width: 136,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: layout == _ReaderFontSelectorLayout.sheet ? 72 : 88,
+            ),
             child: Padding(
               padding: const EdgeInsets.all(10),
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
@@ -139,12 +167,18 @@ class _FontOptionTile extends StatelessWidget {
                   const SizedBox(height: 8),
                   Text(
                     font.preview,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      fontFamily: font.fontFamily,
-                      height: 1.45,
-                      color: scheme.onSurface.withValues(alpha: 0.78),
+                    maxLines: layout == _ReaderFontSelectorLayout.sheet
+                        ? 1
+                        : null,
+                    overflow: layout == _ReaderFontSelectorLayout.sheet
+                        ? TextOverflow.ellipsis
+                        : TextOverflow.clip,
+                    style: readerFontTextStyle(
+                      (theme.textTheme.bodySmall ?? const TextStyle()).copyWith(
+                        height: 1.45,
+                        color: scheme.onSurface.withValues(alpha: 0.78),
+                      ),
+                      fontFamily: font,
                     ),
                   ),
                 ],
@@ -156,3 +190,5 @@ class _FontOptionTile extends StatelessWidget {
     );
   }
 }
+
+enum _ReaderFontSelectorLayout { page, sheet }

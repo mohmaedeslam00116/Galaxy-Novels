@@ -2,8 +2,23 @@
 .worktrees
 .worktrees/
 _codex_wor_reader_inspect/
+_journey_wor_reader_inspect/
 .tool-home/
 .superpowers/
+.npm-cache/
+.skill-archive/
+.tmp/
+.tmp_*/
+output/
+showcase_ai_generated/
+showcase_galaxy_novels/
+showcase_galaxy_novels_v2/
+stitch_/
+شوكيس/
+
+# Local device dumps and extracted Android inspection output
+galaxy_novels_app/.tmp*
+galaxy_novels_app/base/
 
 # Flutter and Dart
 .dart_tool/

@@ -31,6 +31,73 @@ void main() {
   });
 
   test(
+    'retries a failed public history chapter through the authenticated VIP route',
+    () async {
+      late PrivateRawRequest sent;
+      final public = _FakeReaderRepository(
+        error: const PublicChapterLoadException(),
+      );
+      final vip = PrivateVipRepository(
+        client: PrivateApiClient(
+          config: const AppConfig(siteBaseUrl: 'https://example.com/'),
+          requestSender: (request) async {
+            sent = request;
+            return const PrivateRawResponse(
+              statusCode: 200,
+              body:
+                  '{"data":{"id":410,"novel_id":8,'
+                  '"label":"الفصل 410","title":"VIP",'
+                  '"display_title":"VIP","position":410,"total":500,'
+                  '"content_html":"<p>خاص</p>",'
+                  '"navigation":{"previous_api":"",'
+                  '"next_api":"","previous_id":0,"next_id":0}}}',
+            );
+          },
+        )..updateAccessToken('wra_vip_token'),
+      );
+      final repository = VipAwareReaderRepository(
+        publicReader: public,
+        vipRepository: vip,
+      );
+
+      final content = await repository.loadChapter(
+        '/wp-json/wor-reader-app/v1/chapters/410',
+      );
+
+      expect(public.calls, 1);
+      expect(sent.uri.path, '/wp-json/wor-reader-app/v1/vip/chapters/410');
+      expect(content.id, 410);
+      expect(content.contentHtml, '<p>خاص</p>');
+    },
+  );
+
+  test(
+    'keeps the public error when the failed chapter is not available as VIP',
+    () async {
+      const publicError = PublicChapterLoadException();
+      final public = _FakeReaderRepository(error: publicError);
+      final vip = PrivateVipRepository(
+        client: PrivateApiClient(
+          config: const AppConfig(siteBaseUrl: 'https://example.com/'),
+          requestSender: (_) async => const PrivateRawResponse(
+            statusCode: 404,
+            body: '{"message":"missing"}',
+          ),
+        )..updateAccessToken('wra_vip_token'),
+      );
+      final repository = VipAwareReaderRepository(
+        publicReader: public,
+        vipRepository: vip,
+      );
+
+      await expectLater(
+        repository.loadChapter('/wp-json/wor-reader-app/v1/chapters/999'),
+        throwsA(same(publicError)),
+      );
+    },
+  );
+
+  test(
     'adds the first VIP chapter as the next chapter after the public ending',
     () async {
       late PrivateRawRequest sent;
@@ -172,29 +239,39 @@ void main() {
 }
 
 class _FakeReaderRepository implements ReaderRepository {
-  _FakeReaderRepository({this.content});
+  _FakeReaderRepository({this.content, this.error});
 
   final ReaderChapterContent? content;
+  final Exception? error;
   int calls = 0;
 
   @override
   Future<ReaderChapterContent> loadChapter(String contentApi) async {
     calls++;
-    return content ?? const ReaderChapterContent(
-      id: 1,
-      novelId: 2,
-      label: 'الفصل 1',
-      title: 'عام',
-      displayTitle: 'عام',
-      position: 1,
-      total: 10,
-      contentHtml: '<p>عام</p>',
-      navigation: ReaderChapterNavigation(
-        previousApi: '',
-        nextApi: '',
-        previousId: 0,
-        nextId: 0,
-      ),
-    );
+    final loadError = error;
+    if (loadError != null) {
+      throw loadError;
+    }
+    return content ??
+        const ReaderChapterContent(
+          id: 1,
+          novelId: 2,
+          label: 'الفصل 1',
+          title: 'عام',
+          displayTitle: 'عام',
+          position: 1,
+          total: 10,
+          contentHtml: '<p>عام</p>',
+          navigation: ReaderChapterNavigation(
+            previousApi: '',
+            nextApi: '',
+            previousId: 0,
+            nextId: 0,
+          ),
+        );
   }
+}
+
+class PublicChapterLoadException implements Exception {
+  const PublicChapterLoadException();
 }

@@ -22,6 +22,15 @@ flutter build apk --debug
 - Android 7.0 (API 24) أو أحدث، وهو الحد الافتراضي في Flutter 3.41 المستخدم لبناء المشروع.
 - Android Backup معطل حتى لا تنتقل البيانات المشفرة دون مفاتيحها.
 - مشروع iOS مجهز بملفات Keychain entitlements، ويستهدف iOS 13 أو أحدث.
+- إعلانات iOS معطلة مؤقتا: التطبيق لا يهيئ AdMob SDK ولا يطلب إعلانا على iOS في هذه الدورة.
+
+## بناء Android Release
+
+يتطلب Android Release مفتاح إنتاج صالحا وإعداد بياناته كاملة. لا يعود البناء تلقائيا إلى مفتاح debug عند غيابها، وتفشل مهام release أو `build` برسالة واضحة.
+
+يمكن استخدام `ALLOW_DEBUG_SIGNING_IN_RELEASE=true` للتحقق المحلي الصريح فقط. لا يجوز استخدام artifact ناتج بهذا العلم للنشر.
+
+يستخدم Android debug/profile وحدات AdMob الاختبارية، بينما يستخدم release وحدات الإنتاج بعد اجتياز موافقة UMP.
 
 ## حالة الـ API
 

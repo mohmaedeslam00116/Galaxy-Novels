@@ -14,21 +14,23 @@ void main() {
     expect(state.retryJobId, isNull);
   });
 
-  test('active jobs are pending', () {
-    for (final status in [
-      DownloadJobStatus.queued,
-      DownloadJobStatus.reserved,
-      DownloadJobStatus.transferring,
-      DownloadJobStatus.processing,
-      DownloadJobStatus.paused,
-    ]) {
+  test('active jobs expose distinct queue transfer and paused states', () {
+    const expected = {
+      DownloadJobStatus.queued: ChapterDownloadStatus.queued,
+      DownloadJobStatus.reserved: ChapterDownloadStatus.queued,
+      DownloadJobStatus.transferring: ChapterDownloadStatus.downloading,
+      DownloadJobStatus.processing: ChapterDownloadStatus.downloading,
+      DownloadJobStatus.paused: ChapterDownloadStatus.paused,
+    };
+
+    for (final entry in expected.entries) {
       expect(
         resolveChapterDownloadState(
-          _dashboardWith(jobStatus: status),
+          _dashboardWith(jobStatus: entry.key),
           'public:71',
         ).status,
-        ChapterDownloadStatus.pending,
-        reason: '$status should remain visibly pending',
+        entry.value,
+        reason: '${entry.key} should remain visually distinct',
       );
     }
   });

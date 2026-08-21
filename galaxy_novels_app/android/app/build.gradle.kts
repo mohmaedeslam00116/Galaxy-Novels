@@ -5,11 +5,12 @@ plugins {
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+    id("com.google.gms.google-services")
+    id("com.google.firebase.crashlytics")
 }
 
 val testAdMobApplicationId = "ca-app-pub-3940256099942544~3347511713"
-val releaseBuildRequested =
-    gradle.startParameter.taskNames.any { it.contains("Release", ignoreCase = true) }
+val productionAdMobApplicationId = "ca-app-pub-4720168413129669~3354807098"
 val keystorePropertiesFile = rootProject.file("key.properties")
 val keystoreProperties = Properties().apply {
     if (keystorePropertiesFile.exists()) {
@@ -33,9 +34,11 @@ fun keystoreProperty(name: String): String? {
     return keystoreProperties.getProperty(name)?.trim()?.takeIf { it.isNotEmpty() }
 }
 
-val releaseSigningConfigured =
+val hasProductionSigningConfig =
     listOf("storeFile", "storePassword", "keyAlias", "keyPassword")
         .all { keystoreProperty(it) != null }
+val allowDebugSigningInRelease =
+    truthyPropertyOrEnv("ALLOW_DEBUG_SIGNING_IN_RELEASE")
 
 android {
     namespace = "com.galaxynovels.app"
@@ -64,7 +67,7 @@ android {
 
     signingConfigs {
         create("release") {
-            if (releaseSigningConfigured) {
+            if (hasProductionSigningConfig) {
                 storeFile = rootProject.file(keystoreProperty("storeFile")!!)
                 storePassword = keystoreProperty("storePassword")
                 keyAlias = keystoreProperty("keyAlias")
@@ -80,41 +83,35 @@ android {
 
         release {
             val releaseAdMobApplicationId = propertyOrEnv("ADMOB_ANDROID_APP_ID")
-            val allowTestAdsInRelease = truthyPropertyOrEnv("ALLOW_TEST_ADS_IN_RELEASE")
-            val allowDebugSigningInRelease =
-                truthyPropertyOrEnv("ALLOW_DEBUG_SIGNING_IN_RELEASE")
-
-            if (releaseBuildRequested &&
-                releaseAdMobApplicationId == null &&
-                !allowTestAdsInRelease
-            ) {
-                throw GradleException(
-                    "Missing ADMOB_ANDROID_APP_ID for release. " +
-                        "Pass -PADMOB_ANDROID_APP_ID=ca-app-pub-...~... or " +
-                        "set ALLOW_TEST_ADS_IN_RELEASE=true only for local testing."
-                )
-            }
-
-            if (releaseBuildRequested &&
-                !releaseSigningConfigured &&
-                !allowDebugSigningInRelease
-            ) {
-                throw GradleException(
-                    "Missing Android release signing config. Create android/key.properties " +
-                        "with storeFile, storePassword, keyAlias, and keyPassword, or set " +
-                        "ALLOW_DEBUG_SIGNING_IN_RELEASE=true only for local testing."
-                )
-            }
 
             manifestPlaceholders["adMobApplicationId"] =
-                releaseAdMobApplicationId ?: testAdMobApplicationId
-            signingConfig =
-                if (releaseSigningConfigured) {
-                    signingConfigs.getByName("release")
-                } else {
-                    signingConfigs.getByName("debug")
-                }
+                releaseAdMobApplicationId ?: productionAdMobApplicationId
+            signingConfig = when {
+                hasProductionSigningConfig -> signingConfigs.getByName("release")
+                allowDebugSigningInRelease -> signingConfigs.getByName("debug")
+                else -> null
+            }
         }
+    }
+}
+
+gradle.taskGraph.whenReady {
+    val releaseArtifactRequested = allTasks.any { task ->
+        task.project == project &&
+            task.name.contains("Release", ignoreCase = true) &&
+            listOf("assemble", "bundle", "package", "install")
+                .any { prefix -> task.name.startsWith(prefix) }
+    }
+    if (
+        releaseArtifactRequested &&
+        !hasProductionSigningConfig &&
+        !allowDebugSigningInRelease
+    ) {
+        throw GradleException(
+            "Missing Android release signing config. Configure the " +
+                "production keystore or set " +
+                "ALLOW_DEBUG_SIGNING_IN_RELEASE=true for local testing only."
+        )
     }
 }
 

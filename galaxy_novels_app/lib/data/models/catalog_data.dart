@@ -51,6 +51,7 @@ class CatalogNovel {
     required this.url,
     required this.coverThumbnail,
     required this.coverMedium,
+    this.coverLarge = '',
     required this.statusKey,
     required this.statusLabel,
     required this.genres,
@@ -75,6 +76,7 @@ class CatalogNovel {
       url: _asString(json['url']),
       coverThumbnail: _asString(cover['thumbnail']),
       coverMedium: _asString(cover['medium']),
+      coverLarge: _asString(cover['large']),
       statusKey: _asString(status['key']),
       statusLabel: _asString(status['label']),
       genres: _asList(json['genres'])
@@ -96,6 +98,7 @@ class CatalogNovel {
   final String url;
   final String coverThumbnail;
   final String coverMedium;
+  final String coverLarge;
   final String statusKey;
   final String statusLabel;
   final List<CatalogGenre> genres;
@@ -105,6 +108,12 @@ class CatalogNovel {
   final int views;
   final DateTime? updatedAt;
   final String manifest;
+
+  String get bestCover => coverLarge.isNotEmpty
+      ? coverLarge
+      : coverMedium.isNotEmpty
+      ? coverMedium
+      : coverThumbnail;
 }
 
 class CatalogGenre {

@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/auth_session.dart';
+import 'account_action_list.dart';
 import 'account_common_widgets.dart';
 import 'account_hero_panel.dart';
-import 'account_membership_card.dart';
-import 'account_shortcuts.dart';
-import 'account_stats_grid.dart';
+import 'account_reading_stats.dart';
 
 class SignedInAccountView extends StatelessWidget {
   const SignedInAccountView({
@@ -16,7 +15,6 @@ class SignedInAccountView extends StatelessWidget {
     this.onRefreshProfile,
     this.onOpenFavorites,
     this.onOpenHistory,
-    this.onOpenDownloads,
     this.onOpenReaderSettings,
     super.key,
   });
@@ -28,7 +26,6 @@ class SignedInAccountView extends StatelessWidget {
   final Future<void> Function()? onRefreshProfile;
   final VoidCallback? onOpenFavorites;
   final VoidCallback? onOpenHistory;
-  final VoidCallback? onOpenDownloads;
   final VoidCallback? onOpenReaderSettings;
 
   @override
@@ -53,32 +50,28 @@ class SignedInAccountView extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      AccountHeroPanel(user: user),
-                      const SizedBox(height: 12),
-                      AccountMembershipCard(vip: user.vip),
-                      const SizedBox(height: 14),
-                      ReadingStatsGrid(user: user),
-                      if (onRefreshProfile != null) ...[
-                        const SizedBox(height: 8),
-                        _AccountSessionTools(
-                          onRefreshProfile: onRefreshProfile!,
-                        ),
-                      ],
-                      const SizedBox(height: 16),
-                      const AccountSectionTitle(title: 'لوحة القارئ'),
-                      const SizedBox(height: 10),
-                      AccountShortcutGrid(
-                        onOpenFavorites: onOpenFavorites,
-                        onOpenHistory: onOpenHistory,
-                        onOpenDownloads: onOpenDownloads,
-                        onOpenReaderSettings: onOpenReaderSettings,
+                      AccountHeroPanel(
+                        user: user,
+                        onRefreshProfile: onRefreshProfile,
                       ),
                       if (noticeMessage case final message?) ...[
-                        const SizedBox(height: 18),
+                        const SizedBox(height: 10),
                         AccountNotice(message: message),
                       ],
-                      const SizedBox(height: 16),
-                      LogoutButton(
+                      const SizedBox(height: 18),
+                      const AccountSectionTitle(title: 'نشاط القراءة'),
+                      const SizedBox(height: 8),
+                      AccountReadingStats(user: user),
+                      const SizedBox(height: 18),
+                      const AccountSectionTitle(title: 'حسابي'),
+                      const SizedBox(height: 8),
+                      AccountActionList(
+                        onOpenFavorites: onOpenFavorites,
+                        onOpenHistory: onOpenHistory,
+                        onOpenReaderSettings: onOpenReaderSettings,
+                      ),
+                      const SizedBox(height: 14),
+                      AccountLogoutRow(
                         isSigningOut: isSigningOut,
                         onLogout: onLogout,
                       ),
@@ -89,54 +82,6 @@ class SignedInAccountView extends StatelessWidget {
             ],
           );
         },
-      ),
-    );
-  }
-}
-
-class _AccountSessionTools extends StatelessWidget {
-  const _AccountSessionTools({required this.onRefreshProfile});
-
-  final Future<void> Function() onRefreshProfile;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colors.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: colors.outlineVariant),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-        child: Row(
-          children: [
-            Icon(Icons.sync_rounded, color: colors.secondary, size: 20),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'بيانات الحساب تأتي من الموقع ويمكن تحديثها عند الحاجة.',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: colors.onSurfaceVariant,
-                  fontWeight: FontWeight.w800,
-                  height: 1.35,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            OutlinedButton.icon(
-              key: const ValueKey('account-refresh-profile'),
-              onPressed: onRefreshProfile,
-              icon: const Icon(Icons.refresh_rounded),
-              label: const Text('تحديث'),
-            ),
-          ],
-        ),
       ),
     );
   }

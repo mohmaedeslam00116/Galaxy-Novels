@@ -3,42 +3,50 @@ import 'package:flutter/material.dart';
 import '../../../../app/app_theme.dart';
 
 class RankingRankBadge extends StatelessWidget {
-  const RankingRankBadge({
-    required this.rank,
-    this.featured = false,
-    super.key,
-  });
+  const RankingRankBadge({required this.rank, super.key});
 
   final int rank;
-  final bool featured;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final tokens = theme.extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
-    final color = featured ? tokens.gold : tokens.accent;
+    final color = rankingMedalColor(tokens, rank);
+    final isFirstPlace = rank == 1;
 
-    return Container(
-      width: featured ? 46 : 42,
-      height: featured ? 36 : 42,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withValues(alpha: 0.72)),
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        minWidth: isFirstPlace ? 46 : 42,
+        minHeight: isFirstPlace ? 36 : 42,
       ),
-      child: Text(
-        '#$rank',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: theme.textTheme.labelLarge?.copyWith(
-          color: color,
-          fontWeight: FontWeight.w900,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: color.withValues(alpha: 0.72)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Text(
+            '#$rank',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
         ),
       ),
     );
   }
 }
+
+Color rankingMedalColor(AppThemeTokens tokens, int rank) => switch (rank) {
+  1 => tokens.gold,
+  2 => tokens.textSecondary,
+  3 => Color.lerp(tokens.warning, tokens.danger, 0.45)!,
+  _ => tokens.accent,
+};
 
 class RankingInlineMetric extends StatelessWidget {
   const RankingInlineMetric({

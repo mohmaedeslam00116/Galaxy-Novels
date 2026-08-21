@@ -263,6 +263,10 @@ class _CommentBodyState extends State<_CommentBody> {
               TextButton.icon(
                 key: ValueKey('comment-reply-${comment.id}'),
                 onPressed: () => widget.onReply?.call(comment),
+                style: TextButton.styleFrom(
+                  minimumSize: const Size(44, 44),
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                ),
                 icon: const Icon(Icons.reply_rounded, size: 16),
                 label: const Text('رد'),
               ),
@@ -417,9 +421,8 @@ class _CommentVoteButton extends StatelessWidget {
         onPressed: onPressed,
         style: TextButton.styleFrom(
           foregroundColor: color,
-          minimumSize: const Size(0, 32),
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          minimumSize: const Size(44, 44),
+          padding: const EdgeInsets.symmetric(horizontal: 8),
         ),
         icon: Icon(icon, size: 15),
         label: Text(

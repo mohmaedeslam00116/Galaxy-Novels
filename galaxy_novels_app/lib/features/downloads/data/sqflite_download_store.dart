@@ -16,12 +16,14 @@ class SqfliteDownloadStore implements DownloadStore {
   static Future<SqfliteDownloadStore> open({
     DatabaseFactory? factory,
     String? path,
+    bool singleInstance = true,
   }) async {
     final effectiveFactory = factory ?? databaseFactory;
     final effectivePath = path ?? '${await getDatabasesPath()}/downloads.db';
     final database = await effectiveFactory.openDatabase(
       effectivePath,
       options: OpenDatabaseOptions(
+        singleInstance: singleInstance,
         version: 1,
         onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
         onCreate: (db, version) async {
@@ -138,16 +140,7 @@ class SqfliteDownloadStore implements DownloadStore {
     required List<DownloadChapterRequest> chapters,
   }) {
     return _database.transaction((transaction) async {
-      await transaction.rawInsert(
-        '''
-        INSERT INTO download_novels(novel_id, title, cover_url)
-        VALUES(?, ?, ?)
-        ON CONFLICT(novel_id) DO UPDATE SET
-          title = excluded.title,
-          cover_url = excluded.cover_url
-        ''',
-        [novel.novelId, novel.title, novel.coverUrl],
-      );
+      await _saveNovelMetadata(transaction, novel);
 
       final accepted = <DownloadChapterRequest>[];
       final skipped = <String>[];
@@ -265,11 +258,15 @@ class SqfliteDownloadStore implements DownloadStore {
         SELECT j.*, g.novel_id
         FROM download_jobs j
         JOIN download_groups g ON g.group_id = j.group_id
-        WHERE j.status = ?
+        WHERE j.status = ? AND g.status IN (?, ?)
         ORDER BY g.created_at, j.sort_index
         LIMIT 1
       ''',
-        [DownloadJobStatus.queued.name],
+        [
+          DownloadJobStatus.queued.name,
+          DownloadGroupStatus.queued.name,
+          DownloadGroupStatus.running.name,
+        ],
       );
       if (rows.isEmpty) return null;
 
@@ -406,6 +403,162 @@ class SqfliteDownloadStore implements DownloadStore {
         where: 'group_id = ?',
         whereArgs: [rows.single['group_id']],
       );
+    });
+  }
+
+  @override
+  Future<void> retryJob(String jobId) {
+    return _database.transaction((transaction) async {
+      final jobs = await transaction.query(
+        'download_jobs',
+        columns: ['group_id', 'status'],
+        where: 'job_id = ?',
+        whereArgs: [jobId],
+        limit: 1,
+      );
+      if (jobs.isEmpty ||
+          jobs.single['status'] != DownloadJobStatus.failed.name) {
+        return;
+      }
+      await transaction.rawUpdate(
+        '''
+        UPDATE download_jobs
+        SET status = ?, reserved_day = NULL, last_error = NULL,
+            attempts = attempts + 1
+        WHERE job_id = ?
+        ''',
+        [DownloadJobStatus.queued.name, jobId],
+      );
+      await transaction.update(
+        'download_groups',
+        {
+          'status': DownloadGroupStatus.queued.name,
+          'stop_reason': null,
+          'updated_at': DateTime.now().toUtc().millisecondsSinceEpoch,
+        },
+        where: 'group_id = ?',
+        whereArgs: [jobs.single['group_id']],
+      );
+    });
+  }
+
+  @override
+  Future<void> pauseGroup(String groupId) {
+    return _database.update(
+      'download_groups',
+      {
+        'status': DownloadGroupStatus.paused.name,
+        'updated_at': DateTime.now().toUtc().millisecondsSinceEpoch,
+      },
+      where: 'group_id = ? AND status NOT IN (?, ?)',
+      whereArgs: [
+        groupId,
+        DownloadGroupStatus.completed.name,
+        DownloadGroupStatus.canceled.name,
+      ],
+    );
+  }
+
+  @override
+  Future<void> resumeGroup(String groupId) {
+    return _database.transaction((transaction) async {
+      final groups = await transaction.query(
+        'download_groups',
+        columns: ['status'],
+        where: 'group_id = ?',
+        whereArgs: [groupId],
+        limit: 1,
+      );
+      if (groups.isEmpty) return;
+      final currentStatus = groups.single['status'];
+      if (currentStatus == DownloadGroupStatus.completed.name ||
+          currentStatus == DownloadGroupStatus.canceled.name) {
+        return;
+      }
+
+      final activeJobs =
+          Sqflite.firstIntValue(
+            await transaction.rawQuery(
+              '''
+              SELECT COUNT(*) FROM download_jobs
+              WHERE group_id = ? AND status IN (?, ?, ?)
+              ''',
+              [
+                groupId,
+                DownloadJobStatus.reserved.name,
+                DownloadJobStatus.transferring.name,
+                DownloadJobStatus.processing.name,
+              ],
+            ),
+          ) ??
+          0;
+      await transaction.update(
+        'download_groups',
+        {
+          'status': activeJobs > 0
+              ? DownloadGroupStatus.running.name
+              : DownloadGroupStatus.queued.name,
+          'stop_reason': null,
+          'updated_at': DateTime.now().toUtc().millisecondsSinceEpoch,
+        },
+        where: 'group_id = ?',
+        whereArgs: [groupId],
+      );
+    });
+  }
+
+  @override
+  Future<void> cancelGroup(String groupId) {
+    return _database.transaction((transaction) async {
+      final groups = await transaction.query(
+        'download_groups',
+        columns: ['novel_id'],
+        where: 'group_id = ?',
+        whereArgs: [groupId],
+        limit: 1,
+      );
+      if (groups.isEmpty) return;
+      final novelId = _int(groups.single['novel_id']);
+
+      await transaction.delete(
+        'download_jobs',
+        where: 'group_id = ? AND status != ?',
+        whereArgs: [groupId, DownloadJobStatus.completed.name],
+      );
+      final completedJobs =
+          Sqflite.firstIntValue(
+            await transaction.rawQuery(
+              'SELECT COUNT(*) FROM download_jobs WHERE group_id = ?',
+              [groupId],
+            ),
+          ) ??
+          0;
+      if (completedJobs == 0) {
+        await transaction.delete(
+          'download_groups',
+          where: 'group_id = ?',
+          whereArgs: [groupId],
+        );
+      } else {
+        await transaction.update(
+          'download_groups',
+          {
+            'status': DownloadGroupStatus.completed.name,
+            'stop_reason': null,
+            'updated_at': DateTime.now().toUtc().millisecondsSinceEpoch,
+          },
+          where: 'group_id = ?',
+          whereArgs: [groupId],
+        );
+      }
+
+      if (!await _novelHasWork(transaction, novelId)) {
+        await transaction.delete(
+          'download_novels',
+          where: 'novel_id = ?',
+          whereArgs: [novelId],
+        );
+      }
     });
   }
 
@@ -678,6 +831,24 @@ class SqfliteDownloadStore implements DownloadStore {
   static String _newId(String prefix) {
     _idSequence += 1;
     return '${prefix}_${DateTime.now().microsecondsSinceEpoch}_$_idSequence';
+  }
+
+  static Future<void> _saveNovelMetadata(
+    DatabaseExecutor db,
+    DownloadNovelRequest novel,
+  ) async {
+    final metadata = {'title': novel.title, 'cover_url': novel.coverUrl};
+    final updatedRows = await db.update(
+      'download_novels',
+      metadata,
+      where: 'novel_id = ?',
+      whereArgs: [novel.novelId],
+    );
+    if (updatedRows > 0) return;
+    await db.insert('download_novels', {
+      'novel_id': novel.novelId,
+      ...metadata,
+    });
   }
 
   static Future<bool> _chapterKeyExists(

@@ -1,23 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:galaxy_novels_app/app/app_dependencies.dart';
+import 'package:galaxy_novels_app/app/app_theme.dart';
+import 'package:galaxy_novels_app/core/analytics/app_screen_names.dart';
 import 'package:galaxy_novels_app/core/config/app_config.dart';
 import 'package:galaxy_novels_app/data/models/novel_details_data.dart';
 import 'package:galaxy_novels_app/data/models/reader_content_data.dart';
 import 'package:galaxy_novels_app/data/models/reading_progress.dart';
 import 'package:galaxy_novels_app/data/repositories/fake_catalog_repository.dart';
-import 'package:galaxy_novels_app/data/repositories/fake_downloads_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/fake_home_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/fake_rankings_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/fake_search_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/novel_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/reader_repository.dart';
 import 'package:galaxy_novels_app/data/repositories/reading_history_repository.dart';
-import 'package:galaxy_novels_app/features/downloads/application/download_manager.dart';
 import 'package:galaxy_novels_app/features/account/domain/auth_session.dart';
 import 'package:galaxy_novels_app/features/comments/application/comments_repository.dart';
 import 'package:galaxy_novels_app/features/comments/domain/comments_page.dart';
 import 'package:galaxy_novels_app/features/comments/domain/public_comment.dart';
+import 'package:galaxy_novels_app/features/downloads/application/download_repository.dart';
+import 'package:galaxy_novels_app/features/downloads/domain/download_models.dart';
 import 'package:galaxy_novels_app/features/novel_engagement/domain/novel_user_state.dart';
 import 'package:galaxy_novels_app/features/novel_details/presentation/novel_details_screen.dart';
 import 'package:galaxy_novels_app/features/vip/domain/vip_chapter.dart';
@@ -30,6 +32,146 @@ import '../../helpers/fake_novel_engagement_repository.dart';
 import '../../helpers/fake_vip_repository.dart';
 
 void main() {
+  testWidgets('shows feedback when starting a chapter download fails', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(
+      _TestApp(
+        repository: _LongNovelRepository(),
+        downloadRepository: const _FailingDownloadRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _openChaptersTab(tester);
+
+    final downloadButton = find.byKey(
+      const ValueKey('chapter-download-public:1'),
+    );
+    await tester.scrollUntilVisible(
+      downloadButton,
+      300,
+      scrollable: _verticalScrollable(),
+    );
+    await tester.tap(downloadButton);
+    await tester.pump();
+
+    expect(find.text('تعذر بدء التنزيل الآن. حاول مرة أخرى.'), findsOneWidget);
+  });
+
+  testWidgets('single chapter feedback exposes download operations', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final downloads = _MutableDownloadRepository();
+    addTearDown(downloads.dispose);
+    await tester.pumpWidget(
+      _TestApp(
+        repository: _LongNovelRepository(),
+        downloadRepository: downloads,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _openChaptersTab(tester);
+
+    final action = find.byKey(const ValueKey('chapter-download-public:1'));
+    await tester.scrollUntilVisible(
+      action,
+      300,
+      scrollable: _verticalScrollable(),
+    );
+    await tester.tap(action);
+    await tester.pump();
+
+    expect(find.text('تمت إضافة الفصل إلى التنزيلات'), findsOneWidget);
+    expect(find.text('عرض العمليات'), findsOneWidget);
+  });
+
+  testWidgets('download Snackbar action survives closing the details route', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final downloads = _MutableDownloadRepository();
+    final observer = _RecordingNavigatorObserver();
+    addTearDown(downloads.dispose);
+    await tester.pumpWidget(
+      _TestApp(
+        repository: _LongNovelRepository(),
+        downloadRepository: downloads,
+        routed: true,
+        navigatorObserver: observer,
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey('open-novel-details')));
+    await tester.pumpAndSettle();
+    await _openChaptersTab(tester);
+    final action = find.byKey(const ValueKey('chapter-download-public:1'));
+    await tester.scrollUntilVisible(
+      action,
+      300,
+      scrollable: _verticalScrollable(),
+    );
+    await tester.tap(action);
+    await tester.pump();
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('عرض العمليات'));
+
+    expect(tester.takeException(), isNull);
+    expect(observer.pushedNames.last, AppScreenNames.downloads);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('account Snackbar action survives closing the details route', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final observer = _RecordingNavigatorObserver();
+    await tester.pumpWidget(
+      _TestApp(
+        repository: _LongNovelRepository(),
+        routed: true,
+        navigatorObserver: observer,
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey('open-novel-details')));
+    await tester.pumpAndSettle();
+    await tester.drag(_verticalScrollable(), const Offset(0, -500));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('novel-favorite-toggle')));
+    await tester.pump();
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('حسابي'));
+
+    expect(tester.takeException(), isNull);
+    expect(observer.pushedNames.last, AppScreenNames.account);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets('shows fifty chapters in details and opens paginated full list', (
     tester,
   ) async {
@@ -43,6 +185,7 @@ void main() {
     final repository = _LongNovelRepository();
     await tester.pumpWidget(_TestApp(repository: repository));
     await tester.pumpAndSettle();
+    await _openChaptersTab(tester);
 
     final showAllButton = find.byKey(const ValueKey('show-all-chapters'));
     await tester.scrollUntilVisible(
@@ -64,6 +207,14 @@ void main() {
     expect(find.byKey(const ValueKey('chapter-page-previous')), findsOneWidget);
     expect(find.byKey(const ValueKey('chapter-page-next')), findsOneWidget);
     expect(find.text('الفصل 51'), findsNothing);
+
+    final nextCenter = tester.getCenter(
+      find.byKey(const ValueKey('chapter-page-next')),
+    );
+    final previousCenter = tester.getCenter(
+      find.byKey(const ValueKey('chapter-page-previous')),
+    );
+    expect(nextCenter.dx, greaterThan(previousCenter.dx));
 
     await tester.scrollUntilVisible(
       find.text('الفصل 50'),
@@ -108,6 +259,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await _openChaptersTab(tester);
 
     final showAllButton = find.byKey(const ValueKey('show-all-chapters'));
     await tester.scrollUntilVisible(
@@ -147,6 +299,7 @@ void main() {
 
     await tester.pumpWidget(_TestApp(repository: _LongNovelRepository()));
     await tester.pumpAndSettle();
+    await _openChaptersTab(tester);
 
     final showAllButton = find.byKey(const ValueKey('show-all-chapters'));
     await tester.scrollUntilVisible(
@@ -167,6 +320,47 @@ void main() {
     expect(find.text('الفصل 275'), findsOneWidget);
     expect(find.text('الفصل 274'), findsNothing);
     expect(find.text('الفصل 1'), findsNothing);
+  });
+
+  testWidgets('filters and reverses chapters inside novel details', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(_TestApp(repository: _LongNovelRepository()));
+    await tester.pumpAndSettle();
+    await _openChaptersTab(tester);
+
+    final search = find.byKey(const ValueKey('novel-chapter-search-field'));
+    await tester.scrollUntilVisible(
+      search,
+      300,
+      scrollable: _verticalScrollable(),
+    );
+    await tester.enterText(search, '275');
+    await tester.pump();
+
+    expect(find.text('الفصل 275'), findsOneWidget);
+    expect(find.text('الفصل 274'), findsNothing);
+
+    await tester.enterText(search, '');
+    await tester.pump();
+    final orderToggle = find.byKey(
+      const ValueKey('novel-chapter-order-toggle'),
+    );
+    await _revealAboveBottomBar(tester, orderToggle);
+    await tester.tap(orderToggle);
+    await tester.pump();
+
+    expect(find.text('الفصل 300'), findsOneWidget);
+    expect(find.text('الفصل 1'), findsNothing);
+    expect(find.byIcon(Icons.download_outlined), findsNothing);
+    expect(find.byIcon(Icons.download_rounded), findsWidgets);
   });
 
   testWidgets('loads novel comments only when their tab is opened', (
@@ -233,6 +427,45 @@ void main() {
     expect(find.text('ابدأ القراءة'), findsOneWidget);
   });
 
+  testWidgets('read action updates when reading progress changes', (
+    tester,
+  ) async {
+    final historyRepository = _MutableReadingHistoryRepository();
+    addTearDown(historyRepository.dispose);
+    await tester.pumpWidget(
+      _TestApp(
+        repository: _LongNovelRepository(),
+        readingHistoryRepository: historyRepository,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final readAction = find.byKey(const ValueKey('novel-details-read-action'));
+    await tester.scrollUntilVisible(
+      readAction,
+      300,
+      scrollable: _verticalScrollable(),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('ابدأ القراءة'), findsOneWidget);
+
+    await historyRepository.record(
+      ReadingProgress(
+        novelId: 500,
+        novelTitle: 'رواية طويلة',
+        chapterId: 8,
+        chapterTitle: 'الفصل 8',
+        contentApi: '/chapters/8',
+        updatedAt: DateTime.utc(2026, 7, 20),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('متابعة الفصل 8'), findsOneWidget);
+    expect(find.text('ابدأ القراءة'), findsNothing);
+  });
+
   testWidgets('keeps VIP chapters inside the chapters section, not a tab', (
     tester,
   ) async {
@@ -284,7 +517,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('360'), findsOneWidget);
+    expect(find.text('360 فصل'), findsOneWidget);
+    await _openChaptersTab(tester);
 
     final showAllButton = find.byKey(const ValueKey('show-all-chapters'));
     await tester.scrollUntilVisible(
@@ -326,6 +560,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await _openChaptersTab(tester);
 
     await tester.scrollUntilVisible(
       find.text('الفصل 2'),
@@ -341,6 +576,206 @@ void main() {
       contains('/wp-json/wor-reader-app/v1/vip/chapters/2'),
     );
   });
+
+  testWidgets('details exposes bulk download and opens the planner', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(_TestApp(repository: _LongNovelRepository()));
+    await tester.pumpAndSettle();
+    await _openChaptersTab(tester);
+
+    final bulkDownload = find.byKey(
+      const ValueKey('novel-details-bulk-download'),
+    );
+    expect(bulkDownload, findsOneWidget);
+    await tester.scrollUntilVisible(
+      bulkDownload,
+      300,
+      scrollable: _verticalScrollable(),
+    );
+    await tester.tap(bulkDownload);
+    await tester.pumpAndSettle();
+
+    expect(find.text('اختر الفصول للتنزيل'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('download-planner-submit')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('bulk download accepts and enqueues an inclusive chapter range', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final downloads = _MutableDownloadRepository();
+    addTearDown(downloads.dispose);
+
+    await tester.pumpWidget(
+      _TestApp(
+        repository: _LongNovelRepository(),
+        downloadRepository: downloads,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _openChaptersTab(tester);
+    final bulkDownload = find.byKey(
+      const ValueKey('novel-details-bulk-download'),
+    );
+    await tester.scrollUntilVisible(
+      bulkDownload,
+      300,
+      scrollable: _verticalScrollable(),
+    );
+    await tester.tap(bulkDownload);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('download-planner-range')));
+    await tester.pump();
+    await tester.enterText(
+      find.byKey(const ValueKey('download-planner-range-start')),
+      '11',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('download-planner-range-end')),
+      '50',
+    );
+    await tester.pump();
+    expect(find.text('ابدأ تنزيل 40 فصلًا'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('download-planner-submit')));
+    await tester.pumpAndSettle();
+
+    expect(downloads.enqueuedChapterKeys, hasLength(40));
+    expect(downloads.enqueuedChapterKeys.first, 'public:11');
+    expect(downloads.enqueuedChapterKeys.last, 'public:50');
+  });
+
+  testWidgets(
+    'advanced selection returns chosen chapters to the planner before enqueue',
+    (tester) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      final downloads = _MutableDownloadRepository();
+      addTearDown(downloads.dispose);
+
+      await tester.pumpWidget(
+        _TestApp(
+          repository: _LongNovelRepository(),
+          downloadRepository: downloads,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _openChaptersTab(tester);
+
+      final bulkDownload = find.byKey(
+        const ValueKey('novel-details-bulk-download'),
+      );
+      await tester.scrollUntilVisible(
+        bulkDownload,
+        300,
+        scrollable: _verticalScrollable(),
+      );
+      await tester.tap(bulkDownload);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('download-planner-manual')));
+      await tester.pumpAndSettle();
+      expect(find.text('اختر الفصول'), findsOneWidget);
+
+      await tester.tap(find.text('الفصل 3'));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('chapters-use-selection')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('اختر الفصول للتنزيل'), findsOneWidget);
+      expect(find.text('ابدأ تنزيل فصل واحد'), findsOneWidget);
+      expect(downloads.enqueuedChapterKeys, isEmpty);
+
+      await tester.tap(find.byKey(const ValueKey('download-planner-submit')));
+      await tester.pumpAndSettle();
+      expect(downloads.enqueuedChapterKeys, ['public:3']);
+    },
+  );
+
+  testWidgets(
+    'chapter action follows repository updates and retries failures',
+    (tester) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      final downloads = _MutableDownloadRepository();
+      addTearDown(downloads.dispose);
+
+      await tester.pumpWidget(
+        _TestApp(
+          repository: _LongNovelRepository(),
+          downloadRepository: downloads,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _openChaptersTab(tester);
+      final action = find.byKey(const ValueKey('chapter-download-public:1'));
+      await tester.scrollUntilVisible(
+        action,
+        300,
+        scrollable: _verticalScrollable(),
+      );
+
+      downloads.publish(
+        _downloadDashboard(jobStatus: DownloadJobStatus.queued),
+      );
+      await tester.pump();
+      expect(
+        find.descendant(
+          of: action,
+          matching: find.byIcon(Icons.schedule_rounded),
+        ),
+        findsOneWidget,
+      );
+
+      downloads.publish(_downloadDashboard(downloaded: true));
+      await tester.pump();
+      expect(
+        find.descendant(
+          of: action,
+          matching: find.byIcon(Icons.download_done_rounded),
+        ),
+        findsOneWidget,
+      );
+
+      downloads.publish(
+        _downloadDashboard(jobStatus: DownloadJobStatus.failed),
+      );
+      await tester.pump();
+      expect(
+        find.descendant(
+          of: action,
+          matching: find.byIcon(Icons.refresh_rounded),
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(action);
+      expect(downloads.retriedJobIds, ['job-1']);
+    },
+  );
 }
 
 Finder _verticalScrollable() {
@@ -348,6 +783,13 @@ Finder _verticalScrollable() {
     (widget) =>
         widget is Scrollable && widget.axisDirection == AxisDirection.down,
   );
+}
+
+Future<void> _openChaptersTab(WidgetTester tester) async {
+  final chaptersTab = find.byKey(const ValueKey('novel-section-chapters'));
+  await _revealAboveBottomBar(tester, chaptersTab);
+  await tester.tap(chaptersTab);
+  await tester.pumpAndSettle();
 }
 
 Future<void> _revealAboveBottomBar(WidgetTester tester, Finder finder) async {
@@ -372,6 +814,10 @@ class _TestApp extends StatelessWidget {
     this.engagementRepository,
     this.vipRepository,
     this.readerRepository,
+    this.downloadRepository,
+    this.readingHistoryRepository,
+    this.routed = false,
+    this.navigatorObserver,
   });
 
   final NovelRepository repository;
@@ -380,10 +826,13 @@ class _TestApp extends StatelessWidget {
   final FakeNovelEngagementRepository? engagementRepository;
   final FakeVipRepository? vipRepository;
   final ReaderRepository? readerRepository;
+  final DownloadRepository? downloadRepository;
+  final ReadingHistoryRepository? readingHistoryRepository;
+  final bool routed;
+  final NavigatorObserver? navigatorObserver;
 
   @override
   Widget build(BuildContext context) {
-    final downloadsRepository = FakeDownloadsRepository();
     return AppDependencies(
       config: const AppConfig(),
       homeRepository: const FakeHomeRepository(),
@@ -392,9 +841,8 @@ class _TestApp extends StatelessWidget {
       readerRepository: readerRepository ?? const _TestReaderRepository(),
       rankingsRepository: const FakeRankingsRepository(),
       searchRepository: const FakeSearchRepository(),
-      readingHistoryRepository: const _TestReadingHistoryRepository(),
-      downloadsRepository: downloadsRepository,
-      downloadManager: DownloadManager(repository: downloadsRepository),
+      readingHistoryRepository:
+          readingHistoryRepository ?? const _TestReadingHistoryRepository(),
       readerPreferencesRepository: FakeReaderPreferencesRepository(),
       authRepository: authRepository ?? FakeAuthRepository(),
       commentsRepository: commentsRepository ?? FakeCommentsRepository.empty(),
@@ -402,15 +850,195 @@ class _TestApp extends StatelessWidget {
       novelEngagementRepository:
           engagementRepository ?? FakeNovelEngagementRepository(),
       vipRepository: vipRepository ?? const FakeVipRepository(),
-      child: const MaterialApp(
-        locale: Locale('ar'),
-        home: Directionality(
-          textDirection: TextDirection.rtl,
-          child: NovelDetailsScreen(manifestPath: '/novel-long.json'),
-        ),
+      downloadRepository: downloadRepository ?? const NoopDownloadRepository(),
+      child: MaterialApp(
+        locale: const Locale('ar'),
+        theme: AppTheme.light(),
+        navigatorObservers: [?navigatorObserver],
+        home: routed
+            ? Builder(
+                builder: (context) => Scaffold(
+                  body: Center(
+                    child: FilledButton(
+                      key: const ValueKey('open-novel-details'),
+                      onPressed: () => Navigator.of(context).push<void>(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const Directionality(
+                            textDirection: TextDirection.rtl,
+                            child: NovelDetailsScreen(
+                              manifestPath: '/novel-long.json',
+                            ),
+                          ),
+                        ),
+                      ),
+                      child: const Text('فتح التفاصيل'),
+                    ),
+                  ),
+                ),
+              )
+            : const Directionality(
+                textDirection: TextDirection.rtl,
+                child: NovelDetailsScreen(manifestPath: '/novel-long.json'),
+              ),
       ),
     );
   }
+}
+
+class _RecordingNavigatorObserver extends NavigatorObserver {
+  final List<String?> pushedNames = [];
+
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    pushedNames.add(route.settings.name);
+  }
+}
+
+class _FailingDownloadRepository extends NoopDownloadRepository {
+  const _FailingDownloadRepository();
+
+  @override
+  Future<DownloadEnqueueResult> enqueue({
+    required DownloadNovelRequest novel,
+    required List<DownloadChapterRequest> chapters,
+  }) {
+    throw const DownloadUnavailableException();
+  }
+}
+
+class _MutableDownloadRepository extends ChangeNotifier
+    implements DownloadRepository {
+  DownloadsDashboard _dashboard = NoopDownloadRepository.emptyDashboard;
+  final List<String> retriedJobIds = [];
+  List<String> enqueuedChapterKeys = const [];
+
+  @override
+  DownloadsDashboard get value => _dashboard;
+
+  void publish(DownloadsDashboard dashboard) {
+    _dashboard = dashboard;
+    notifyListeners();
+  }
+
+  @override
+  Future<DownloadEnqueueResult> enqueue({
+    required DownloadNovelRequest novel,
+    required List<DownloadChapterRequest> chapters,
+  }) async {
+    enqueuedChapterKeys = chapters
+        .map((chapter) => chapter.chapterKey)
+        .toList(growable: false);
+    return DownloadEnqueueResult(
+      groupId: 'group-enqueued',
+      acceptedChapterKeys: chapters
+          .map((chapter) => chapter.chapterKey)
+          .toList(growable: false),
+      skippedChapterKeys: const [],
+    );
+  }
+
+  @override
+  Future<void> retryJob(String jobId) async => retriedJobIds.add(jobId);
+
+  @override
+  Future<void> cancelGroup(String groupId) async {}
+
+  @override
+  Future<void> deleteChapters(Set<String> chapterKeys) async {}
+
+  @override
+  Future<void> grantReward({required String rewardEventId}) async {}
+
+  @override
+  Future<void> initialize() async {}
+
+  @override
+  Future<ReaderChapterContent> loadOffline(String offlineUri) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> pauseGroup(String groupId) async {}
+
+  @override
+  Future<void> refreshMembership(AuthSessionState state) async {}
+
+  @override
+  Future<void> resumeGroup(String groupId) async {}
+
+  @override
+  Future<void> setWifiOnly(bool enabled) async {}
+}
+
+DownloadsDashboard _downloadDashboard({
+  bool downloaded = false,
+  DownloadJobStatus? jobStatus,
+}) {
+  return DownloadsDashboard(
+    allowance: NoopDownloadRepository.emptyDashboard.allowance,
+    groups: jobStatus == null
+        ? const []
+        : [
+            DownloadGroup(
+              groupId: 'group-1',
+              novelId: 500,
+              status: DownloadGroupStatus.running,
+              stopReason: null,
+              createdAtUtcMs: 1,
+              updatedAtUtcMs: 2,
+              jobs: [
+                DownloadJob(
+                  jobId: 'job-1',
+                  groupId: 'group-1',
+                  chapterKey: 'public:1',
+                  chapterId: 1,
+                  label: 'الفصل 1',
+                  contentApi: '/chapters/1',
+                  isVip: false,
+                  status: jobStatus,
+                  sortIndex: 0,
+                  reservedDayOrdinal: null,
+                  transferTaskId: null,
+                  tempPath: null,
+                  attempts: 0,
+                  lastError: jobStatus == DownloadJobStatus.failed
+                      ? DownloadFailure.network
+                      : null,
+                ),
+              ],
+            ),
+          ],
+    novels: downloaded
+        ? const [
+            DownloadedNovel(
+              novelId: 500,
+              title: 'رواية طويلة',
+              coverUrl: '',
+              coverPath: '',
+              totalBytes: 120,
+              chapters: [
+                DownloadedChapter(
+                  chapterKey: 'public:1',
+                  novelId: 500,
+                  chapterId: 1,
+                  label: 'الفصل 1',
+                  contentApi: '/chapters/1',
+                  isVip: false,
+                  filePath: '/downloads/1.gnchapter',
+                  byteSize: 120,
+                  downloadedAtUtcMs: 3,
+                  vipVerifiedAtUtcMs: null,
+                  vipExpiresAtUtcMs: null,
+                ),
+              ],
+            ),
+          ]
+        : const [],
+    wifiOnly: false,
+    totalBytes: downloaded ? 120 : 0,
+    quotaBlockGeneration: 0,
+    isInitializing: false,
+  );
 }
 
 PublicComment _comment(String content) {
@@ -589,4 +1217,22 @@ class _TestReadingHistoryRepository implements ReadingHistoryRepository {
 
   @override
   void removeListener(VoidCallback listener) {}
+}
+
+class _MutableReadingHistoryRepository extends ChangeNotifier
+    implements ReadingHistoryRepository {
+  List<ReadingProgress> _items = const [];
+
+  @override
+  Future<List<ReadingProgress>> load() async => _items;
+
+  @override
+  Future<void> record(ReadingProgress progress) async {
+    _items = [
+      progress,
+      for (final item in _items)
+        if (item.novelId != progress.novelId) item,
+    ];
+    notifyListeners();
+  }
 }

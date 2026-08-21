@@ -30,10 +30,10 @@ void main() {
     );
   });
 
-  test('uses the documented Android user agent by default', () {
+  test('uses a platform-neutral user agent by default', () {
     const config = AppConfig();
 
-    expect(config.userAgent, 'WorReaderApp/1.0 Android');
+    expect(config.userAgent, 'WorReaderApp/1.0');
   });
 
   test('uses Galaxy Novels as the default site base url', () {

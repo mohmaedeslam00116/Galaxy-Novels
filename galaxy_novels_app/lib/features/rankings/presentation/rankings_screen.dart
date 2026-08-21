@@ -1,9 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../app/app_dependencies.dart';
 import '../../../data/models/rankings_data.dart';
-import '../../novel_details/presentation/novel_details_screen.dart';
+import '../../../shared/widgets/app_async_state.dart';
+import '../../../shared/widgets/app_empty_state.dart';
+import '../../novel_details/presentation/novel_details_navigation.dart';
 import 'widgets/rankings_content.dart';
+import 'widgets/rankings_loading_state.dart';
 
 class RankingsScreen extends StatefulWidget {
   const RankingsScreen({super.key});
@@ -27,21 +32,22 @@ class _RankingsScreenState extends State<RankingsScreen> {
       future: _future,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return const _RankingsMessage(title: 'جار تحميل الترتيب...');
+          return const RankingsLoadingState();
         }
 
         if (snapshot.hasError || !snapshot.hasData) {
-          return _RankingsMessage(
+          return AppAsyncState.error(
             title: 'تعذر تحميل الترتيب الآن',
-            actionLabel: 'إعادة المحاولة',
-            onAction: _retry,
+            message: 'تحقق من الاتصال ثم حاول مجددًا.',
+            onRetry: _retry,
           );
         }
 
         final rankings = snapshot.data!;
         if (rankings.items.isEmpty) {
-          return const _RankingsMessage(
+          return const AppEmptyState(
             title: 'لا توجد روايات في الترتيب الآن',
+            message: 'ستظهر الروايات هنا عند توفر الترتيب.',
           );
         }
 
@@ -60,41 +66,6 @@ class _RankingsScreenState extends State<RankingsScreen> {
   }
 
   void _openNovelDetails(String manifestPath) {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (context) => NovelDetailsScreen(manifestPath: manifestPath),
-      ),
-    );
-  }
-}
-
-class _RankingsMessage extends StatelessWidget {
-  const _RankingsMessage({
-    required this.title,
-    this.actionLabel,
-    this.onAction,
-  });
-
-  final String title;
-  final String? actionLabel;
-  final VoidCallback? onAction;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(title, textAlign: TextAlign.center),
-            if (actionLabel != null) ...[
-              const SizedBox(height: 12),
-              OutlinedButton(onPressed: onAction, child: Text(actionLabel!)),
-            ],
-          ],
-        ),
-      ),
-    );
+    unawaited(NovelDetailsNavigation.open(context, manifestPath: manifestPath));
   }
 }

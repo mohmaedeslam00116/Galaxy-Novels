@@ -1,605 +1,975 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
-import '../../../app/app_dependencies.dart';
-import '../../../data/repositories/downloads_repository.dart';
-import '../../../shared/widgets/novel_cover.dart';
-import '../../ads/application/rewarded_ad_repository.dart';
-import '../../rewards/application/reader_rewards_repository.dart';
-import '../application/download_manager.dart';
-import '../domain/downloaded_novel_group.dart';
+import '../../../core/analytics/app_screen_names.dart';
+import '../../../data/repositories/reading_history_repository.dart';
+import '../../../design_system/galaxy_design_system.dart';
+import '../../ads/application/rewarded_download_ad_repository.dart';
+import '../../ads/application/reward_grant_verifier.dart';
+import '../application/download_repository.dart';
+import '../application/download_analytics.dart';
+import '../domain/download_models.dart';
+import 'download_artwork.dart';
+import 'download_quota_sheet.dart';
 import 'downloaded_novel_screen.dart';
+import 'downloads_help_sheet.dart';
 
-class DownloadsScreen extends StatefulWidget {
-  const DownloadsScreen({this.onOpenLibrary, super.key});
+class DownloadsScreen extends StatelessWidget {
+  const DownloadsScreen({
+    required this.repository,
+    required this.rewardedAds,
+    this.readingHistoryRepository,
+    this.onOpenLibrary,
+    this.rewardVerifier = const LocalRewardGrantVerifier(),
+    this.downloadAnalytics = const NoopDownloadAnalytics(),
+    super.key,
+  });
 
+  final DownloadRepository repository;
+  final RewardedDownloadAdRepository rewardedAds;
+  final ReadingHistoryRepository? readingHistoryRepository;
   final VoidCallback? onOpenLibrary;
-
-  @override
-  State<DownloadsScreen> createState() => _DownloadsScreenState();
-}
-
-class _DownloadsScreenState extends State<DownloadsScreen> {
-  DownloadsRepository? _repository;
-  ReaderRewardsRepository? _rewardsRepository;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-
-    final dependencies = AppDependencies.of(context);
-    final repository = dependencies.downloadsRepository;
-
-    if (_repository != repository) {
-      _repository = repository;
-      unawaited(repository.load());
-    }
-
-    final rewardsRepository = dependencies.readerRewardsRepository;
-    if (_rewardsRepository != rewardsRepository) {
-      _rewardsRepository = rewardsRepository;
-      unawaited(rewardsRepository.load());
-    }
-  }
+  final RewardGrantVerifier rewardVerifier;
+  final DownloadAnalytics downloadAnalytics;
 
   @override
   Widget build(BuildContext context) {
-    final dependencies = AppDependencies.of(context);
-    final repository = _repository ?? dependencies.downloadsRepository;
-    final downloadManager = dependencies.downloadManager;
+    return Scaffold(
+      key: const ValueKey('downloads-screen'),
+      appBar: AppBar(title: const Text('التنزيلات')),
+      body: DownloadsView(
+        repository: repository,
+        rewardedAds: rewardedAds,
+        readingHistoryRepository: readingHistoryRepository,
+        onOpenLibrary: onOpenLibrary,
+        rewardVerifier: rewardVerifier,
+        downloadAnalytics: downloadAnalytics,
+      ),
+    );
+  }
+}
 
+class DownloadsView extends StatefulWidget {
+  const DownloadsView({
+    required this.repository,
+    required this.rewardedAds,
+    this.readingHistoryRepository,
+    this.onOpenLibrary,
+    this.rewardVerifier = const LocalRewardGrantVerifier(),
+    this.downloadAnalytics = const NoopDownloadAnalytics(),
+    super.key,
+  });
+
+  final DownloadRepository repository;
+  final RewardedDownloadAdRepository rewardedAds;
+  final ReadingHistoryRepository? readingHistoryRepository;
+  final VoidCallback? onOpenLibrary;
+  final RewardGrantVerifier rewardVerifier;
+  final DownloadAnalytics downloadAnalytics;
+
+  @override
+  State<DownloadsView> createState() => _DownloadsViewState();
+}
+
+class _DownloadsViewState extends State<DownloadsView>
+    with AutomaticKeepAliveClientMixin {
+  bool _showingAd = false;
+  bool _rewardSheetOpen = false;
+
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
     return SafeArea(
       top: false,
-      child: ValueListenableBuilder<DownloadManagerState>(
-        valueListenable: downloadManager.state,
-        builder: (context, jobState, _) {
-          return ValueListenableBuilder<DownloadsState>(
-            valueListenable: repository.state,
-            builder: (context, downloadsState, _) {
-              final groups = groupDownloadedChapters(downloadsState.chapters);
-              final totalBytes = groups.fold(
-                0,
-                (total, group) => total + group.totalBytes,
-              );
-
-              return Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 760),
-                  child: CustomScrollView(
-                    slivers: [
-                      SliverPadding(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                        sliver: SliverList.list(
-                          children: [
-                            const _DownloadsHeroHeader(),
-                            const SizedBox(height: 12),
-                            _DownloadsCountBanner(
-                              state: downloadsState,
-                              totalBytes: totalBytes,
-                            ),
-                            const SizedBox(height: 10),
-                            _DownloadPointsBanner(
-                              rewardsRepository:
-                                  dependencies.readerRewardsRepository,
-                              rewardedAdRepository:
-                                  dependencies.rewardedAdRepository,
-                            ),
-                            if (_showJobBanner(jobState)) ...[
-                              const SizedBox(height: 10),
-                              _DownloadJobBanner(
-                                state: jobState,
-                                onTap: downloadManager.showOverlay,
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      if (groups.isEmpty)
-                        SliverFillRemaining(
-                          hasScrollBody: false,
-                          child: _DownloadsEmptyState(
-                            onOpenLibrary: widget.onOpenLibrary,
-                          ),
-                        )
-                      else
-                        SliverPadding(
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                          sliver: SliverList.builder(
-                            itemCount: groups.length,
-                            itemBuilder: (context, index) {
-                              final group = groups[index];
-                              return Column(
-                                children: [
-                                  _DownloadedNovelRow(
-                                    group: group,
-                                    onTap: () => _openNovel(group.novelId),
-                                  ),
-                                  if (index < groups.length - 1)
-                                    const Divider(height: 1),
-                                ],
-                              );
-                            },
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              );
-            },
+      child: ValueListenableBuilder<DownloadsDashboard>(
+        valueListenable: widget.repository,
+        builder: (context, dashboard, child) {
+          if (dashboard.isInitializing) {
+            return const _DownloadsSkeleton();
+          }
+          return _DownloadsDashboardView(
+            dashboard: dashboard,
+            showingAd: _showingAd,
+            onReward: () => _showReward(dashboard),
+            onOpenOptions: () => _showOptions(dashboard),
+            onOpenQueue: _showQueue,
+            onOpenNovel: _openDownloadedNovel,
+            onOpenLibrary: widget.onOpenLibrary,
           );
         },
       ),
     );
   }
 
-  void _openNovel(int novelId) {
+  void _openDownloadedNovel(DownloadedNovel novel) {
     Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (context) => DownloadedNovelScreen(novelId: novelId),
+      galaxyPageRoute<void>(
+        context: context,
+        settings: const RouteSettings(name: AppScreenNames.downloadedNovel),
+        builder: (context) => DownloadedNovelScreen(
+          repository: widget.repository,
+          novelId: novel.novelId,
+          readingHistoryRepository: widget.readingHistoryRepository,
+        ),
       ),
+    );
+  }
+
+  Future<void> _showOptions(DownloadsDashboard dashboard) async {
+    var wifiOnly = dashboard.wifiOnly;
+    var saving = false;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          Future<void> updateWifi(bool value) async {
+            if (saving) return;
+            final previous = wifiOnly;
+            setSheetState(() {
+              wifiOnly = value;
+              saving = true;
+            });
+            try {
+              await widget.repository.setWifiOnly(value);
+            } catch (_) {
+              if (!sheetContext.mounted) return;
+              setSheetState(() => wifiOnly = previous);
+              _showMessage('تعذر حفظ إعداد Wi‑Fi. أُعيد الخيار السابق.');
+            } finally {
+              if (sheetContext.mounted) {
+                setSheetState(() => saving = false);
+              }
+            }
+          }
+
+          return GalaxyBottomSheet(
+            title: 'خيارات التنزيل',
+            content: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height * 0.62,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    GalaxySurface(
+                      variant: GalaxySurfaceVariant.base,
+                      child: SwitchListTile(
+                        key: const ValueKey('downloads-wifi-only'),
+                        title: const Text('التنزيل عبر Wi‑Fi فقط'),
+                        subtitle: Text(
+                          saving ? 'جارٍ الحفظ…' : 'يحمي بيانات الهاتف المحمول',
+                        ),
+                        value: wifiOnly,
+                        onChanged: saving ? null : updateWifi,
+                      ),
+                    ),
+                    const SizedBox(height: GalaxyMetrics.space12),
+                    GalaxyButton(
+                      key: const ValueKey('downloads-help'),
+                      label: 'كيف تعمل التنزيلات؟',
+                      icon: Icons.help_outline_rounded,
+                      variant: GalaxyActionVariant.secondary,
+                      onPressed: () {
+                        Navigator.of(sheetContext).pop();
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (mounted) showDownloadsHelpSheet(context);
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _showQueue() async {
+    final groups = _activeGroups(widget.repository.value.groups);
+    if (groups.isEmpty) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _DownloadQueueSheet(
+        repository: widget.repository,
+        onPause: _pauseGroup,
+        onResume: _resumeGroup,
+        onCancel: _confirmCancelGroup,
+        onRetry: _retryJob,
+      ),
+    );
+  }
+
+  Future<void> _showReward(DownloadsDashboard dashboard) async {
+    if (_rewardSheetOpen) return;
+    _rewardSheetOpen = true;
+    unawaited(
+      widget.downloadAnalytics.record(
+        DownloadAnalyticsEvent.reward(
+          stage: 'prompt_shown',
+          rewardAmount: dashboard.allowance.plan.rewardPerAd,
+          adsRemaining: dashboard.allowance.adsRemaining,
+          membershipTier: downloadMembershipLabel(dashboard.allowance.plan),
+        ),
+      ),
+    );
+    try {
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        backgroundColor: Colors.transparent,
+        builder: (sheetContext) => ValueListenableBuilder(
+          valueListenable: widget.rewardedAds,
+          builder: (context, availability, _) => DownloadQuotaSheet(
+            dashboard: dashboard,
+            showingAd: _showingAd,
+            adAvailability: availability,
+            onWatch: () => _watchRewardedAd(sheetContext),
+          ),
+        ),
+      );
+    } finally {
+      _rewardSheetOpen = false;
+    }
+  }
+
+  Future<void> _watchRewardedAd(BuildContext sheetContext) async {
+    final allowance = widget.repository.value.allowance;
+    Navigator.of(sheetContext).pop();
+    if (!mounted) return;
+    setState(() => _showingAd = true);
+    try {
+      unawaited(
+        widget.downloadAnalytics.record(
+          DownloadAnalyticsEvent.reward(
+            stage: 'started',
+            rewardAmount: allowance.plan.rewardPerAd,
+            adsRemaining: allowance.adsRemaining,
+            membershipTier: downloadMembershipLabel(allowance.plan),
+          ),
+        ),
+      );
+      final reward = await widget.rewardedAds.show();
+      if (reward.status == RewardedDownloadAdStatus.earned &&
+          reward.rewardEventId != null) {
+        unawaited(
+          widget.downloadAnalytics.record(
+            DownloadAnalyticsEvent.reward(
+              stage: 'completed',
+              rewardAmount: allowance.plan.rewardPerAd,
+              adsRemaining: allowance.adsRemaining,
+              membershipTier: downloadMembershipLabel(allowance.plan),
+            ),
+          ),
+        );
+        final verified = await widget.rewardVerifier.verify(
+          RewardGrantClaim(
+            rewardEventId: reward.rewardEventId!,
+            rewardType: downloadChaptersRewardType,
+          ),
+        );
+        if (verified) {
+          await widget.repository.grantReward(
+            rewardEventId: reward.rewardEventId!,
+          );
+          unawaited(
+            widget.downloadAnalytics.record(
+              DownloadAnalyticsEvent.reward(
+                stage: 'granted',
+                rewardAmount: allowance.plan.rewardPerAd,
+                adsRemaining: widget.repository.value.allowance.adsRemaining,
+                membershipTier: downloadMembershipLabel(allowance.plan),
+              ),
+            ),
+          );
+          unawaited(
+            widget.downloadAnalytics.record(
+              DownloadAnalyticsEvent.reward(
+                stage: 'queue_resumed',
+                rewardAmount: allowance.plan.rewardPerAd,
+                adsRemaining: widget.repository.value.allowance.adsRemaining,
+                membershipTier: downloadMembershipLabel(allowance.plan),
+              ),
+            ),
+          );
+        } else if (mounted) {
+          _showAdOutcome(RewardedDownloadAdStatus.unavailable);
+        }
+      } else if (mounted) {
+        _showAdOutcome(reward.status);
+      }
+    } on PlatformException {
+      if (mounted) _showAdOutcome(RewardedDownloadAdStatus.unavailable);
+    } catch (_) {
+      if (mounted) {
+        _showMessage('تعذر إضافة رصيد التنزيل الآن، حاول مرة أخرى.');
+      }
+    } finally {
+      if (mounted) setState(() => _showingAd = false);
+    }
+  }
+
+  void _showAdOutcome(RewardedDownloadAdStatus status) {
+    _showMessage(
+      status == RewardedDownloadAdStatus.dismissed
+          ? 'أكمل مشاهدة الإعلان للحصول على الفصول الإضافية'
+          : 'الإعلان غير متاح الآن، حاول بعد قليل',
+    );
+  }
+
+  Future<void> _pauseGroup(String groupId) => _runGroupAction(
+    groupId,
+    widget.repository.pauseGroup,
+    'تعذر إيقاف التنزيل مؤقتًا.',
+  );
+
+  Future<void> _resumeGroup(String groupId) => _runGroupAction(
+    groupId,
+    widget.repository.resumeGroup,
+    'تعذر استئناف التنزيل.',
+  );
+
+  Future<void> _confirmCancelGroup(String groupId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => GalaxyDialog(
+        title: 'إلغاء مجموعة التنزيل؟',
+        content: const Text(
+          'ستتوقف الفصول غير المكتملة. الفصول التي اكتمل تنزيلها ستبقى محفوظة.',
+        ),
+        actions: [
+          GalaxyButton(
+            label: 'الاحتفاظ',
+            variant: GalaxyActionVariant.ghost,
+            onPressed: () => Navigator.of(context).pop(false),
+          ),
+          GalaxyButton(
+            key: const ValueKey('confirm-cancel-download-group'),
+            label: 'إلغاء المجموعة',
+            variant: GalaxyActionVariant.danger,
+            onPressed: () => Navigator.of(context).pop(true),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await _runGroupAction(
+        groupId,
+        widget.repository.cancelGroup,
+        'تعذر إلغاء التنزيل.',
+      );
+    }
+  }
+
+  Future<void> _retryJob(String jobId) async {
+    try {
+      await widget.repository.retryJob(jobId);
+    } catch (_) {
+      if (mounted) _showMessage('تعذرت إعادة محاولة الفصل الآن.');
+    }
+  }
+
+  Future<void> _runGroupAction(
+    String groupId,
+    Future<void> Function(String) action,
+    String failureMessage,
+  ) async {
+    try {
+      await action(groupId);
+    } catch (_) {
+      if (mounted) _showMessage(failureMessage);
+    }
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+}
+
+class _DownloadsDashboardView extends StatelessWidget {
+  const _DownloadsDashboardView({
+    required this.dashboard,
+    required this.showingAd,
+    required this.onReward,
+    required this.onOpenOptions,
+    required this.onOpenQueue,
+    required this.onOpenNovel,
+    required this.onOpenLibrary,
+  });
+
+  final DownloadsDashboard dashboard;
+  final bool showingAd;
+  final VoidCallback onReward;
+  final VoidCallback onOpenOptions;
+  final VoidCallback onOpenQueue;
+  final ValueChanged<DownloadedNovel> onOpenNovel;
+  final VoidCallback? onOpenLibrary;
+
+  @override
+  Widget build(BuildContext context) {
+    final metrics = GalaxyAdaptiveMetrics.forWidth(
+      MediaQuery.sizeOf(context).width,
+    );
+    final activeGroups = _activeGroups(dashboard.groups);
+    return CustomScrollView(
+      key: const PageStorageKey('downloads-dashboard-scroll'),
+      slivers: [
+        SliverPadding(
+          padding: EdgeInsets.fromLTRB(
+            metrics.horizontalPadding,
+            GalaxyMetrics.space16,
+            metrics.horizontalPadding,
+            0,
+          ),
+          sliver: SliverToBoxAdapter(
+            child: _DownloadAllowanceSummary(
+              dashboard: dashboard,
+              showingAd: showingAd,
+              onReward: onReward,
+              onOpenOptions: onOpenOptions,
+            ),
+          ),
+        ),
+        if (activeGroups.isNotEmpty)
+          SliverPadding(
+            padding: EdgeInsets.fromLTRB(
+              metrics.horizontalPadding,
+              GalaxyMetrics.space12,
+              metrics.horizontalPadding,
+              0,
+            ),
+            sliver: SliverToBoxAdapter(
+              child: _DownloadQueueSummary(
+                groups: activeGroups,
+                onTap: onOpenQueue,
+              ),
+            ),
+          ),
+        SliverPadding(
+          padding: EdgeInsets.fromLTRB(
+            metrics.horizontalPadding,
+            metrics.sectionSpacing,
+            metrics.horizontalPadding,
+            GalaxyMetrics.space12,
+          ),
+          sliver: SliverToBoxAdapter(
+            child: GalaxySectionHeader(
+              title: 'الروايات المحمّلة',
+              subtitle: dashboard.novels.isEmpty
+                  ? 'اقرأ فصولك المفضلة دون اتصال.'
+                  : '${dashboard.novels.length} رواية · ${_formatBytes(dashboard.totalBytes)}',
+              icon: Icons.offline_pin_outlined,
+            ),
+          ),
+        ),
+        if (dashboard.novels.isEmpty)
+          SliverPadding(
+            padding: EdgeInsets.symmetric(
+              horizontal: metrics.horizontalPadding,
+            ),
+            sliver: SliverToBoxAdapter(
+              child: GalaxyAsyncState.empty(
+                title: 'لا توجد روايات محمّلة',
+                message:
+                    'ابدأ من قائمة فصول أي رواية واختر الفصول التي تريدها.',
+                actionLabel: onOpenLibrary == null ? null : 'فتح المكتبة',
+                onAction: onOpenLibrary,
+              ),
+            ),
+          )
+        else
+          SliverPadding(
+            padding: EdgeInsets.fromLTRB(
+              metrics.horizontalPadding,
+              0,
+              metrics.horizontalPadding,
+              GalaxyMetrics.space24,
+            ),
+            sliver: SliverToBoxAdapter(
+              child: GalaxyEditorialList(
+                children: [
+                  for (final novel in dashboard.novels)
+                    _DownloadedNovelEditorialRow(
+                      novel: novel,
+                      onTap: () => onOpenNovel(novel),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        const SliverToBoxAdapter(
+          child: SizedBox(height: GalaxyMetrics.space24),
+        ),
+      ],
     );
   }
 }
 
-bool _showJobBanner(DownloadManagerState state) {
-  return state.progress != null &&
-      (state.isActive || state.status == DownloadJobStatus.failed);
-}
+class _DownloadAllowanceSummary extends StatelessWidget {
+  const _DownloadAllowanceSummary({
+    required this.dashboard,
+    required this.showingAd,
+    required this.onReward,
+    required this.onOpenOptions,
+  });
 
-class _DownloadsHeroHeader extends StatelessWidget {
-  const _DownloadsHeroHeader();
+  final DownloadsDashboard dashboard;
+  final bool showingAd;
+  final VoidCallback onReward;
+  final VoidCallback onOpenOptions;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(2, 8, 2, 2),
-      child: Row(
+    final allowance = dashboard.allowance;
+    final tokens = GalaxyDesignTokens.of(context);
+    final progress = allowance.plan.baseChapters == 0
+        ? 0.0
+        : (allowance.remaining / allowance.plan.baseChapters).clamp(0.0, 1.0);
+    return GalaxySurface(
+      key: const ValueKey('downloads-allowance'),
+      variant: GalaxySurfaceVariant.tonal,
+      padding: const EdgeInsets.all(GalaxyMetrics.space16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          DecoratedBox(
-            decoration: BoxDecoration(
-              color: colors.primaryContainer,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: colors.outlineVariant),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(10),
-              child: Icon(
-                Icons.download_for_offline_rounded,
-                color: colors.onPrimaryContainer,
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'متبقي اليوم ${allowance.remaining} فصل',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: GalaxyMetrics.space4),
+                    Text(
+                      '${allowance.adsRemaining} إعلان متاح · ${_formatBytes(dashboard.totalBytes)} مستخدمة',
+                      key: const ValueKey('download-storage-usage'),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: tokens.contentSecondary,
+                      ),
+                    ),
+                  ],
+                ),
               ),
+              const SizedBox(width: GalaxyMetrics.space8),
+              GalaxyIconAction(
+                key: const ValueKey('downloads-options'),
+                icon: Icons.tune_rounded,
+                tooltip: 'خيارات التنزيل',
+                onPressed: onOpenOptions,
+              ),
+            ],
+          ),
+          const SizedBox(height: GalaxyMetrics.space12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(GalaxyMetrics.radiusSmall),
+            child: LinearProgressIndicator(
+              key: const ValueKey('downloads-allowance-progress'),
+              value: progress,
+              minHeight: 7,
+              backgroundColor: tokens.surfaceRaised,
+              color: tokens.brand,
             ),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'مركز التنزيلات',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'تابع الرصيد والتحميلات والقراءة دون اتصال من مكان واحد.',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: colors.onSurfaceVariant,
-                    fontWeight: FontWeight.w700,
-                    height: 1.35,
-                  ),
-                ),
-              ],
+          if (allowance.remaining == 0 && allowance.canWatchRewardedAd) ...[
+            const SizedBox(height: GalaxyMetrics.space12),
+            GalaxyButton(
+              key: const ValueKey('downloads-reward'),
+              label:
+                  'شاهد إعلانًا واحصل على ${allowance.plan.rewardPerAd} فصلًا',
+              icon: Icons.ondemand_video_rounded,
+              onPressed: showingAd ? null : onReward,
             ),
-          ),
+          ],
         ],
       ),
     );
   }
 }
 
-class _DownloadPointsBanner extends StatefulWidget {
-  const _DownloadPointsBanner({
-    required this.rewardsRepository,
-    required this.rewardedAdRepository,
-  });
+class _DownloadQueueSummary extends StatelessWidget {
+  const _DownloadQueueSummary({required this.groups, required this.onTap});
 
-  final ReaderRewardsRepository rewardsRepository;
-  final RewardedAdRepository rewardedAdRepository;
-
-  @override
-  State<_DownloadPointsBanner> createState() => _DownloadPointsBannerState();
-}
-
-class _DownloadPointsBannerState extends State<_DownloadPointsBanner> {
-  bool _isShowingAd = false;
+  final List<DownloadGroup> groups;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-
-    return ValueListenableBuilder<ReaderRewardsState>(
-      valueListenable: widget.rewardsRepository.state,
-      builder: (context, rewardsState, _) {
-        final watched = rewardsState.clampedRewardedAdsWatchedToday;
-        final max = ReaderRewardsState.maxRewardedAdsPerDay;
-        final canWatch = rewardsState.canWatchRewardedAd && !_isShowingAd;
-
-        return DecoratedBox(
-          decoration: BoxDecoration(
-            color: colors.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: colors.outlineVariant),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(14),
+    final jobs = groups.expand((group) => group.jobs).toList(growable: false);
+    final completed = jobs
+        .where((job) => job.status == DownloadJobStatus.completed)
+        .length;
+    final failed = jobs
+        .where((job) => job.status == DownloadJobStatus.failed)
+        .length;
+    final progress = jobs.isEmpty ? null : completed / jobs.length;
+    return GalaxySurface(
+      key: const ValueKey('download-queue-section'),
+      variant: GalaxySurfaceVariant.base,
+      onTap: onTap,
+      semanticLabel: 'فتح عمليات التنزيل',
+      padding: const EdgeInsets.all(GalaxyMetrics.space12),
+      child: Row(
+        children: [
+          const Icon(Icons.downloading_rounded),
+          const SizedBox(width: GalaxyMetrics.space12),
+          Expanded(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Row(
-                  children: [
-                    Icon(Icons.stars_rounded, color: colors.tertiary, size: 22),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'نقاط التنزيل',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ),
-                    Text(
-                      '${rewardsState.points} نقطة',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        color: colors.tertiary,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
                 Text(
-                  'كل فيديو يمنحك 25 نقطة. كل فصل يكلف نقطة واحدة. '
-                  'إذا فشل تنزيل فصل، ترجع نقطته تلقائيا.',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: colors.onSurfaceVariant,
-                    fontWeight: FontWeight.w700,
-                    height: 1.45,
-                  ),
+                  groups.length == 1
+                      ? 'عملية تنزيل واحدة نشطة'
+                      : '${groups.length} عمليات تنزيل نشطة',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
                 ),
-                const SizedBox(height: 10),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(999),
-                  child: LinearProgressIndicator(
-                    minHeight: 5,
-                    value: rewardsState.rewardedAdsProgress,
-                    backgroundColor: colors.surface,
-                    color: colors.tertiary,
-                  ),
+                const SizedBox(height: GalaxyMetrics.space4),
+                Text(
+                  jobs.isEmpty
+                      ? _groupStatus(groups.first.status)
+                      : '$completed من ${jobs.length} مكتمل${failed == 0 ? '' : ' · $failed متعثر'}',
+                  style: Theme.of(context).textTheme.bodySmall,
                 ),
-                const SizedBox(height: 9),
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final isCompact = constraints.maxWidth < 330;
-                    final limitText = Text(
-                      'شاهدت $watched / $max اليوم. المتبقي '
-                      '${rewardsState.remainingRewardedAdsToday} فيديو. '
-                      'قريبا سنضيف طرقا جديدة لزيادة نقاطك.',
-                      maxLines: isCompact ? 3 : 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: colors.onSurfaceVariant,
-                        fontWeight: FontWeight.w800,
-                        height: 1.35,
-                      ),
-                    );
-                    final action = FilledButton.tonalIcon(
-                      key: const ValueKey('download-rewarded-ad-button'),
-                      onPressed: canWatch ? _watchRewardedAd : null,
-                      icon: _isShowingAd
-                          ? const SizedBox.square(
-                              dimension: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.play_circle_outline_rounded),
-                      label: Text(
-                        _isShowingAd
-                            ? 'جاري فتح الإعلان'
-                            : rewardsState.canWatchRewardedAd
-                            ? (isCompact ? 'فيديو +25' : 'شاهد فيديو +25')
-                            : (isCompact ? 'تم الحد' : 'تم الحد اليومي'),
-                      ),
-                    );
-
-                    if (isCompact) {
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          limitText,
-                          const SizedBox(height: 10),
-                          Align(
-                            alignment: AlignmentDirectional.centerStart,
-                            child: action,
-                          ),
-                        ],
-                      );
-                    }
-
-                    return Row(
-                      children: [
-                        Expanded(child: limitText),
-                        const SizedBox(width: 10),
-                        action,
-                      ],
-                    );
-                  },
-                ),
+                if (progress != null) ...[
+                  const SizedBox(height: GalaxyMetrics.space8),
+                  LinearProgressIndicator(value: progress, minHeight: 5),
+                ],
               ],
             ),
+          ),
+          const SizedBox(width: GalaxyMetrics.space8),
+          const Icon(Icons.chevron_left_rounded),
+        ],
+      ),
+    );
+  }
+}
+
+class _DownloadQueueSheet extends StatefulWidget {
+  const _DownloadQueueSheet({
+    required this.repository,
+    required this.onPause,
+    required this.onResume,
+    required this.onCancel,
+    required this.onRetry,
+  });
+
+  final DownloadRepository repository;
+  final Future<void> Function(String) onPause;
+  final Future<void> Function(String) onResume;
+  final Future<void> Function(String) onCancel;
+  final Future<void> Function(String) onRetry;
+
+  @override
+  State<_DownloadQueueSheet> createState() => _DownloadQueueSheetState();
+}
+
+class _DownloadQueueSheetState extends State<_DownloadQueueSheet> {
+  final Set<String> _busyGroupIds = {};
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<DownloadsDashboard>(
+      valueListenable: widget.repository,
+      builder: (context, dashboard, child) {
+        final groups = _activeGroups(dashboard.groups);
+        return GalaxyBottomSheet(
+          title: 'عمليات التنزيل',
+          content: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height * 0.70,
+            ),
+            child: groups.isEmpty
+                ? GalaxyAsyncState.empty(
+                    title: 'لا توجد عمليات نشطة',
+                    message: 'اكتملت عمليات التنزيل أو تم إلغاؤها.',
+                  )
+                : ListView.separated(
+                    key: const ValueKey('download-queue-sheet-list'),
+                    shrinkWrap: true,
+                    itemCount: groups.length,
+                    separatorBuilder: (_, _) =>
+                        const SizedBox(height: GalaxyMetrics.space8),
+                    itemBuilder: (context, index) {
+                      final group = groups[index];
+                      return _DownloadGroupPanel(
+                        group: group,
+                        busy: _busyGroupIds.contains(group.groupId),
+                        onPause: (groupId) =>
+                            _runGroupAction(groupId, widget.onPause),
+                        onResume: (groupId) =>
+                            _runGroupAction(groupId, widget.onResume),
+                        onCancel: widget.onCancel,
+                        onRetry: widget.onRetry,
+                      );
+                    },
+                  ),
           ),
         );
       },
     );
   }
 
-  Future<void> _watchRewardedAd() async {
-    if (_isShowingAd) {
-      return;
-    }
-    setState(() => _isShowingAd = true);
-    final messenger = ScaffoldMessenger.of(context);
+  Future<void> _runGroupAction(
+    String groupId,
+    Future<void> Function(String) action,
+  ) async {
+    if (_busyGroupIds.contains(groupId)) return;
+    setState(() => _busyGroupIds.add(groupId));
     try {
-      final outcome = await widget.rewardedAdRepository.showRewardedAd();
-      if (!mounted) {
-        return;
-      }
-      if (outcome == RewardedAdOutcome.earnedReward) {
-        widget.rewardsRepository.grantRewardedAdPoints();
-        messenger.showSnackBar(
-          const SnackBar(content: Text('تمت إضافة 25 نقطة إلى رصيدك')),
-        );
-        return;
-      }
-
-      final message = switch (outcome) {
-        RewardedAdOutcome.unavailable => 'الإعلان غير متاح الآن، حاول لاحقا.',
-        RewardedAdOutcome.dismissed => 'أكمل مشاهدة الإعلان للحصول على النقاط.',
-        RewardedAdOutcome.failed => 'تعذر تشغيل الإعلان الآن.',
-        RewardedAdOutcome.earnedReward => 'تمت إضافة 25 نقطة إلى رصيدك',
-      };
-      messenger.showSnackBar(SnackBar(content: Text(message)));
-    } on RewardedAdDailyLimitException {
-      if (mounted) {
-        messenger.showSnackBar(
-          const SnackBar(content: Text('وصلت إلى حد المشاهدات اليومي.')),
-        );
-      }
+      await action(groupId);
     } finally {
       if (mounted) {
-        setState(() => _isShowingAd = false);
+        setState(() => _busyGroupIds.remove(groupId));
       }
     }
   }
 }
 
-class _DownloadsCountBanner extends StatelessWidget {
-  const _DownloadsCountBanner({required this.state, required this.totalBytes});
+class _DownloadGroupPanel extends StatelessWidget {
+  const _DownloadGroupPanel({
+    required this.group,
+    required this.busy,
+    required this.onPause,
+    required this.onResume,
+    required this.onCancel,
+    required this.onRetry,
+  });
 
-  final DownloadsState state;
-  final int totalBytes;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: colors.outline),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Row(
-          children: [
-            Icon(Icons.offline_pin_rounded, color: colors.secondary),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                '${state.downloadedCount} / ${state.maxChapters} فصل محمل',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Text(
-              formatDownloadSize(totalBytes),
-              style: theme.textTheme.labelLarge?.copyWith(
-                color: colors.secondary,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _DownloadJobBanner extends StatelessWidget {
-  const _DownloadJobBanner({required this.state, required this.onTap});
-
-  final DownloadManagerState state;
-  final VoidCallback onTap;
+  final DownloadGroup group;
+  final bool busy;
+  final Future<void> Function(String) onPause;
+  final Future<void> Function(String) onResume;
+  final Future<void> Function(String) onCancel;
+  final Future<void> Function(String) onRetry;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    final progress = state.progress!;
-    final isPaused = state.status == DownloadJobStatus.paused;
-    final isFailed = state.status == DownloadJobStatus.failed;
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Ink(
-        decoration: BoxDecoration(
-          color: colors.secondaryContainer,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        child: Row(
-          children: [
-            Icon(
-              isFailed
-                  ? Icons.error_outline_rounded
-                  : isPaused
-                  ? Icons.pause_circle_outline_rounded
-                  : Icons.downloading_rounded,
-              color: isFailed ? colors.error : colors.onSecondaryContainer,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                isFailed
-                    ? 'تعذر إكمال التنزيل'
-                    : isPaused
-                    ? 'التنزيل متوقف مؤقتا'
-                    : 'جاري تحميل ${progress.completed + progress.failed} من ${progress.total}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.labelLarge?.copyWith(
-                  color: isFailed ? colors.error : colors.onSecondaryContainer,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            const Icon(Icons.open_in_new_rounded, size: 18),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _DownloadedNovelRow extends StatelessWidget {
-  const _DownloadedNovelRow({required this.group, required this.onTap});
-
-  final DownloadedNovelGroup group;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        child: Row(
-          children: [
-            NovelCover.list(
-              title: group.novelTitle,
-              imageUrl: group.novelCover,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    group.novelTitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '${group.downloadedCount} فصل  •  ${formatDownloadSize(group.totalBytes)}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: colors.onSurfaceVariant,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 5),
-                  Text(
-                    'الأحدث: ${group.latestChapter.chapterLabel}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: colors.secondary,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Icon(Icons.chevron_left_rounded, color: colors.onSurfaceVariant),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _DownloadsEmptyState extends StatelessWidget {
-  const _DownloadsEmptyState({required this.onOpenLibrary});
-
-  final VoidCallback? onOpenLibrary;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 48, 8, 0),
+    final completed = group.jobs
+        .where((job) => job.status == DownloadJobStatus.completed)
+        .length;
+    final failedJobs = group.jobs
+        .where((job) => job.status == DownloadJobStatus.failed)
+        .toList(growable: false);
+    final canPause =
+        group.status == DownloadGroupStatus.queued ||
+        group.status == DownloadGroupStatus.running;
+    final canResume =
+        group.status == DownloadGroupStatus.paused ||
+        group.status == DownloadGroupStatus.waitingForWifi ||
+        group.status == DownloadGroupStatus.waitingForNetwork ||
+        group.status == DownloadGroupStatus.storageFull;
+    return GalaxySurface(
+      key: ValueKey('download-group-${group.groupId}'),
+      variant: GalaxySurfaceVariant.base,
+      padding: const EdgeInsets.all(GalaxyMetrics.space12),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Icon(
-            Icons.download_for_offline_outlined,
-            color: colors.secondary,
-            size: 44,
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      group.jobs.isEmpty
+                          ? 'مجموعة تنزيل'
+                          : '${group.jobs.length} فصل',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text(_groupStatus(group.status)),
+                  ],
+                ),
+              ),
+              if (busy)
+                const SizedBox.square(
+                  dimension: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2.4),
+                )
+              else
+                PopupMenuButton<_DownloadGroupAction>(
+                  tooltip: 'إدارة التنزيل',
+                  onSelected: (action) {
+                    switch (action) {
+                      case _DownloadGroupAction.pause:
+                        unawaited(onPause(group.groupId));
+                      case _DownloadGroupAction.resume:
+                        unawaited(onResume(group.groupId));
+                      case _DownloadGroupAction.cancel:
+                        unawaited(onCancel(group.groupId));
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    if (canPause)
+                      const PopupMenuItem(
+                        value: _DownloadGroupAction.pause,
+                        child: Text('إيقاف مؤقت'),
+                      ),
+                    if (canResume)
+                      const PopupMenuItem(
+                        value: _DownloadGroupAction.resume,
+                        child: Text('استئناف'),
+                      ),
+                    const PopupMenuItem(
+                      value: _DownloadGroupAction.cancel,
+                      child: Text('إلغاء'),
+                    ),
+                  ],
+                ),
+            ],
           ),
-          const SizedBox(height: 16),
-          Text(
-            'الفصول التي تحملها ستظهر هنا للقراءة بدون إنترنت',
-            textAlign: TextAlign.center,
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: colors.onSurfaceVariant,
-              fontWeight: FontWeight.w800,
-              height: 1.5,
+          if (group.jobs.isNotEmpty) ...[
+            const SizedBox(height: GalaxyMetrics.space8),
+            Text('$completed من ${group.jobs.length} مكتمل'),
+            const SizedBox(height: GalaxyMetrics.space4),
+            LinearProgressIndicator(
+              value: completed / group.jobs.length,
+              key: ValueKey('download-group-progress-${group.groupId}'),
             ),
-          ),
-          const SizedBox(height: 18),
-          OutlinedButton(
-            onPressed: onOpenLibrary,
-            child: const Text('فتح المكتبة'),
-          ),
+          ],
+          for (final job in failedJobs) ...[
+            const SizedBox(height: GalaxyMetrics.space8),
+            Align(
+              alignment: AlignmentDirectional.centerEnd,
+              child: TextButton.icon(
+                onPressed: () => unawaited(onRetry(job.jobId)),
+                icon: const Icon(Icons.refresh_rounded),
+                label: Text(
+                  '${_failureLabel(job.lastError)} · إعادة ${job.label}',
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 }
+
+class _DownloadedNovelEditorialRow extends StatelessWidget {
+  const _DownloadedNovelEditorialRow({
+    required this.novel,
+    required this.onTap,
+  });
+
+  final DownloadedNovel novel;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final latest = novel.chapters.isEmpty
+        ? null
+        : novel.chapters.reduce(
+            (first, second) =>
+                first.downloadedAtUtcMs >= second.downloadedAtUtcMs
+                ? first
+                : second,
+          );
+    return GalaxyNovelCard(
+      key: ValueKey('downloaded-novel-${novel.novelId}'),
+      novel: GalaxyNovelCardData(
+        title: novel.title,
+        artwork: downloadedNovelArtwork(context, novel),
+        metadata:
+            '${novel.chapters.length} فصل · ${_formatBytes(novel.totalBytes)}',
+        secondaryMetadata: latest == null
+            ? null
+            : 'الأحدث تنزيلًا: ${latest.label}',
+      ),
+      style: const GalaxyNovelCardStyle(
+        variant: GalaxyNovelCardVariant.horizontal,
+        surface: GalaxyCardSurface.flat,
+      ),
+      onTap: onTap,
+    );
+  }
+}
+
+class _DownloadsSkeleton extends StatelessWidget {
+  const _DownloadsSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final horizontal = GalaxyAdaptive.horizontalPaddingFor(
+      MediaQuery.sizeOf(context).width,
+    );
+    return ListView(
+      key: const ValueKey('downloads-loading-skeleton'),
+      padding: EdgeInsets.fromLTRB(horizontal, 16, horizontal, 24),
+      children: const [
+        GalaxySkeleton(variant: GalaxySkeletonVariant.details),
+        SizedBox(height: GalaxyMetrics.space12),
+        GalaxySkeleton(),
+        SizedBox(height: GalaxyMetrics.space24),
+        GalaxySkeleton(),
+        SizedBox(height: GalaxyMetrics.space8),
+        GalaxySkeleton(),
+      ],
+    );
+  }
+}
+
+List<DownloadGroup> _activeGroups(List<DownloadGroup> groups) {
+  return groups
+      .where(
+        (group) =>
+            group.status != DownloadGroupStatus.completed &&
+            group.status != DownloadGroupStatus.canceled,
+      )
+      .toList(growable: false);
+}
+
+String _formatBytes(int bytes) {
+  if (bytes < 1024) return '$bytes B';
+  if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+  return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+}
+
+String _groupStatus(DownloadGroupStatus status) => switch (status) {
+  DownloadGroupStatus.waitingForQuota => 'بانتظار تجدد الحصة',
+  DownloadGroupStatus.waitingForWifi => 'بانتظار Wi‑Fi',
+  DownloadGroupStatus.waitingForNetwork => 'بانتظار الشبكة',
+  DownloadGroupStatus.storageFull => 'المساحة غير كافية',
+  DownloadGroupStatus.paused => 'متوقف مؤقتًا',
+  DownloadGroupStatus.canceled => 'ملغي',
+  DownloadGroupStatus.completed => 'مكتمل',
+  DownloadGroupStatus.queued => 'في الطابور',
+  DownloadGroupStatus.running => 'جارٍ التنزيل',
+};
+
+String _failureLabel(DownloadFailure? failure) => switch (failure) {
+  DownloadFailure.network => 'مشكلة في الشبكة',
+  DownloadFailure.wifiRequired => 'بانتظار Wi‑Fi',
+  DownloadFailure.storageFull => 'المساحة غير كافية',
+  DownloadFailure.unauthorized => 'انتهت جلسة الحساب',
+  DownloadFailure.vipRequired => 'يتطلب اشتراك VIP',
+  DownloadFailure.invalidContent => 'بيانات الفصل غير صالحة',
+  DownloadFailure.canceled => 'أُلغي التنزيل',
+  DownloadFailure.unknown || null => 'فشل التنزيل',
+};
+
+enum _DownloadGroupAction { pause, resume, cancel }

@@ -6,21 +6,27 @@ import '../models/reading_progress.dart';
 import 'reading_history_repository.dart';
 
 abstract class ReadingHistoryStore {
-  Future<String?> read();
+  Future<String?> read(ReadingHistoryScope scope);
 
-  Future<void> write(String value);
+  Future<void> write(ReadingHistoryScope scope, String value);
 }
 
 class StoredReadingHistoryRepository extends ChangeNotifier
-    implements ReadingHistoryRepository {
+    implements ReadingHistoryRepository, ScopedReadingHistoryRepository {
   StoredReadingHistoryRepository({required ReadingHistoryStore store})
     : _store = store;
 
   final ReadingHistoryStore _store;
+  final Map<ReadingHistoryScope, Future<void>> _mutationQueues = {};
 
   @override
-  Future<List<ReadingProgress>> load() async {
-    final raw = await _store.read();
+  Future<List<ReadingProgress>> load() {
+    return loadForScope(ReadingHistoryScope.guest);
+  }
+
+  @override
+  Future<List<ReadingProgress>> loadForScope(ReadingHistoryScope scope) async {
+    final raw = await _store.read(scope);
     if (raw == null || raw.isEmpty) {
       return const [];
     }
@@ -39,20 +45,59 @@ class StoredReadingHistoryRepository extends ChangeNotifier
   }
 
   @override
-  Future<void> record(ReadingProgress progress) async {
-    if (progress.novelId == 0 || progress.contentApi.isEmpty) {
-      return;
-    }
+  Future<void> record(ReadingProgress progress) {
+    return recordForScope(ReadingHistoryScope.guest, progress);
+  }
 
-    final items = await load();
+  @override
+  Future<void> recordForScope(
+    ReadingHistoryScope scope,
+    ReadingProgress progress,
+  ) {
+    if (progress.novelId == 0 || progress.contentApi.isEmpty) {
+      return Future.value();
+    }
+    return _serializeMutation(scope, () => _recordNow(scope, progress));
+  }
+
+  Future<void> _recordNow(
+    ReadingHistoryScope scope,
+    ReadingProgress progress,
+  ) async {
+    final items = await loadForScope(scope);
     final next = <ReadingProgress>[
       progress,
       for (final item in items)
         if (item.novelId != progress.novelId) item,
     ];
 
-    await _store.write(jsonEncode(next.map((item) => item.toJson()).toList()));
+    await _store.write(
+      scope,
+      jsonEncode(next.map((item) => item.toJson()).toList()),
+    );
     notifyListeners();
+  }
+
+  Future<void> _serializeMutation(
+    ReadingHistoryScope scope,
+    Future<void> Function() mutation,
+  ) {
+    final previous = _mutationQueues[scope] ?? Future<void>.value();
+    final operation = previous.then<void>(
+      (_) => mutation(),
+      onError: (Object _, StackTrace _) => mutation(),
+    );
+
+    late final Future<void> tail;
+    tail = operation
+        .then<void>((_) {}, onError: (Object _, StackTrace _) {})
+        .whenComplete(() {
+          if (identical(_mutationQueues[scope], tail)) {
+            _mutationQueues.remove(scope);
+          }
+        });
+    _mutationQueues[scope] = tail;
+    return operation;
   }
 }
 

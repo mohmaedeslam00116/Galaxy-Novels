@@ -23,11 +23,13 @@ class AccountSectionTitle extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 10),
-        Text(
-          title,
-          style: theme.textTheme.titleMedium?.copyWith(
-            color: tokens.textPrimary,
-            fontWeight: FontWeight.w900,
+        Expanded(
+          child: Text(
+            title,
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: tokens.textPrimary,
+              fontWeight: FontWeight.w900,
+            ),
           ),
         ),
       ],
@@ -73,8 +75,8 @@ class AccountNotice extends StatelessWidget {
   }
 }
 
-class LogoutButton extends StatelessWidget {
-  const LogoutButton({
+class AccountLogoutRow extends StatelessWidget {
+  const AccountLogoutRow({
     required this.isSigningOut,
     required this.onLogout,
     super.key,
@@ -88,19 +90,56 @@ class LogoutButton extends StatelessWidget {
     final tokens =
         Theme.of(context).extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
 
-    return OutlinedButton.icon(
-      onPressed: isSigningOut ? null : onLogout,
-      style: OutlinedButton.styleFrom(
-        foregroundColor: tokens.danger,
-        side: BorderSide(color: tokens.danger.withValues(alpha: 0.28)),
+    final onTap = isSigningOut ? null : onLogout;
+
+    return Semantics(
+      key: const ValueKey('account-logout'),
+      button: true,
+      enabled: !isSigningOut,
+      onTap: onTap,
+      label: isSigningOut ? 'جارٍ تسجيل الخروج...' : 'تسجيل الخروج',
+      excludeSemantics: true,
+      child: Material(
+        color: tokens.danger.withValues(alpha: 0.04),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+          side: BorderSide(color: tokens.danger.withValues(alpha: 0.2)),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 56),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+              child: Row(
+                children: [
+                  if (isSigningOut)
+                    SizedBox.square(
+                      dimension: 19,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: tokens.danger,
+                      ),
+                    )
+                  else
+                    Icon(Icons.logout_rounded, color: tokens.danger, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      isSigningOut ? 'جارٍ تسجيل الخروج...' : 'تسجيل الخروج',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: tokens.danger,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
-      icon: isSigningOut
-          ? const SizedBox.square(
-              dimension: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : const Icon(Icons.logout_rounded),
-      label: Text(isSigningOut ? 'جارٍ تسجيل الخروج...' : 'تسجيل الخروج'),
     );
   }
 }

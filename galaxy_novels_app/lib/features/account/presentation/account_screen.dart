@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../app/app_dependencies.dart';
-import '../../downloads/presentation/downloads_screen.dart';
+import '../../../core/analytics/app_screen_names.dart';
 import '../../favorites/presentation/favorites_screen.dart';
 import '../../history/presentation/history_screen.dart';
 import '../../settings/presentation/settings_screen.dart';
@@ -12,7 +12,9 @@ import '../domain/auth_session.dart';
 import 'widgets/account_session_view.dart';
 
 class AccountScreen extends StatefulWidget {
-  const AccountScreen({super.key});
+  const AccountScreen({this.embedded = false, super.key});
+
+  final bool embedded;
 
   @override
   State<AccountScreen> createState() => _AccountScreenState();
@@ -45,42 +47,53 @@ class _AccountScreenState extends State<AccountScreen> {
   @override
   Widget build(BuildContext context) {
     final repository = _repository!;
-
+    final content = AccountSessionView(
+      repository: repository,
+      onOpenFavorites: _openFavorites,
+      onOpenHistory: _openHistory,
+      onOpenReaderSettings: _openSettings,
+    );
+    if (widget.embedded) return content;
     return Scaffold(
       appBar: AppBar(title: const Text('حسابي')),
-      body: AccountSessionView(
-        repository: repository,
-        onOpenFavorites: _openFavorites,
-        onOpenHistory: _openHistory,
-        onOpenDownloads: _openDownloads,
-        onOpenReaderSettings: _openSettings,
-      ),
+      body: content,
     );
   }
 
   void _openFavorites() {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute<void>(builder: (_) => const FavoritesScreen()));
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(name: AppScreenNames.favorites),
+        builder: (_) => const FavoritesScreen(),
+      ),
+    );
   }
 
   void _openHistory() {
-    _openStandaloneShellPage(title: 'السجل', body: const HistoryScreen());
-  }
-
-  void _openDownloads() {
-    _openStandaloneShellPage(title: 'التنزيلات', body: const DownloadsScreen());
+    _openStandaloneShellPage(
+      title: 'السجل',
+      body: const HistoryScreen(),
+      screenName: AppScreenNames.history,
+    );
   }
 
   void _openSettings() {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute<void>(builder: (_) => const SettingsScreen()));
-  }
-
-  void _openStandaloneShellPage({required String title, required Widget body}) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
+        settings: const RouteSettings(name: AppScreenNames.settings),
+        builder: (_) => const SettingsScreen(),
+      ),
+    );
+  }
+
+  void _openStandaloneShellPage({
+    required String title,
+    required Widget body,
+    required String screenName,
+  }) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        settings: RouteSettings(name: screenName),
         builder: (_) => Scaffold(
           appBar: AppBar(title: Text(title)),
           body: body,

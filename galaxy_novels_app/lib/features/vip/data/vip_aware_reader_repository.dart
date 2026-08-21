@@ -32,7 +32,21 @@ class VipAwareReaderRepository implements ReaderRepository {
   }
 
   Future<ReaderChapterContent> _loadPublicChapter(String contentApi) async {
-    final content = await _publicReader.loadChapter(contentApi);
+    late final ReaderChapterContent content;
+    try {
+      content = await _publicReader.loadChapter(contentApi);
+    } on Exception catch (publicError, publicStackTrace) {
+      final chapterId = _publicChapterId(contentApi);
+      if (chapterId <= 0) {
+        Error.throwWithStackTrace(publicError, publicStackTrace);
+      }
+
+      try {
+        return await _vipRepository.loadChapterById(chapterId);
+      } on Exception {
+        Error.throwWithStackTrace(publicError, publicStackTrace);
+      }
+    }
     if (!_needsVipContinuation(content)) {
       return content;
     }
@@ -58,6 +72,18 @@ class VipAwareReaderRepository implements ReaderRepository {
       return content;
     }
   }
+}
+
+int _publicChapterId(String contentApi) {
+  final uri = Uri.tryParse(contentApi.trim());
+  if (uri == null) {
+    return 0;
+  }
+  final segments = uri.pathSegments;
+  if (segments.length < 2 || segments[segments.length - 2] != 'chapters') {
+    return 0;
+  }
+  return int.tryParse(segments.last) ?? 0;
 }
 
 bool _needsVipContinuation(ReaderChapterContent content) {

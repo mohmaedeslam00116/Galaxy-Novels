@@ -22,6 +22,10 @@ abstract interface class DownloadStore {
   });
 
   Future<void> release(String jobId, {required DownloadFailure reason});
+  Future<void> retryJob(String jobId);
+  Future<void> pauseGroup(String groupId);
+  Future<void> resumeGroup(String groupId);
+  Future<void> cancelGroup(String groupId);
 
   Future<DownloadStoreSnapshot> grantReward({
     required String rewardEventId,

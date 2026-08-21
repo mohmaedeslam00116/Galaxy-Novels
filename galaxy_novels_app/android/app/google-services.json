@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "184724821028",
+    "project_id": "galaxy-novels-app-4720",
+    "storage_bucket": "galaxy-novels-app-4720.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:184724821028:android:e5f4c4333e1e28b20ff4b1",
+        "android_client_info": {
+          "package_name": "com.galaxynovels.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAbI2jBmgILdbjfVrede42AJlvJjTJdgiA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

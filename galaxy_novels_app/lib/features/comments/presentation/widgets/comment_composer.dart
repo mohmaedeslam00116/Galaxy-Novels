@@ -12,6 +12,7 @@ class CommentComposer extends StatefulWidget {
   const CommentComposer({
     required this.controller,
     required this.authRepository,
+    this.focusNode,
     this.replyTarget,
     this.onSignIn,
     this.onSubmitted,
@@ -21,6 +22,7 @@ class CommentComposer extends StatefulWidget {
 
   final CommentsController controller;
   final AuthRepository? authRepository;
+  final FocusNode? focusNode;
   final PublicComment? replyTarget;
   final VoidCallback? onSignIn;
   final VoidCallback? onSubmitted;
@@ -32,12 +34,41 @@ class CommentComposer extends StatefulWidget {
 
 class _CommentComposerState extends State<CommentComposer> {
   final _textController = TextEditingController();
+  late FocusNode _focusNode;
+  late bool _ownsFocusNode;
   bool _isSpoiler = false;
+  String? _submitAnnouncement;
+
+  @override
+  void initState() {
+    super.initState();
+    _setFocusNode(widget.focusNode);
+  }
+
+  @override
+  void didUpdateWidget(covariant CommentComposer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.focusNode == widget.focusNode) {
+      return;
+    }
+    if (_ownsFocusNode) {
+      _focusNode.dispose();
+    }
+    _setFocusNode(widget.focusNode);
+  }
 
   @override
   void dispose() {
+    if (_ownsFocusNode) {
+      _focusNode.dispose();
+    }
     _textController.dispose();
     super.dispose();
+  }
+
+  void _setFocusNode(FocusNode? suppliedFocusNode) {
+    _ownsFocusNode = suppliedFocusNode == null;
+    _focusNode = suppliedFocusNode ?? FocusNode();
   }
 
   @override
@@ -75,43 +106,94 @@ class _CommentComposerState extends State<CommentComposer> {
               ? _AuthenticatedComposer(
                   controller: widget.controller,
                   textController: _textController,
+                  focusNode: _focusNode,
                   isSpoiler: _isSpoiler,
+                  submitAnnouncement: _submitAnnouncement,
                   replyTarget: widget.replyTarget,
                   onSpoilerChanged: (value) =>
                       setState(() => _isSpoiler = value),
                   onCancelReply: widget.onCancelReply,
-                  onSubmitted: () {
-                    _textController.clear();
-                    setState(() => _isSpoiler = false);
-                    widget.onSubmitted?.call();
-                  },
+                  onSubmit: _submit,
                 )
-              : Row(
-                  children: [
-                    Icon(Icons.lock_outline_rounded, color: tokens.primary),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'سجل الدخول لكتابة تعليق.',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: tokens.textSecondary,
-                          fontWeight: FontWeight.w800,
+              : LayoutBuilder(
+                  builder: (context, constraints) {
+                    final message = Row(
+                      children: [
+                        Icon(Icons.lock_outline_rounded, color: tokens.primary),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'سجل الدخول لكتابة تعليق.',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: tokens.textSecondary,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                    if (widget.onSignIn != null) ...[
-                      const SizedBox(width: 10),
-                      OutlinedButton(
-                        key: const ValueKey('comments-open-account'),
-                        onPressed: widget.onSignIn,
-                        child: const Text('فتح حسابي'),
-                      ),
-                    ],
-                  ],
+                      ],
+                    );
+                    final accountAction = widget.onSignIn == null
+                        ? null
+                        : OutlinedButton(
+                            key: const ValueKey('comments-open-account'),
+                            onPressed: widget.onSignIn,
+                            child: const Text('فتح حسابي'),
+                          );
+
+                    if (constraints.maxWidth < 360 && accountAction != null) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          message,
+                          const SizedBox(height: 10),
+                          accountAction,
+                        ],
+                      );
+                    }
+
+                    return Row(
+                      children: [
+                        Expanded(child: message),
+                        if (accountAction != null) ...[
+                          const SizedBox(width: 10),
+                          accountAction,
+                        ],
+                      ],
+                    );
+                  },
                 ),
         ),
       ),
     );
+  }
+
+  Future<void> _submit() async {
+    setState(() => _submitAnnouncement = 'جارٍ إرسال التعليق');
+    final content = _textController.text;
+    final parentId = widget.replyTarget?.id ?? 0;
+    final isSpoiler = _isSpoiler;
+    final outcome = await widget.controller.submitComment(
+      content: content,
+      parentId: parentId,
+      isSpoiler: isSpoiler,
+    );
+    if (!mounted) {
+      return;
+    }
+    _completeSubmission(outcome);
+  }
+
+  void _completeSubmission(CommentSubmitOutcome outcome) {
+    if (outcome.status != CommentSubmitStatus.saved) {
+      setState(() => _submitAnnouncement = outcome.errorMessage);
+      return;
+    }
+    _textController.clear();
+    setState(() {
+      _isSpoiler = false;
+      _submitAnnouncement = 'تم نشر تعليقك';
+    });
+    widget.onSubmitted?.call();
   }
 }
 
@@ -119,20 +201,24 @@ class _AuthenticatedComposer extends StatelessWidget {
   const _AuthenticatedComposer({
     required this.controller,
     required this.textController,
+    required this.focusNode,
     required this.isSpoiler,
+    required this.submitAnnouncement,
     required this.onSpoilerChanged,
+    required this.onSubmit,
     this.replyTarget,
     this.onCancelReply,
-    this.onSubmitted,
   });
 
   final CommentsController controller;
   final TextEditingController textController;
+  final FocusNode focusNode;
   final bool isSpoiler;
+  final String? submitAnnouncement;
   final ValueChanged<bool> onSpoilerChanged;
+  final Future<void> Function() onSubmit;
   final PublicComment? replyTarget;
   final VoidCallback? onCancelReply;
-  final VoidCallback? onSubmitted;
 
   @override
   Widget build(BuildContext context) {
@@ -142,7 +228,8 @@ class _AuthenticatedComposer extends StatelessWidget {
         final tokens =
             Theme.of(context).extension<AppThemeTokens>() ??
             AppTheme.galaxyNoir;
-        final error = state.submitErrorMessage;
+        final announcement = submitAnnouncement ?? state.submitErrorMessage;
+        final announcementIsError = state.submitErrorMessage != null;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -153,6 +240,7 @@ class _AuthenticatedComposer extends StatelessWidget {
             TextField(
               key: const ValueKey('comments-content-field'),
               controller: textController,
+              focusNode: focusNode,
               minLines: 2,
               maxLines: 5,
               textInputAction: TextInputAction.newline,
@@ -161,18 +249,31 @@ class _AuthenticatedComposer extends StatelessWidget {
                 border: OutlineInputBorder(),
               ),
             ),
-            if (error != null) ...[
+            if (announcement != null) ...[
               const SizedBox(height: 8),
-              Text(
-                error,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: tokens.danger,
-                  fontWeight: FontWeight.w800,
+              Semantics(
+                key: const ValueKey('comments-submit-announcement'),
+                container: true,
+                liveRegion: true,
+                label: announcement,
+                excludeSemantics: true,
+                child: Text(
+                  announcement,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: announcementIsError
+                        ? tokens.danger
+                        : tokens.textSecondary,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
             ],
             const SizedBox(height: 10),
-            Row(
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 12,
+              runSpacing: 8,
               children: [
                 FilterChip(
                   key: const ValueKey('comments-spoiler-toggle'),
@@ -180,12 +281,11 @@ class _AuthenticatedComposer extends StatelessWidget {
                   selected: isSpoiler,
                   onSelected: state.isSubmitting ? null : onSpoilerChanged,
                 ),
-                const Spacer(),
                 FilledButton.icon(
                   key: const ValueKey('comments-submit-button'),
                   onPressed: state.isSubmitting
                       ? null
-                      : () => unawaited(_submit(context)),
+                      : () => unawaited(onSubmit()),
                   icon: state.isSubmitting
                       ? const SizedBox.square(
                           dimension: 16,
@@ -201,17 +301,6 @@ class _AuthenticatedComposer extends StatelessWidget {
       },
     );
   }
-
-  Future<void> _submit(BuildContext context) async {
-    final outcome = await controller.submitComment(
-      content: textController.text,
-      parentId: replyTarget?.id ?? 0,
-      isSpoiler: isSpoiler,
-    );
-    if (outcome.status == CommentSubmitStatus.saved) {
-      onSubmitted?.call();
-    }
-  }
 }
 
 class _ReplyTargetBar extends StatelessWidget {
@@ -224,6 +313,7 @@ class _ReplyTargetBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens =
         Theme.of(context).extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
+    final replyLabel = 'رد على ${comment.authorName}';
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -235,14 +325,21 @@ class _ReplyTargetBar extends StatelessWidget {
         child: Row(
           children: [
             Expanded(
-              child: Text(
-                'رد على ${comment.authorName}',
-                key: const ValueKey('comments-reply-target'),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: tokens.primary,
-                  fontWeight: FontWeight.w900,
+              child: Semantics(
+                key: const ValueKey('comments-reply-announcement'),
+                container: true,
+                liveRegion: true,
+                label: replyLabel,
+                excludeSemantics: true,
+                child: Text(
+                  replyLabel,
+                  key: const ValueKey('comments-reply-target'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: tokens.primary,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
               ),
             ),

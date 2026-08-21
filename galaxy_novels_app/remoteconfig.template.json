@@ -1,0 +1,105 @@
+{
+  "parameters": {
+    "android_update_system_enabled": {
+      "defaultValue": {
+        "value": "true"
+      },
+      "description": "Master switch for the Android app update system.",
+      "valueType": "BOOLEAN"
+    },
+    "android_optional_update_enabled": {
+      "defaultValue": {
+        "value": "true"
+      },
+      "description": "Shows optional Google Play updates on the home screen.",
+      "valueType": "BOOLEAN"
+    },
+    "android_min_supported_build": {
+      "defaultValue": {
+        "value": "0"
+      },
+      "description": "Minimum supported Android versionCode. Keep at zero until a replacement build is fully available.",
+      "valueType": "NUMBER"
+    },
+    "android_optional_update_title_ar": {
+      "defaultValue": {
+        "value": "تحديث جديد متاح"
+      },
+      "description": "Arabic title for optional update prompts.",
+      "valueType": "STRING"
+    },
+    "android_optional_update_message_ar": {
+      "defaultValue": {
+        "value": "حدّث التطبيق للحصول على أحدث التحسينات والإصلاحات."
+      },
+      "description": "Arabic message for optional update prompts.",
+      "valueType": "STRING"
+    },
+    "android_required_update_title_ar": {
+      "defaultValue": {
+        "value": "يلزم تحديث التطبيق"
+      },
+      "description": "Arabic title for the unsupported-version gate.",
+      "valueType": "STRING"
+    },
+    "android_required_update_message_ar": {
+      "defaultValue": {
+        "value": "هذا الإصدار لم يعد مدعومًا. حدّث التطبيق لمتابعة استخدامه."
+      },
+      "description": "Arabic message for the unsupported-version gate.",
+      "valueType": "STRING"
+    },
+    "android_reader_interstitial_enabled": {
+      "defaultValue": {
+        "value": "true"
+      },
+      "description": "Master switch for interstitial ads between reader chapters.",
+      "valueType": "BOOLEAN"
+    },
+    "android_reader_interstitial_min_chapters": {
+      "defaultValue": {
+        "value": "5"
+      },
+      "description": "Minimum forward chapter transitions before a reader interstitial.",
+      "valueType": "NUMBER"
+    },
+    "android_reader_interstitial_max_chapters": {
+      "defaultValue": {
+        "value": "20"
+      },
+      "description": "Maximum forward chapter transitions before a reader interstitial.",
+      "valueType": "NUMBER"
+    },
+    "android_in_app_review_enabled": {
+      "defaultValue": { "value": "true" },
+      "description": "Master switch for automatic Google Play in-app review prompts.",
+      "valueType": "BOOLEAN"
+    },
+    "android_in_app_review_min_days": {
+      "defaultValue": { "value": "3" },
+      "description": "Minimum installation age in days before an automatic review attempt.",
+      "valueType": "NUMBER"
+    },
+    "android_in_app_review_min_completed_chapters": {
+      "defaultValue": { "value": "10" },
+      "description": "Minimum locally completed chapters before an automatic review attempt.",
+      "valueType": "NUMBER"
+    },
+    "android_in_app_review_min_sessions": {
+      "defaultValue": { "value": "2" },
+      "description": "Minimum qualifying reader sessions before an automatic review attempt.",
+      "valueType": "NUMBER"
+    },
+    "android_in_app_review_cooldown_days": {
+      "defaultValue": { "value": "120" },
+      "description": "Cooldown between automatic review attempts or after opening the store manually.",
+      "valueType": "NUMBER"
+    },
+    "android_in_app_review_max_attempts": {
+      "defaultValue": { "value": "3" },
+      "description": "Maximum automatic review requests during one installation.",
+      "valueType": "NUMBER"
+    }
+  },
+  "parameterGroups": {}
+}

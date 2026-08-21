@@ -132,7 +132,7 @@ void main() {
     expect(harness.repository.value.status, AuthSessionStatus.authenticated);
     expect(request.method, 'POST');
     expect(request.uri.path, endsWith('/auth/register'));
-    expect(request.headers['User-Agent'], 'WorReaderApp/1.0 Android');
+    expect(request.headers['User-Agent'], 'WorReaderApp/1.0');
     expect(request.headers, isNot(contains('X-WP-Nonce')));
     expect(body, {
       'username': 'reader123',
@@ -1148,6 +1148,120 @@ void main() {
     expect(sessionStore.session, isNull);
   });
 
+  test('logout becomes guest before the remote request completes', () async {
+    final logoutResponse = Completer<PrivateRawResponse>();
+    addTearDown(() {
+      if (!logoutResponse.isCompleted) {
+        logoutResponse.complete(
+          const PrivateRawResponse(
+            statusCode: 200,
+            body: '{"logged_in":false}',
+          ),
+        );
+      }
+    });
+    final sessionStore = FakeAuthSessionStore();
+    final harness = _AuthHarness(
+      responses: const [],
+      sessionStore: sessionStore,
+      responseHandler: (request) {
+        if (request.uri.path.endsWith('/auth/login')) {
+          return Future.value(_authenticatedResponse(nonce: 'logout-token'));
+        }
+        if (request.uri.path.endsWith('/auth/logout')) {
+          return logoutResponse.future;
+        }
+        throw StateError('Unexpected request: ${request.uri.path}');
+      },
+    );
+    addTearDown(harness.repository.dispose);
+    await harness.repository.login(
+      const LoginCredentials(
+        username: 'reader',
+        password: 'secret',
+        rememberSession: true,
+      ),
+    );
+
+    final logout = harness.repository.logout();
+    await Future<void>.delayed(Duration.zero);
+
+    expect(harness.repository.value.status, AuthSessionStatus.guest);
+    expect(harness.client.accessToken, isNull);
+    expect(sessionStore.session, isNull);
+
+    logoutResponse.complete(
+      const PrivateRawResponse(statusCode: 200, body: '{"logged_in":false}'),
+    );
+    await logout;
+  });
+
+  test(
+    'logout network failure cannot restore the authenticated session',
+    () async {
+      final sessionStore = FakeAuthSessionStore();
+      final harness = _AuthHarness(
+        responses: const [],
+        sessionStore: sessionStore,
+        responseHandler: (request) async {
+          if (request.uri.path.endsWith('/auth/login')) {
+            return _authenticatedResponse(nonce: 'offline-logout-token');
+          }
+          if (request.uri.path.endsWith('/auth/logout')) {
+            throw const PrivateApiException(
+              code: 'network_unavailable',
+              message: 'offline',
+            );
+          }
+          throw StateError('Unexpected request: ${request.uri.path}');
+        },
+      );
+      addTearDown(harness.repository.dispose);
+      await harness.repository.login(
+        const LoginCredentials(
+          username: 'reader',
+          password: 'secret',
+          rememberSession: true,
+        ),
+      );
+
+      await harness.repository.logout();
+
+      expect(harness.repository.value.status, AuthSessionStatus.guest);
+      expect(harness.client.accessToken, isNull);
+      expect(sessionStore.session, isNull);
+    },
+  );
+
+  test('logout storage cleanup failure remains guest with an error', () async {
+    final sessionStore = FakeAuthSessionStore();
+    final harness = _AuthHarness(
+      responses: [
+        _authenticatedResponse(nonce: 'stored-logout-token'),
+        const PrivateRawResponse(statusCode: 200, body: '{"logged_in":false}'),
+      ],
+      sessionStore: sessionStore,
+    );
+    addTearDown(harness.repository.dispose);
+    await harness.repository.login(
+      const LoginCredentials(
+        username: 'reader',
+        password: 'secret',
+        rememberSession: true,
+      ),
+    );
+    sessionStore.failClear = true;
+
+    await harness.repository.logout();
+
+    expect(harness.repository.value.status, AuthSessionStatus.guest);
+    expect(
+      harness.repository.value.errorMessage,
+      'تم تسجيل الخروج، لكن تعذر تنظيف الجلسة المحفوظة.',
+    );
+    expect(harness.client.accessToken, isNull);
+  });
+
   test('logout treats a server 401 as an expired local session', () async {
     final sessionStore = FakeAuthSessionStore();
     final harness = _AuthHarness(
@@ -1174,6 +1288,89 @@ void main() {
     expect(harness.repository.value.status, AuthSessionStatus.guest);
     expect(sessionStore.session, isNull);
   });
+
+  test(
+    'restore rejects a locally expired snapshot without a network request',
+    () async {
+      final sessionStore = FakeAuthSessionStore()
+        ..session = PrivateSessionSnapshot(
+          accessToken: 'wra_expired_token',
+          expiresAt: DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+        );
+      final harness = _AuthHarness(
+        responses: const [
+          PrivateRawResponse(statusCode: 200, body: '{"logged_in":false}'),
+        ],
+        sessionStore: sessionStore,
+      );
+      addTearDown(harness.repository.dispose);
+
+      await harness.repository.restoreSession();
+
+      expect(harness.repository.value.status, AuthSessionStatus.guest);
+      expect(harness.requests, isEmpty);
+      expect(sessionStore.session, isNull);
+    },
+  );
+
+  test('restore treats status 401 as an expired session', () async {
+    final sessionStore = FakeAuthSessionStore()
+      ..session = const PrivateSessionSnapshot(accessToken: 'wra_saved_token');
+    final harness = _AuthHarness(
+      responses: const [
+        PrivateRawResponse(statusCode: 401, body: '{"code":"some_auth_error"}'),
+      ],
+      sessionStore: sessionStore,
+    );
+    addTearDown(harness.repository.dispose);
+
+    await harness.repository.restoreSession();
+
+    expect(harness.repository.value.status, AuthSessionStatus.guest);
+    expect(sessionStore.session, isNull);
+  });
+
+  test('restore treats status 403 as an expired session', () async {
+    final sessionStore = FakeAuthSessionStore()
+      ..session = const PrivateSessionSnapshot(accessToken: 'wra_saved_token');
+    final harness = _AuthHarness(
+      responses: const [
+        PrivateRawResponse(statusCode: 403, body: '{"code":"some_auth_error"}'),
+      ],
+      sessionStore: sessionStore,
+    );
+    addTearDown(harness.repository.dispose);
+
+    await harness.repository.restoreSession();
+
+    expect(harness.repository.value.status, AuthSessionStatus.guest);
+    expect(sessionStore.session, isNull);
+  });
+
+  test(
+    'restore treats wor_reader_app_login_required as an expired session',
+    () async {
+      final sessionStore = FakeAuthSessionStore()
+        ..session = const PrivateSessionSnapshot(
+          accessToken: 'wra_saved_token',
+        );
+      final harness = _AuthHarness(
+        responses: const [
+          PrivateRawResponse(
+            statusCode: 409,
+            body: '{"code":"wor_reader_app_login_required"}',
+          ),
+        ],
+        sessionStore: sessionStore,
+      );
+      addTearDown(harness.repository.dispose);
+
+      await harness.repository.restoreSession();
+
+      expect(harness.repository.value.status, AuthSessionStatus.guest);
+      expect(sessionStore.session, isNull);
+    },
+  );
 
   test('maps restore network failures to a retryable state', () async {
     final client = PrivateApiClient(
@@ -1276,7 +1473,7 @@ class _AuthHarness {
     Duration profileRefreshCooldown = const Duration(seconds: 60),
   }) : responses = [...responses],
        sessionStore = sessionStore ?? FakeAuthSessionStore() {
-    final client = PrivateApiClient(
+    client = PrivateApiClient(
       config: const AppConfig(siteBaseUrl: 'https://example.com/'),
       requestSender: (request) async {
         requests.add(request);
@@ -1296,6 +1493,7 @@ class _AuthHarness {
   final List<PrivateRawResponse> responses;
   final FakeAuthSessionStore sessionStore;
   final List<PrivateRawRequest> requests = [];
+  late final PrivateApiClient client;
   late final SessionAuthRepository repository;
 }
 

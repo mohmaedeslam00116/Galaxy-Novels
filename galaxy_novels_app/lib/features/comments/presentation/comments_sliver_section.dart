@@ -32,8 +32,31 @@ class CommentsSliverSection extends StatefulWidget {
   State<CommentsSliverSection> createState() => _CommentsSliverSectionState();
 }
 
-class _CommentsSliverSectionState extends State<CommentsSliverSection> {
+class _CommentsSliverSectionState extends State<CommentsSliverSection>
+    with WidgetsBindingObserver {
+  final _composerFocus = FocusNode();
+  final _composerKey = GlobalKey();
   PublicComment? _replyTarget;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _composerFocus.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeMetrics() {
+    if (_composerFocus.hasFocus) {
+      unawaited(_revealComposerAfterLayout());
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -67,8 +90,10 @@ class _CommentsSliverSectionState extends State<CommentsSliverSection> {
             ),
             SliverToBoxAdapter(
               child: CommentComposer(
+                key: _composerKey,
                 controller: widget.controller,
                 authRepository: widget.authRepository,
+                focusNode: _composerFocus,
                 onSignIn: widget.onSignIn,
                 replyTarget: _replyTarget,
                 onCancelReply: () => setState(() => _replyTarget = null),
@@ -106,7 +131,7 @@ class _CommentsSliverSectionState extends State<CommentsSliverSection> {
         delegate: SliverChildBuilderDelegate(
           (context, index) => CommentItem(
             comment: state.comments[index],
-            onReply: (comment) => setState(() => _replyTarget = comment),
+            onReply: _replyTo,
             onVote: (comment, vote) => unawaited(
               widget.controller.voteComment(commentId: comment.id, vote: vote),
             ),
@@ -119,6 +144,31 @@ class _CommentsSliverSectionState extends State<CommentsSliverSection> {
         child: _CommentsFooter(state: state, controller: widget.controller),
       ),
     ];
+  }
+
+  void _replyTo(PublicComment comment) {
+    setState(() => _replyTarget = comment);
+    _composerFocus.requestFocus();
+    unawaited(_revealComposerAfterLayout());
+  }
+
+  Future<void> _revealComposerAfterLayout() async {
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) {
+      return;
+    }
+    final targetContext = _composerFocus.context ?? _composerKey.currentContext;
+    if (targetContext == null || !targetContext.mounted) {
+      return;
+    }
+    await Scrollable.ensureVisible(
+      targetContext,
+      alignment: 0.1,
+      duration: MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero
+          : const Duration(milliseconds: 200),
+      curve: Curves.easeOutCubic,
+    );
   }
 }
 
@@ -198,11 +248,18 @@ class _TargetReactionsStrip extends StatelessWidget {
           ),
           if (error != null) ...[
             const SizedBox(height: 8),
-            Text(
-              error,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: tokens.danger,
-                fontWeight: FontWeight.w800,
+            Semantics(
+              key: const ValueKey('comments-interaction-error'),
+              container: true,
+              liveRegion: true,
+              label: error,
+              excludeSemantics: true,
+              child: Text(
+                error,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: tokens.danger,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ),
           ],
@@ -238,25 +295,30 @@ class _ReactionButton extends StatelessWidget {
       button: true,
       selected: selected,
       label: '${reaction.label}: $count',
-      child: InkWell(
-        key: ValueKey('comment-reaction-${reaction.apiValue}'),
-        onTap: enabled ? onPressed : null,
-        borderRadius: BorderRadius.circular(8),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: background,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: selected ? tokens.primary : tokens.border,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+        child: InkWell(
+          key: ValueKey('comment-reaction-${reaction.apiValue}'),
+          onTap: enabled ? onPressed : null,
+          borderRadius: BorderRadius.circular(8),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: background,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: selected ? tokens.primary : tokens.border,
+              ),
             ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-            child: Text(
-              '${reaction.label} $count',
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: foreground,
-                fontWeight: FontWeight.w900,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              child: Center(
+                child: Text(
+                  '${reaction.label} $count',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: foreground,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
               ),
             ),
           ),

@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/auth_session.dart';
+import 'guest_account_view.dart';
 import 'login_account_view.dart';
 import 'register_account_view.dart';
+
+enum _AuthEntryMode { guest, login, register }
 
 class AuthEntryView extends StatefulWidget {
   const AuthEntryView({
@@ -23,24 +26,30 @@ class AuthEntryView extends StatefulWidget {
 }
 
 class _AuthEntryViewState extends State<AuthEntryView> {
-  bool _registerMode = false;
+  _AuthEntryMode _mode = _AuthEntryMode.guest;
 
   @override
   Widget build(BuildContext context) {
-    if (_registerMode) {
-      return RegisterAccountView(
+    return switch (_mode) {
+      _AuthEntryMode.guest => GuestAccountView(
+        errorMessage: widget.errorMessage,
+        onShowLogin: () => setState(() => _mode = _AuthEntryMode.login),
+        onShowRegister: () => setState(() => _mode = _AuthEntryMode.register),
+      ),
+      _AuthEntryMode.login => LoginAccountView(
+        isSubmitting: widget.isSubmitting,
+        errorMessage: widget.errorMessage,
+        onLogin: widget.onLogin,
+        onCreateAccount: () => setState(() => _mode = _AuthEntryMode.register),
+        onBackToGuest: () => setState(() => _mode = _AuthEntryMode.guest),
+      ),
+      _AuthEntryMode.register => RegisterAccountView(
         isSubmitting: widget.isSubmitting,
         errorMessage: widget.errorMessage,
         onRegister: widget.onRegister,
-        onShowLogin: () => setState(() => _registerMode = false),
-      );
-    }
-
-    return LoginAccountView(
-      isSubmitting: widget.isSubmitting,
-      errorMessage: widget.errorMessage,
-      onLogin: widget.onLogin,
-      onCreateAccount: () => setState(() => _registerMode = true),
-    );
+        onShowLogin: () => setState(() => _mode = _AuthEntryMode.login),
+        onBackToGuest: () => setState(() => _mode = _AuthEntryMode.guest),
+      ),
+    };
   }
 }

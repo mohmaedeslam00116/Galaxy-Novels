@@ -82,7 +82,7 @@ flowchart TD
 | manifest عام | `GET /wp-json/wor-reader-app/v1/public/manifest/{slug}` | يقرأ manifest عام من cache | مفيد كبديل منظم لملفات manifest | 4/5 | جاهز. `inc/app-api.php:73`, `inc/app-api.php:400` |
 | pack عام | `GET /wp-json/wor-reader-app/v1/public/pack/{file}.json` | يقرأ pack عام من cache | مفيد لو أردنا المرور عبر REST بدل رابط الملف المباشر | 4/5 | جاهز. `inc/app-api.php:80`, `inc/app-api.php:417` |
 | تفاصيل رواية عامة | `GET /wp-json/wor-reader-app/v1/novels/{novel_id}` | يرجع بيانات رواية من cache/pack | أساسي لشاشة تفاصيل الرواية | 5/5 | جاهز. `inc/app-api.php:52`, `inc/app-api.php:442` |
-| فصول رواية عامة | `GET /wp-json/wor-reader-app/v1/novels/{novel_id}/chapters` | يرجع قائمة فصول الرواية من manifest/pack | أساسي للتفاصيل والتنزيل والقارئ | 5/5 | جاهز. `inc/app-api.php:59`, `inc/app-api.php:455` |
+| فصول رواية عامة | `GET /wp-json/wor-reader-app/v1/novels/{novel_id}/chapters` | يرجع قائمة فصول الرواية من manifest/pack | أساسي للتفاصيل والقارئ | 5/5 | جاهز. `inc/app-api.php:59`, `inc/app-api.php:455` |
 | محتوى فصل عام | `GET /wp-json/wor-reader-app/v1/chapters/{chapter_id}` | يرجع محتوى الفصل بصيغة JSON مع `content_html` والتنقل | أساس القارئ native | 5/5 | جاهز. `inc/app-api.php:66`, `inc/app-api.php:491`, `inc/app-cache.php:761` |
 | بيانات المستخدم | `GET /wp-json/wor-reader-app/v1/me` | يرجع الاسم، الصورة، VIP، XP مختصر | أساس صفحة حسابي | 5/5 | جاهز. `inc/app-api.php:87`, `inc/app-api.php:1040` |
 | حالة المستخدم داخل رواية | `GET /wp-json/wor-reader-app/v1/me/novels/{novel_id}` | يرجع حالة الرواية للمستخدم مثل المفضلة/السجل حسب المتاح | مهم لتفاصيل الرواية | 4/5 | جاهز. `inc/app-api.php:93` |
@@ -120,7 +120,7 @@ flowchart TD
 | `rankings_manifest` | روايات شائعة شهريا | صفحة الترتيب | 4/5 | `inc/app-cache.php:529` |
 | `store_manifest` | إعدادات المتجر والخطط العامة | شاشة VIP/المتجر مستقبلا | 4/5 | `inc/app-cache.php:549`, `inc/store.php:460` |
 | `novel manifest/pack` | تفاصيل رواية كاملة وروابط فصولها | صفحة تفاصيل الرواية | 5/5 | `inc/app-cache.php:558`, `inc/app-cache.php:333` |
-| `chapters_manifest` و chapter pack | قائمة فصول الرواية وروابطها | تفاصيل الرواية، التنزيلات، القارئ | 5/5 | `functions.php:2198`, `inc/app-api.php:455` |
+| `chapters_manifest` و chapter pack | قائمة فصول الرواية وروابطها | تفاصيل الرواية والقارئ | 5/5 | `functions.php:2198`, `inc/app-api.php:455` |
 | `chapter content pack` | محتوى فصل عام بصيغة JSON | القارئ native | 5/5 | `inc/app-cache.php:761`, `inc/app-cache.php:846` |
 | `vip_schedule_manifest` | جدول إتاحة فصول VIP للعامة بدون محتوى | إظهار أن الرواية لها فصول مبكرة/قادمة | 4/5 | `inc/vip-release-schedule.php:90`, `inc/app-cache.php:392` |
 

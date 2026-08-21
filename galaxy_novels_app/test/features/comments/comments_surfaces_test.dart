@@ -11,6 +11,7 @@ import 'package:galaxy_novels_app/features/comments/domain/comments_page.dart';
 import 'package:galaxy_novels_app/features/comments/domain/public_comment.dart';
 import 'package:galaxy_novels_app/features/comments/presentation/chapter_comments_sheet.dart';
 import 'package:galaxy_novels_app/features/comments/presentation/comments_sliver_section.dart';
+import 'package:galaxy_novels_app/features/comments/presentation/widgets/comment_composer.dart';
 
 import '../../helpers/fake_auth_repository.dart';
 import '../../helpers/fake_comments_repository.dart';
@@ -97,10 +98,12 @@ void main() {
   ) async {
     var openedAccount = false;
     final target = CommentTarget.novel(42);
+    final authRepository = FakeAuthRepository();
+    addTearDown(authRepository.dispose);
     final controller = CommentsController(
       repository: FakeCommentsRepository.empty(),
       target: target,
-      authRepository: FakeAuthRepository(),
+      authRepository: authRepository,
     );
     addTearDown(controller.dispose);
     await controller.loadInitial();
@@ -108,7 +111,7 @@ void main() {
     await tester.pumpWidget(
       _surface(
         controller,
-        authRepository: FakeAuthRepository(),
+        authRepository: authRepository,
         onSignIn: () => openedAccount = true,
       ),
     );
@@ -158,6 +161,61 @@ void main() {
 
     expect(find.text('تعليق من التطبيق'), findsOneWidget);
   });
+
+  testWidgets(
+    'does not complete composer callbacks after the composer is removed',
+    (tester) async {
+      final response = Completer<PublicComment>();
+      final savedComment = _comment(78, 'تعليق مكتمل');
+      addTearDown(() {
+        if (!response.isCompleted) {
+          response.complete(savedComment);
+        }
+      });
+      final authRepository = FakeAuthRepository(
+        initialState: const AuthSessionState.authenticated(_user),
+      );
+      addTearDown(authRepository.dispose);
+      final repository = FakeCommentsRepository(
+        handler: (target, sort, page) async =>
+            CommentsPage.empty(target: target, sort: sort, page: page),
+        submitHandler: (_, _, _, _) => response.future,
+      );
+      final controller = CommentsController(
+        repository: repository,
+        target: CommentTarget.novel(42),
+        authRepository: authRepository,
+      );
+      addTearDown(controller.dispose);
+      var submittedCallbackCalled = false;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.dark(),
+          home: Scaffold(
+            body: CommentComposer(
+              controller: controller,
+              authRepository: authRepository,
+              onSubmitted: () => submittedCallbackCalled = true,
+            ),
+          ),
+        ),
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('comments-content-field')),
+        'تعليق مؤجل',
+      );
+      await tester.tap(find.byKey(const ValueKey('comments-submit-button')));
+      await tester.pump();
+      await tester.pumpWidget(const SizedBox.shrink());
+
+      response.complete(savedComment);
+      await tester.pump();
+
+      expect(tester.takeException(), isNull);
+      expect(submittedCallbackCalled, isFalse);
+    },
+  );
 
   testWidgets('authenticated reader votes and reacts from comments surface', (
     tester,

@@ -94,36 +94,37 @@ void main() {
     expect(openedPath, 'vip:chapter:1');
   });
 
-  testWidgets('guards server-provided direct VIP content_api when unavailable', (
-    tester,
-  ) async {
-    String? openedPath;
-    final controller = VipChaptersController(
-      repository: _FakeVipRepository(
-        contentApi: '/wp-json/wor-reader-app/v1/vip/chapters/1',
-      ),
-      novelId: 1,
-    );
-
-    await tester.pumpWidget(
-      _wrap(
-        VipChaptersSection(
-          controller: controller,
-          canReadPrivate: true,
-          nativeReaderAvailable: false,
-          onSignIn: () {},
-          onOpenVipChapter: (path, _) => openedPath = path,
+  testWidgets(
+    'guards server-provided direct VIP content_api when unavailable',
+    (tester) async {
+      String? openedPath;
+      final controller = VipChaptersController(
+        repository: _FakeVipRepository(
+          contentApi: '/wp-json/wor-reader-app/v1/vip/chapters/1',
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+        novelId: 1,
+      );
 
-    await tester.tap(find.text('الفصل 1'));
-    await tester.pump();
+      await tester.pumpWidget(
+        _wrap(
+          VipChaptersSection(
+            controller: controller,
+            canReadPrivate: true,
+            nativeReaderAvailable: false,
+            onSignIn: () {},
+            onOpenVipChapter: (path, _) => openedPath = path,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
 
-    expect(openedPath, isNull);
-    expect(find.textContaining('تنتظر تحديث السيرفر'), findsOneWidget);
-  });
+      await tester.tap(find.text('الفصل 1'));
+      await tester.pump();
+
+      expect(openedPath, isNull);
+      expect(find.textContaining('تنتظر تحديث السيرفر'), findsOneWidget);
+    },
+  );
 }
 
 Widget _wrap(Widget child) {

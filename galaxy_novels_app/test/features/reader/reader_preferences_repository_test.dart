@@ -19,19 +19,35 @@ void main() {
       'font_family': 'amiri',
       'text_width': 'compact',
       'immersive_mode': true,
+      'continuous_reading': true,
+      'auto_scroll_enabled': true,
+      'auto_scroll_speed': 500,
+      'pinch_zoom_enabled': false,
+      'highlight_replaced_terms': false,
       'brightness_mode': 'manual',
       'screen_brightness': 4,
     });
 
-    expect(preferences.fontScale, 1.35);
+    expect(preferences.fontScale, 2);
     expect(preferences.lineHeight, 1.75);
     expect(preferences.paletteMode, ReaderPaletteMode.nightBlue);
     expect(preferences.fontFamily, ReaderFontFamily.amiri);
     expect(preferences.textWidth, ReaderTextWidth.compact);
     expect(preferences.immersiveMode, isTrue);
+    expect(preferences.continuousReading, isTrue);
+    expect(preferences.autoScrollEnabled, isTrue);
+    expect(preferences.autoScrollSpeed, ReaderPreferences.maxAutoScrollSpeed);
+    expect(preferences.pinchZoomEnabled, isFalse);
+    expect(preferences.highlightReplacedTerms, isFalse);
     expect(preferences.brightnessMode, ReaderBrightnessMode.manual);
     expect(preferences.screenBrightness, 1);
     expect(ReaderPreferences.fromJson(preferences.toJson()), preferences);
+  });
+
+  test('legacy reader preferences enable pinch zoom by default', () {
+    final preferences = ReaderPreferences.fromJson(const {});
+
+    expect(preferences.pinchZoomEnabled, isTrue);
   });
 
   test('stored repository restores the last reader preferences', () async {
@@ -45,6 +61,11 @@ void main() {
           fontFamily: ReaderFontFamily.cairo,
           textWidth: ReaderTextWidth.wide,
           immersiveMode: true,
+          continuousReading: true,
+          autoScrollEnabled: true,
+          autoScrollSpeed: 48,
+          pinchZoomEnabled: false,
+          highlightReplacedTerms: false,
           brightnessMode: ReaderBrightnessMode.manual,
           screenBrightness: 0.42,
         );
@@ -55,6 +76,16 @@ void main() {
     await restored.load();
 
     expect(restored.value, updated);
+  });
+
+  test('font size can grow to 200 percent', () {
+    var preferences = ReaderPreferences.defaults;
+    for (var step = 0; step < 20; step++) {
+      preferences = preferences.increaseFont();
+    }
+
+    expect(preferences.fontScale, 2);
+    expect(preferences.increaseFont().fontScale, 2);
   });
 
   test('malformed stored preferences fall back to reader defaults', () async {

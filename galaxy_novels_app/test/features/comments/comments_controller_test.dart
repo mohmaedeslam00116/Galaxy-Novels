@@ -225,6 +225,96 @@ void main() {
     expect(controller.value.isSubmitting, isFalse);
   });
 
+  test('changing sort keeps an in-flight submit busy', () async {
+    final target = CommentTarget.novel(42);
+    final submitResponse = Completer<PublicComment>();
+    final topResponse = Completer<CommentsPage>();
+    final savedComment = _comment(99, content: 'تعليق محفوظ');
+    final sortedPage = _page(target: target, sort: CommentsSort.top);
+    addTearDown(() {
+      if (!topResponse.isCompleted) {
+        topResponse.complete(sortedPage);
+      }
+      if (!submitResponse.isCompleted) {
+        submitResponse.complete(savedComment);
+      }
+    });
+    final repository = FakeCommentsRepository(
+      handler: (_, sort, _) => sort == CommentsSort.top
+          ? topResponse.future
+          : Future.value(_page(target: target, sort: sort)),
+      submitHandler: (_, _, _, _) => submitResponse.future,
+    );
+    final controller = CommentsController(
+      repository: repository,
+      target: target,
+      authRepository: FakeAuthRepository(
+        initialState: const AuthSessionState.authenticated(_user),
+      ),
+    );
+    addTearDown(controller.dispose);
+    await controller.loadInitial();
+
+    final firstSubmission = controller.submitComment(content: 'تعليق أول');
+    final sortChange = controller.changeSort(CommentsSort.top);
+    final duplicateSubmission = controller.submitComment(content: 'تعليق مكرر');
+    topResponse.complete(sortedPage);
+    await sortChange;
+    submitResponse.complete(savedComment);
+    final duplicateOutcome = await duplicateSubmission;
+    await firstSubmission;
+
+    expect(duplicateOutcome.status, CommentSubmitStatus.busy);
+    expect(repository.submitCalls, hasLength(1));
+  });
+
+  test('successful submit remains saved after changing sort', () async {
+    final target = CommentTarget.novel(42);
+    final submitResponse = Completer<PublicComment>();
+    final topResponse = Completer<CommentsPage>();
+    final savedComment = _comment(99, content: 'تعليق محفوظ');
+    final sortedPage = _page(target: target, sort: CommentsSort.top);
+    addTearDown(() {
+      if (!topResponse.isCompleted) {
+        topResponse.complete(sortedPage);
+      }
+      if (!submitResponse.isCompleted) {
+        submitResponse.complete(savedComment);
+      }
+    });
+    final repository = FakeCommentsRepository(
+      handler: (_, sort, _) => sort == CommentsSort.top
+          ? topResponse.future
+          : Future.value(_page(target: target, sort: sort)),
+      submitHandler: (_, _, _, _) => submitResponse.future,
+    );
+    final controller = CommentsController(
+      repository: repository,
+      target: target,
+      authRepository: FakeAuthRepository(
+        initialState: const AuthSessionState.authenticated(_user),
+      ),
+    );
+    addTearDown(controller.dispose);
+    await controller.loadInitial();
+
+    final pendingSubmit = controller.submitComment(content: 'تعليق جديد');
+    final sortChange = controller.changeSort(CommentsSort.top);
+    topResponse.complete(sortedPage);
+    await sortChange;
+    submitResponse.complete(savedComment);
+    final outcome = await pendingSubmit;
+
+    expect(outcome.status, CommentSubmitStatus.saved);
+    expect(controller.value.sort, CommentsSort.top);
+    expect(
+      controller.value.comments.where((comment) => comment.id == 99),
+      hasLength(1),
+    );
+    expect(controller.value.isSubmitting, isFalse);
+    expect(repository.submitCalls, hasLength(1));
+  });
+
   test('guest cannot vote on a comment', () async {
     final repository = FakeCommentsRepository.empty();
     final controller = CommentsController(

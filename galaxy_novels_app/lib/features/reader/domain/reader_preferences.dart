@@ -25,6 +25,11 @@ class ReaderPreferences {
     required this.fontFamily,
     required this.textWidth,
     required this.immersiveMode,
+    required this.continuousReading,
+    required this.autoScrollEnabled,
+    required this.autoScrollSpeed,
+    required this.pinchZoomEnabled,
+    required this.highlightReplacedTerms,
     required this.brightnessMode,
     required this.screenBrightness,
   });
@@ -36,18 +41,25 @@ class ReaderPreferences {
     fontFamily: ReaderFontFamily.system,
     textWidth: ReaderTextWidth.comfortable,
     immersiveMode: false,
+    continuousReading: false,
+    autoScrollEnabled: false,
+    autoScrollSpeed: 32,
+    pinchZoomEnabled: true,
+    highlightReplacedTerms: true,
     brightnessMode: ReaderBrightnessMode.system,
     screenBrightness: 0.65,
   );
 
   static const _fontStep = 0.1;
   static const _lineStep = 0.1;
-  static const _minFontScale = 0.85;
-  static const _maxFontScale = 1.35;
+  static const minFontScale = 0.85;
+  static const maxFontScale = 2.0;
   static const _minLineHeight = 1.75;
   static const _maxLineHeight = 2.35;
   static const _minScreenBrightness = 0.2;
   static const _maxScreenBrightness = 1.0;
+  static const minAutoScrollSpeed = 16.0;
+  static const maxAutoScrollSpeed = 72.0;
 
   final double fontScale;
   final double lineHeight;
@@ -55,6 +67,11 @@ class ReaderPreferences {
   final ReaderFontFamily fontFamily;
   final ReaderTextWidth textWidth;
   final bool immersiveMode;
+  final bool continuousReading;
+  final bool autoScrollEnabled;
+  final double autoScrollSpeed;
+  final bool pinchZoomEnabled;
+  final bool highlightReplacedTerms;
   final ReaderBrightnessMode brightnessMode;
   final double screenBrightness;
 
@@ -83,8 +100,8 @@ class ReaderPreferences {
     return ReaderPreferences(
       fontScale: _clamp(
         _asDouble(json['font_scale']) ?? defaults.fontScale,
-        _minFontScale,
-        _maxFontScale,
+        minFontScale,
+        maxFontScale,
       ),
       lineHeight: _clamp(
         _asDouble(json['line_height']) ?? defaults.lineHeight,
@@ -95,6 +112,15 @@ class ReaderPreferences {
       fontFamily: fontFamily,
       textWidth: textWidth,
       immersiveMode: json['immersive_mode'] == true,
+      continuousReading: json['continuous_reading'] == true,
+      autoScrollEnabled: json['auto_scroll_enabled'] == true,
+      autoScrollSpeed: _clamp(
+        _asDouble(json['auto_scroll_speed']) ?? defaults.autoScrollSpeed,
+        minAutoScrollSpeed,
+        maxAutoScrollSpeed,
+      ),
+      pinchZoomEnabled: json['pinch_zoom_enabled'] != false,
+      highlightReplacedTerms: json['highlight_replaced_terms'] != false,
       brightnessMode: brightnessMode,
       screenBrightness: _clamp(
         _asDouble(json['screen_brightness']) ?? defaults.screenBrightness,
@@ -112,6 +138,11 @@ class ReaderPreferences {
       'font_family': fontFamily.name,
       'text_width': textWidth.name,
       'immersive_mode': immersiveMode,
+      'continuous_reading': continuousReading,
+      'auto_scroll_enabled': autoScrollEnabled,
+      'auto_scroll_speed': autoScrollSpeed,
+      'pinch_zoom_enabled': pinchZoomEnabled,
+      'highlight_replaced_terms': highlightReplacedTerms,
       'brightness_mode': brightnessMode.name,
       'screen_brightness': screenBrightness,
     };
@@ -124,6 +155,11 @@ class ReaderPreferences {
     ReaderFontFamily? fontFamily,
     ReaderTextWidth? textWidth,
     bool? immersiveMode,
+    bool? continuousReading,
+    bool? autoScrollEnabled,
+    double? autoScrollSpeed,
+    bool? pinchZoomEnabled,
+    bool? highlightReplacedTerms,
     ReaderBrightnessMode? brightnessMode,
     double? screenBrightness,
   }) {
@@ -134,6 +170,14 @@ class ReaderPreferences {
       fontFamily: fontFamily ?? this.fontFamily,
       textWidth: textWidth ?? this.textWidth,
       immersiveMode: immersiveMode ?? this.immersiveMode,
+      continuousReading: continuousReading ?? this.continuousReading,
+      autoScrollEnabled: autoScrollEnabled ?? this.autoScrollEnabled,
+      autoScrollSpeed: autoScrollSpeed == null
+          ? this.autoScrollSpeed
+          : _clamp(autoScrollSpeed, minAutoScrollSpeed, maxAutoScrollSpeed),
+      pinchZoomEnabled: pinchZoomEnabled ?? this.pinchZoomEnabled,
+      highlightReplacedTerms:
+          highlightReplacedTerms ?? this.highlightReplacedTerms,
       brightnessMode: brightnessMode ?? this.brightnessMode,
       screenBrightness: screenBrightness == null
           ? this.screenBrightness
@@ -147,13 +191,13 @@ class ReaderPreferences {
 
   ReaderPreferences increaseFont() {
     return copyWith(
-      fontScale: _clamp(fontScale + _fontStep, _minFontScale, _maxFontScale),
+      fontScale: _clamp(fontScale + _fontStep, minFontScale, maxFontScale),
     );
   }
 
   ReaderPreferences decreaseFont() {
     return copyWith(
-      fontScale: _clamp(fontScale - _fontStep, _minFontScale, _maxFontScale),
+      fontScale: _clamp(fontScale - _fontStep, minFontScale, maxFontScale),
     );
   }
 
@@ -186,6 +230,11 @@ class ReaderPreferences {
         other.fontFamily == fontFamily &&
         other.textWidth == textWidth &&
         other.immersiveMode == immersiveMode &&
+        other.continuousReading == continuousReading &&
+        other.autoScrollEnabled == autoScrollEnabled &&
+        other.autoScrollSpeed == autoScrollSpeed &&
+        other.pinchZoomEnabled == pinchZoomEnabled &&
+        other.highlightReplacedTerms == highlightReplacedTerms &&
         other.brightnessMode == brightnessMode &&
         other.screenBrightness == screenBrightness;
   }
@@ -198,6 +247,11 @@ class ReaderPreferences {
     fontFamily,
     textWidth,
     immersiveMode,
+    continuousReading,
+    autoScrollEnabled,
+    autoScrollSpeed,
+    pinchZoomEnabled,
+    highlightReplacedTerms,
     brightnessMode,
     screenBrightness,
   );

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show SemanticsRole;
 
 import 'package:flutter/material.dart';
 
@@ -14,12 +15,14 @@ class ChapterCommentsSheet extends StatefulWidget {
     required this.repository,
     required this.target,
     this.authRepository,
+    this.onSignIn,
     super.key,
   });
 
   final CommentsRepository repository;
   final CommentTarget target;
   final AuthRepository? authRepository;
+  final VoidCallback? onSignIn;
 
   @override
   State<ChapterCommentsSheet> createState() => _ChapterCommentsSheetState();
@@ -49,40 +52,61 @@ class _ChapterCommentsSheetState extends State<ChapterCommentsSheet> {
   Widget build(BuildContext context) {
     final tokens =
         Theme.of(context).extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
+    final viewInsets = MediaQuery.viewInsetsOf(context);
+    final animationDuration = MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : const Duration(milliseconds: 200);
 
-    return DraggableScrollableSheet(
-      expand: false,
-      initialChildSize: 0.78,
-      minChildSize: 0.50,
-      maxChildSize: 0.95,
-      builder: (context, scrollController) {
-        return Material(
-          key: const ValueKey('chapter-comments-sheet'),
-          color: tokens.background,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
-          clipBehavior: Clip.antiAlias,
-          child: SafeArea(
-            top: false,
-            child: Column(
-              children: [
-                _SheetHeader(onClose: () => Navigator.of(context).pop()),
-                Expanded(
-                  child: CustomScrollView(
-                    controller: scrollController,
-                    slivers: [
-                      CommentsSliverSection(
-                        controller: _controller,
-                        authRepository: widget.authRepository,
-                        showTitle: false,
+    return Semantics(
+      key: const ValueKey('chapter-comments-dialog-semantics'),
+      container: true,
+      scopesRoute: true,
+      namesRoute: true,
+      explicitChildNodes: true,
+      role: SemanticsRole.dialog,
+      label: 'تعليقات الفصل',
+      child: AnimatedPadding(
+        padding: EdgeInsets.only(bottom: viewInsets.bottom),
+        duration: animationDuration,
+        curve: Curves.easeOutCubic,
+        child: DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.78,
+          minChildSize: 0.50,
+          maxChildSize: 0.95,
+          builder: (context, scrollController) {
+            return Material(
+              key: const ValueKey('chapter-comments-sheet'),
+              color: tokens.background,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(8),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: SafeArea(
+                top: false,
+                child: Column(
+                  children: [
+                    _SheetHeader(onClose: () => Navigator.of(context).pop()),
+                    Expanded(
+                      child: CustomScrollView(
+                        controller: scrollController,
+                        slivers: [
+                          CommentsSliverSection(
+                            controller: _controller,
+                            authRepository: widget.authRepository,
+                            onSignIn: widget.onSignIn,
+                            showTitle: false,
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ),
-        );
-      },
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 }

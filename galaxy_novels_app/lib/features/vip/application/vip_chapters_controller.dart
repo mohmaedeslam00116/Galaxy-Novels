@@ -69,28 +69,46 @@ class VipChaptersController extends ValueNotifier<VipChaptersState> {
 
   final VipRepository _repository;
   final int _novelId;
+  bool _disposed = false;
+  int _requestGeneration = 0;
 
   Future<void> loadInitial() async {
-    if (value.status == VipChaptersStatus.loading ||
+    if (_disposed ||
+        value.status == VipChaptersStatus.loading ||
         value.status == VipChaptersStatus.ready) {
       return;
     }
 
+    final generation = ++_requestGeneration;
     value = const VipChaptersState(status: VipChaptersStatus.loading);
-    await _load(const _VipLoadCursor.initial(), reset: true);
+    await _load(
+      const _VipLoadCursor.initial(),
+      reset: true,
+      generation: generation,
+    );
   }
 
   Future<void> retry() async {
+    if (_disposed) {
+      return;
+    }
+
+    final generation = ++_requestGeneration;
     value = const VipChaptersState(status: VipChaptersStatus.loading);
-    await _load(const _VipLoadCursor.initial(), reset: true);
+    await _load(
+      const _VipLoadCursor.initial(),
+      reset: true,
+      generation: generation,
+    );
   }
 
   Future<void> loadMore() async {
-    if (value.isLoadingMore || !value.hasMore) {
+    if (_disposed || value.isLoadingMore || !value.hasMore) {
       return;
     }
 
     final previous = value;
+    final generation = ++_requestGeneration;
     value = previous.copyWith(isLoadingMore: true);
     await _load(
       _VipLoadCursor(
@@ -98,10 +116,31 @@ class VipChaptersController extends ValueNotifier<VipChaptersState> {
         id: previous.nextCursorId,
       ),
       reset: false,
+      generation: generation,
     );
   }
 
-  Future<void> _load(_VipLoadCursor cursor, {required bool reset}) async {
+  Future<bool> loadAll() async {
+    if (value.status == VipChaptersStatus.idle) {
+      await loadInitial();
+    }
+    while (!_disposed && value.status == VipChaptersStatus.ready) {
+      if (!value.hasMore) return true;
+      final previousCount = value.chapters.length;
+      await loadMore();
+      if (value.errorMessage != null ||
+          value.chapters.length <= previousCount) {
+        return false;
+      }
+    }
+    return false;
+  }
+
+  Future<void> _load(
+    _VipLoadCursor cursor, {
+    required bool reset,
+    required int generation,
+  }) async {
     try {
       final page = await _repository.loadChapters(
         VipChapterQuery(
@@ -111,6 +150,9 @@ class VipChaptersController extends ValueNotifier<VipChaptersState> {
           limit: 50,
         ),
       );
+      if (!_isActive(generation)) {
+        return;
+      }
       value = VipChaptersState(
         status: VipChaptersStatus.ready,
         chapters: reset ? page.items : [...value.chapters, ...page.items],
@@ -120,6 +162,16 @@ class VipChaptersController extends ValueNotifier<VipChaptersState> {
         totalAvailable: page.totalAvailable,
       );
     } on VipAccessException catch (error) {
+      if (!_isActive(generation)) {
+        return;
+      }
+      if (!reset) {
+        value = value.copyWith(
+          isLoadingMore: false,
+          errorMessage: error.message,
+        );
+        return;
+      }
       value = VipChaptersState(
         status: switch (error.reason) {
           VipAccessReason.loginRequired => VipChaptersStatus.loginRequired,
@@ -132,11 +184,35 @@ class VipChaptersController extends ValueNotifier<VipChaptersState> {
             : error.message,
       );
     } catch (_) {
+      if (!_isActive(generation)) {
+        return;
+      }
+      if (!reset) {
+        value = value.copyWith(
+          isLoadingMore: false,
+          errorMessage: 'تعذر تحميل بقية فصول VIP الآن.',
+        );
+        return;
+      }
       value = const VipChaptersState(
         status: VipChaptersStatus.failure,
         errorMessage: 'تعذر تحميل فصول VIP الآن.',
       );
     }
+  }
+
+  bool _isActive(int generation) {
+    return !_disposed && generation == _requestGeneration;
+  }
+
+  @override
+  void dispose() {
+    if (_disposed) {
+      return;
+    }
+    _disposed = true;
+    _requestGeneration++;
+    super.dispose();
   }
 }
 

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../app/app_theme.dart';
+import 'app_section_header.dart';
 
+@Deprecated('Use AppSectionHeader instead.')
 class SectionTitle extends StatelessWidget {
   const SectionTitle({
     required this.title,
@@ -16,39 +17,10 @@ class SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final tokens = theme.extension<AppThemeTokens>() ?? AppTheme.galaxyNoir;
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
-      child: Row(
-        children: [
-          Container(
-            width: 4,
-            height: 32,
-            decoration: BoxDecoration(
-              color: tokens.accent,
-              borderRadius: BorderRadius.circular(8),
-            ),
-          ),
-          const SizedBox(width: 10),
-          if (leadingIcon != null) ...[
-            Icon(leadingIcon, color: tokens.accent, size: 22),
-            const SizedBox(width: 8),
-          ],
-          Expanded(
-            child: Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ),
-          ?action,
-        ],
-      ),
+    return AppSectionHeader(
+      title: title,
+      action: action,
+      leadingIcon: leadingIcon,
     );
   }
 }

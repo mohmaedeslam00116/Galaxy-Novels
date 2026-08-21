@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:background_downloader/background_downloader.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:galaxy_novels_app/features/downloads/application/download_transfer.dart';
 import 'package:galaxy_novels_app/features/downloads/data/background_download_transfer.dart';
@@ -80,6 +81,27 @@ void main() {
     expect(cover.group, 'download-covers');
     expect(cover.directory, 'galaxy_downloads/covers');
     expect(cover.requiresWiFi, isFalse);
+  });
+
+  test('maps a native enqueue error to transfer unavailable', () async {
+    await transfer.initialize();
+    client.enqueueError = PlatformException(code: 'unavailable');
+
+    final operation = transfer.enqueue(
+      DownloadTransferRequest(
+        transferId: 'job-failed',
+        kind: DownloadTransferKind.chapter,
+        url: Uri.parse('https://example.com/chapter/1'),
+        headers: const {},
+        fileName: 'chapter-1.json',
+        requiresWifi: false,
+      ),
+    );
+
+    await expectLater(
+      operation,
+      throwsA(isA<DownloadTransferUnavailableException>()),
+    );
   });
 
   test('maps native progress, completion, and authorization failure', () async {
@@ -183,6 +205,7 @@ class _FakeNativeDownloadClient implements NativeDownloadClient {
   dynamic androidConfig;
   bool notificationsConfigured = false;
   bool started = false;
+  PlatformException? enqueueError;
 
   void emit(TaskUpdate update) => controller.add(update);
   Future<void> close() => controller.close();
@@ -212,6 +235,7 @@ class _FakeNativeDownloadClient implements NativeDownloadClient {
 
   @override
   Future<bool> enqueue(DownloadTask task) async {
+    if (enqueueError case final error?) throw error;
     enqueued.add(task);
     return true;
   }
